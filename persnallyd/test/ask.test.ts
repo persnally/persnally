@@ -1,0 +1,169 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, test } from "node:test";
+import { askUserModel, CONFIDENCE_THRESHOLD, DEFER_MESSAGE } from "../src/ask.js";
+import { newEvent } from "../src/events.js";
+import type { LlmExtract } from "../src/llm.js";
+import { EventStore } from "../src/store.js";
+
+const dir = mkdtempSync(join(tmpdir(), "ask-test-"));
+after(() => rmSync(dir, { recursive: true, force: true }));
+
+const CLI_OPTS = {
+  question: "Would they want tests with this change?",
+  asker: "cli",
+  source: "cli",
+  provenance: { kind: "local", surface: "cli" },
+} as const;
+
+function seededStore(name: string): EventStore {
+  const store = new EventStore(join(dir, `${name}.db`));
+  const tech = newEvent("signal.topic", "import:claude", {
+    topic: "test-driven development", weight: 0.9, intent: "building", sentiment: "positive",
+    depth: "deep", category: "technology", entities: ["node:test"],
+  }, { kind: "import", batch: "b1", file: "conversations.json" });
+  const biz = newEvent("signal.topic", "import:claude", {
+    topic: "fundraising strategy", weight: 0.6, intent: "deciding", sentiment: "neutral",
+    depth: "moderate", category: "business", entities: [],
+  }, { kind: "import", batch: "b1", file: "conversations.json" });
+  const assertion = newEvent("signal.assertion", "import:claude", {
+    claim: "Treats unverified code as unfinished", kind: "behavior", confidence: 0.9, evidence: "repeated insistence on test passes",
+  }, { kind: "import", batch: "b1", file: "conversations.json" });
+  store.append([tech, biz, assertion]);
+  store.rebuild();
+  store.saveProfile({
+    headline: "A verify-everything builder",
+    sections: [{ title: "How they work", body: "Ships only verified code.", evidence_event_ids: [assertion.id] }],
+    generated_at: new Date().toISOString(),
+    model: "test",
+  });
+  return store;
+}
+
+const fakeEngine = (result: { answer: string; confidence: number; evidence_event_ids?: string[] }, calls?: { content?: string; n: number }) => ({
+  extract: (async (opts) => {
+    if (calls) { calls.n++; calls.content = opts.content; }
+    return result;
+  }) as LlmExtract,
+  model: "fake-model",
+});
+
+test("answers above the threshold and records the question/answer pair", async () => {
+  const store = seededStore("answers");
+  const assertionId = store.query({ type: "signal.assertion" })[0]!.id;
+  const r = await askUserModel(store, CLI_OPTS, fakeEngine({
+    answer: "Yes — write the tests.", confidence: 0.92, evidence_event_ids: [assertionId, "hallucinated-id"],
+  }));
+
+  assert.equal(r.deferred, false);
+  assert.equal(r.answer, "Yes — write the tests.");
+  assert.equal(r.confidence, 0.92);
+  assert.deepEqual(r.evidence_event_ids, [assertionId], "hallucinated evidence ids must be dropped");
+
+  const q = store.query({ type: "agent.question" });
+  const a = store.query({ type: "agent.answer" });
+  assert.equal(q.length, 1);
+  assert.equal(a.length, 1);
+  assert.equal(q[0]!.id, r.question_id);
+  assert.equal((q[0]!.payload as { asker: string }).asker, "cli");
+  assert.deepEqual(a[0]!.payload, { question_id: q[0]!.id, answer: "Yes — write the tests.", confidence: 0.92, deferred: false });
+  assert.deepEqual(a[0]!.provenance, { kind: "derived", from: [q[0]!.id] });
+  store.close();
+});
+
+test("defers below the threshold but still records the exchange", async () => {
+  const store = seededStore("defers");
+  const r = await askUserModel(store, CLI_OPTS, fakeEngine({ answer: "Probably?", confidence: 0.4 }));
+
+  assert.equal(r.deferred, true);
+  assert.equal(r.reason, "low-confidence");
+  assert.equal(r.answer, DEFER_MESSAGE, "a deferred result must tell the agent to ask the human");
+  const a = store.query({ type: "agent.answer" })[0]!;
+  assert.deepEqual(a.payload, { question_id: r.question_id, answer: "Probably?", confidence: 0.4, deferred: true });
+  store.close();
+});
+
+test("confidence exactly at the threshold counts as answered", async () => {
+  const store = seededStore("boundary");
+  const r = await askUserModel(store, CLI_OPTS, fakeEngine({ answer: "Yes.", confidence: CONFIDENCE_THRESHOLD }));
+  assert.equal(r.deferred, false);
+  store.close();
+});
+
+test("empty store defers without spending inference", async () => {
+  const store = new EventStore(join(dir, "empty.db"));
+  const calls = { n: 0 };
+  const r = await askUserModel(store, CLI_OPTS, fakeEngine({ answer: "x", confidence: 1 }, calls));
+  assert.equal(r.deferred, true);
+  assert.equal(r.reason, "not-enough-context");
+  assert.equal(calls.n, 0, "no material → the LLM must not be called");
+  assert.equal(store.query({ type: "agent.answer" }).length, 1, "deferral is still recorded");
+  store.close();
+});
+
+test("no engine defers with reason no-engine", async () => {
+  const store = seededStore("noengine");
+  const r = await askUserModel(store, CLI_OPTS, null);
+  assert.equal(r.deferred, true);
+  assert.equal(r.reason, "no-engine");
+  assert.equal(r.confidence, 0);
+  store.close();
+});
+
+test("scoped clients get only allowed-category topics — no profile, no assertions", async () => {
+  const store = seededStore("scoped");
+  const calls = { n: 0, content: "" };
+  await askUserModel(store, {
+    ...CLI_OPTS,
+    source: "mcp:cursor",
+    provenance: { kind: "mcp", client: "cursor" },
+    allowed: ["technology"],
+  }, fakeEngine({ answer: "Yes.", confidence: 0.9 }, calls));
+
+  assert.match(calls.content, /test-driven development/);
+  assert.doesNotMatch(calls.content, /fundraising strategy/, "topics outside the scope must not leak");
+  assert.doesNotMatch(calls.content, /verify-everything builder/, "the cross-category profile must not leak");
+  assert.doesNotMatch(calls.content, /Treats unverified code/, "assertions must not leak to scoped clients");
+  store.close();
+});
+
+test("unscoped material includes profile, assertions, and topics", async () => {
+  const store = seededStore("unscoped");
+  const calls = { n: 0, content: "" };
+  await askUserModel(store, CLI_OPTS, fakeEngine({ answer: "Yes.", confidence: 0.9 }, calls));
+  assert.match(calls.content, /test-driven development/);
+  assert.match(calls.content, /fundraising strategy/);
+  assert.match(calls.content, /verify-everything builder/);
+  assert.match(calls.content, /Treats unverified code/);
+  store.close();
+});
+
+test("askHistory joins questions, answers, and feedback with conservative precision", async () => {
+  const store = seededStore("history");
+  const engine = fakeEngine({ answer: "Yes.", confidence: 0.9 });
+  const r1 = await askUserModel(store, CLI_OPTS, engine);
+  const r2 = await askUserModel(store, { ...CLI_OPTS, question: "What tone for this email?" }, engine);
+  const r3 = await askUserModel(store, { ...CLI_OPTS, question: "Unanswerable?" }, fakeEngine({ answer: "?", confidence: 0.1 }));
+
+  store.append([
+    newEvent("feedback.signal", "dashboard", { subject_id: r1.answer_id, verdict: "approved" }, { kind: "local", surface: "dashboard" }),
+    newEvent("feedback.signal", "dashboard", { subject_id: r2.answer_id, verdict: "vetoed" }, { kind: "local", surface: "dashboard" }),
+  ]);
+
+  const { items, stats } = store.askHistory();
+  assert.equal(items.length, 3);
+  const byId = new Map(items.map((i) => [i.answer_id, i]));
+  assert.equal(byId.get(r1.answer_id)?.verdict, "approved");
+  assert.equal(byId.get(r1.answer_id)?.question, CLI_OPTS.question, "history must join the question text");
+  assert.equal(byId.get(r2.answer_id)?.verdict, "vetoed");
+  assert.equal(byId.get(r3.answer_id)?.deferred, true);
+  assert.equal(stats.asked, 3);
+  assert.equal(stats.answered, 2);
+  assert.equal(stats.deferred, 1);
+  assert.equal(stats.approved, 1);
+  assert.equal(stats.vetoed, 1);
+  assert.equal(stats.precision, 0.5, "precision = approved / all labeled");
+  store.close();
+});

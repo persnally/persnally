@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const MOCK_PORT = 49832;
-const received = { posts: [], deletes: [] };
+const received = { posts: [], deletes: [], asks: [] };
 
 const mockDaemon = http.createServer((req, res) => {
   let body = "";
@@ -20,6 +20,13 @@ const mockDaemon = http.createServer((req, res) => {
     if (req.method === "POST" && req.url === "/events") {
       received.posts.push(JSON.parse(body));
       return respond(201, { inserted: JSON.parse(body).length ?? 1, ids: ["x"] });
+    }
+    if (req.method === "POST" && req.url === "/ask") {
+      received.asks.push(JSON.parse(body));
+      return respond(200, {
+        question_id: "q1", answer_id: "a1", deferred: false, confidence: 0.88,
+        answer: "Yes — they always want tests with refactors.", evidence_event_ids: ["e1", "e2"],
+      });
     }
     if (req.method === "DELETE") {
       received.deletes.push(req.url);
@@ -86,7 +93,7 @@ srv.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initiali
 
 // ── tools list ──
 const tools = (await rpc("tools/list", {})).result.tools.map((t) => t.name).sort();
-assert.deepEqual(tools, ["persnally_context", "persnally_forget", "persnally_interests", "persnally_track"]);
+assert.deepEqual(tools, ["persnally_ask", "persnally_context", "persnally_forget", "persnally_interests", "persnally_track"]);
 console.log("✅ handshake + tool list");
 
 // ── track → daemon POST with provenance ──
@@ -137,6 +144,16 @@ await callTool("persnally_context", { detail: "full", purpose: "personalize a co
 assert.equal(reads().length, 2);
 assert.deepEqual(reads()[1][0].payload, { scope: "full", client_purpose: "personalize a code review", items: 3 });
 console.log("✅ context reads recorded with scope, purpose, items");
+
+// ── ask → POST /ask with client identity; answer carries confidence + evidence count ──
+const askText = await callTool("persnally_ask", { question: "Would they want tests with this refactor?" });
+assert.match(askText, /Yes — they always want tests/);
+assert.match(askText, /confidence 0\.88/);
+assert.match(askText, /2 evidence event\(s\)/);
+assert.equal(received.asks.length, 1, "ask must POST to the daemon");
+assert.equal(received.asks[0].question, "Would they want tests with this refactor?");
+assert.equal(received.asks[0].client, "e2e-test", "the daemon needs the client for scoping + provenance");
+console.log("✅ ask → daemon /ask with client identity");
 
 // ── interests + forget ──
 assert.match(await callTool("persnally_interests", {}), /rust — 0\.90/);

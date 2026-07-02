@@ -168,6 +168,35 @@ Call this at the START of a conversation (or when personalization would improve 
     }),
 );
 
+// ── persnally_ask — the decision loop (Phase 3) ─────────────
+
+interface AskResult {
+  answer: string;
+  confidence: number;
+  deferred: boolean;
+  evidence_event_ids: string[];
+}
+
+server.tool(
+  "persnally_ask",
+  `Ask the user's personal model a question INSTEAD of interrupting the user. Use when you'd otherwise stop to ask about their preferences, conventions, taste, or how they'd decide — e.g. "would they want tests with this change?", "what tone should this email take?", "would they prefer a new dependency or hand-rolling it?".
+
+Persnally answers from the user's accumulated history with a confidence score. If it can't answer confidently, it tells you to ask the user — then ask them directly. Never treat a deferred response as an answer.`,
+  {
+    question: z.string().min(1).max(500)
+      .describe("A specific question about this user's preferences, conventions, or likely decision — not a general knowledge question"),
+  },
+  async ({ question }) =>
+    guarded(async () => {
+      logEvent("tool_call", { tool: "persnally_ask" });
+      const r = await daemonPost<AskResult>("/ask", { question, client: getClient(), asker: getClient() });
+      if (r.deferred) return text(r.answer);
+      return text(
+        `${r.answer}\n\n(confidence ${r.confidence.toFixed(2)} · ${r.evidence_event_ids.length} evidence event(s) · answered by the user's Persnally model — the user can audit this at http://127.0.0.1:4983)`,
+      );
+    }),
+);
+
 // ── persnally_interests — transparency view ─────────────────
 
 server.tool(

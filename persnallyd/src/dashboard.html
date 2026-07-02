@@ -166,6 +166,21 @@
   .refl .rc { font-size: 14.5px; color: var(--text); line-height: 1.55; }
   .refl .rm { font-size: 11.5px; color: var(--faint); margin-top: 5px; }
 
+  /* ── ask loop ── */
+  .ask-stats { font-size: 12.5px; color: var(--dim); margin-bottom: 14px; display: flex; gap: 18px; flex-wrap: wrap; }
+  .ask-stats b { color: var(--text); }
+  .ask { border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; margin-bottom: 12px; background: var(--panel); }
+  .ask .q { font-size: 13.5px; color: var(--text); }
+  .ask .q .asker { color: var(--faint); font-weight: 400; }
+  .ask .a { font-size: 13.5px; color: var(--dim); margin-top: 7px; line-height: 1.55; }
+  .ask .a.deferred { color: var(--faint); font-style: italic; }
+  .ask .meta { display: flex; align-items: center; gap: 10px; margin-top: 9px; font-size: 11px; color: var(--faint); flex-wrap: wrap; }
+  .conf { border: 1px solid var(--line-2); border-radius: 999px; padding: 1px 8px; }
+  .judge { margin-left: auto; display: flex; gap: 6px; }
+  .judge button { background: none; border: 1px solid var(--line); color: var(--faint); border-radius: 6px; cursor: pointer; font-size: 11px; padding: 3px 9px; transition: all .16s; }
+  .judge button:hover { color: var(--text); border-color: var(--line-2); }
+  .verdict-chip { border-radius: 999px; padding: 1px 8px; border: 1px solid var(--line-2); margin-left: auto; }
+
   /* ── misc ── */
   .empty { color: var(--dim); padding: 28px; text-align: center; font-size: 14px; }
   .empty .big { font-size: 18px; color: var(--text); display: block; margin-bottom: 8px; font-weight: 600; }
@@ -293,6 +308,12 @@
   <section class="reveal" style="animation-delay:.25s" id="reflSection">
     <div class="sec-head"><h2>What changed about you</h2><span class="aside">noticed by the nightly reflection</span></div>
     <div id="reflections"></div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.3s" id="askSection">
+    <div class="sec-head"><h2>What your AIs asked</h2><span class="aside">answered from your model — you judge every answer</span></div>
+    <div class="ask-stats" id="askStats"></div>
+    <div id="asks"></div>
   </section>
 
   <footer>
@@ -515,6 +536,38 @@ function renderReflections(assertions) {
     const p = a.payload || {}, conf = typeof p.confidence==="number" ? ` · ${Math.round(p.confidence*100)}% confidence` : "";
     return `<div class="refl"><div class="rc">${esc(p.claim)}</div><div class="rm">${esc(p.kind)} · noticed ${esc(timeAgo(a.ts))}${esc(conf)}</div></div>`;
   }).join("");
+}
+
+/* ── ask loop: agents ask about you; you judge the answers ── */
+function renderAsks(data) {
+  const items = (data && data.items) || [];
+  const s = (data && data.stats) || null;
+  if (s && s.asked) {
+    const prec = s.precision !== null ? `<span>precision <b>${Math.round(s.precision*100)}%</b> (of ${s.approved+s.edited+s.vetoed} judged)</span>` : "";
+    $("askStats").innerHTML = `<span><b>${fmtN(s.asked)}</b> asked</span><span><b>${fmtN(s.answered)}</b> answered</span><span><b>${fmtN(s.deferred)}</b> deferred to you</span>${prec}`;
+  } else $("askStats").innerHTML = "";
+  if (!items.length) {
+    $("asks").innerHTML = `<div class="card empty">No questions yet. Connected agents can call <code>persnally_ask</code> to ask <i>your model</i> — "would they want tests?", "what tone?" — instead of interrupting you. They show up here for your judgment.</div>`;
+    return;
+  }
+  $("asks").innerHTML = items.map(it => {
+    const conf = `<span class="conf">${it.deferred ? "deferred" : `confidence ${Math.round(it.confidence*100)}%`}</span>`;
+    const answer = it.deferred
+      ? `<div class="a deferred">Deferred — not enough evidence to answer, so the agent was told to ask you.</div>`
+      : `<div class="a">${esc(it.answer)}</div>`;
+    const judge = it.deferred ? "" : (it.verdict
+      ? `<span class="verdict-chip">${esc(it.verdict)}</span>`
+      : `<span class="judge"><button data-id="${esc(it.answer_id)}" data-v="approved" title="The answer was right">✓ right</button><button data-id="${esc(it.answer_id)}" data-v="vetoed" title="The answer was wrong">✗ wrong</button></span>`);
+    const asker = it.asker ? `<span class="asker">from ${esc(prettyClient(it.asker))} · </span>` : "";
+    return `<div class="ask"><div class="q">${asker}${esc(it.question)}</div>${answer}
+      <div class="meta">${conf}<span>${esc(timeAgo(it.ts))}</span>${judge}</div></div>`;
+  }).join("");
+  document.querySelectorAll(".judge button").forEach(b => b.addEventListener("click", async () => {
+    if (DEMO) return alert("Preview mode — start persnallyd to judge answers for real.");
+    await fetch("/feedback", { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ answer_id: b.dataset.id, verdict: b.dataset.v }) });
+    renderAsks(await get("/questions?limit=8"));
+  }));
 }
 
 /* ── topic list ── */
@@ -784,16 +837,17 @@ async function saveKey() {
 
 /* ── load ── */
 async function loadAll() {
-  let stats, profile, topics, reads, assertions, voice, activity;
+  let stats, profile, topics, reads, assertions, voice, activity, asks;
   try {
-    [stats, profile, topics, reads, assertions, voice, activity] = await Promise.all([
+    [stats, profile, topics, reads, assertions, voice, activity, asks] = await Promise.all([
       get("/stats"), get("/profile"), get("/topics?limit=40"),
       get("/events?type=context.read&limit=60"), get("/events?type=signal.assertion&limit=20"), get("/voice"), get("/activity"),
+      get("/questions?limit=8"),
     ]);
     if (!stats) throw new Error("no daemon");
   } catch (e) {
     DEMO = true; $("ribbon").classList.add("show");
-    ({ stats, profile, topics, reads, assertions, voice, activity } = DEMO_DATA());
+    ({ stats, profile, topics, reads, assertions, voice, activity, asks } = DEMO_DATA());
   }
   topics = topics||[]; reads = reads||[]; assertions = assertions||[];
   const engine = DEMO ? null : await get("/engine");
@@ -812,6 +866,7 @@ async function loadAll() {
   renderReads(reads, total);
   renderEngage(activity);
   renderReflections(assertions);
+  renderAsks(asks);
   setCardData(profile, topics, voice, stats);
   saveSnapshot(topics);
 }
@@ -830,10 +885,11 @@ $("reflect").onclick = async () => {
 };
 setInterval(async () => {
   if (DEMO) return;
-  const [reads, stats, voice, activity] = await Promise.all([get("/events?type=context.read&limit=60"), get("/stats"), get("/voice"), get("/activity")]);
+  const [reads, stats, voice, activity, asks] = await Promise.all([get("/events?type=context.read&limit=60"), get("/stats"), get("/voice"), get("/activity"), get("/questions?limit=8")]);
   if (reads && stats) renderReads(reads, (stats.byType && stats.byType["context.read"]) || reads.length);
   if (voice) renderVoice(voice); // live: voice signals captured mid-session show up without a reload
   if (activity) renderEngage(activity);
+  if (asks) renderAsks(asks);   // live: agent questions land here as they happen
 }, 25000);
 
 /* ── shareable portrait card (drawn locally on a canvas; nothing uploaded) ── */
@@ -1021,6 +1077,17 @@ function DEMO_DATA() {
       { ts:iso(86400000*2), payload:{ claim:"You consistently choose local-first, auditable tools over cloud convenience.", kind:"preference", confidence:0.86 }, provenance:{ kind:"derived" } },
       { ts:iso(86400000*6), payload:{ claim:"You generate new ideas fastest right when your main bet stalls.", kind:"behavior", confidence:0.71 }, provenance:{ kind:"derived" } },
     ],
+    asks: {
+      stats: { asked: 23, answered: 19, deferred: 4, approved: 16, edited: 0, vetoed: 2, precision: 16/18 },
+      items: [
+        { question_id:"q1", answer_id:"a1", ts:iso(3600000*3), asker:"claude-code", question:"Would they want tests with this refactor?",
+          answer:"Yes — they treat unverified code as unfinished and repeatedly insist on test passes before merging. Write the tests.", confidence:0.92, deferred:false, verdict:"approved" },
+        { question_id:"q2", answer_id:"a2", ts:iso(3600000*8), asker:"cursor", question:"New dependency or hand-roll this date parser?",
+          answer:"Hand-roll it — they consistently prefer the smallest design over new dependencies and audit everything they ship.", confidence:0.84, deferred:false, verdict:null },
+        { question_id:"q3", answer_id:"a3", ts:iso(86400000), asker:"claude-desktop", question:"What tone for this investor update?",
+          answer:"", confidence:0.45, deferred:true, verdict:null },
+      ],
+    },
     activity: { firstEventAt: iso(86400000*214), firstReadAt: iso(86400000*210), lastReadAt: iso(3600000*2), daysSinceFirst: 214, daysSinceFirstRead: 210, totalReads: 1247, reads7d: 33, reads30d: 142, activeDays7d: 5, activeDays14d: 12, retainedWeek2: true, daily: [2,0,3,5,1,4,6,2,0,3,7,5,8,4].map((r,i)=>({ date:new Date(now-(13-i)*86400000).toISOString().slice(0,10), reads:r })) },
     voice: {
       pack: "Write like this user: terse — short, declarative sentences; leads with imperatives, minimal preamble; states things flatly; no emoji; casual register (lowercases “i”); recurring phrasing: “be 100% sure”, “industry best practices”, “validate whether it's valid or not”.",
