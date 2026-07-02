@@ -29,6 +29,7 @@ import {
 import { newEvent } from "./events.js";
 import { refreshVoice } from "./voice.js";
 import { renderProfile, synthesizeProfile } from "./profile.js";
+import { askUserModel } from "./ask.js";
 import { DEFAULT_DB_PATH, EventStore } from "./store.js";
 
 const USAGE = `persnallyd ${VERSION} — so every AI finally knows you
@@ -44,6 +45,7 @@ Usage:
   persnallyd import chatgpt <path>  Import a ChatGPT export dir or conversations.json (needs ANTHROPIC_API_KEY)
   persnallyd import git <path> [--author <email>]   Import repo activity (offline, no LLM); path = repo or folder of repos
   persnallyd profile                Synthesize your profile from the store
+  persnallyd ask "<question>"       Ask your model a question the way an agent would (answers or defers)
   persnallyd voice                  Refresh your voice fingerprint from Claude Code transcripts (offline, no LLM)
   persnallyd consolidate            Reflect now: refresh decay, add behavior patterns, re-synthesize
   persnallyd show [topics|events|profile]   Show topics (default), recent events, or the profile
@@ -334,6 +336,22 @@ async function main(): Promise<void> {
       const profile = await synthesizeProfile(store, engine.extract, engine.model);
       store.close();
       console.log(renderProfile(profile));
+      return;
+    }
+    case "ask": {
+      const question = args.join(" ").trim();
+      if (!question) return die('Usage: persnallyd ask "<question about the user>"');
+      const engine = await chooseExtractor("extract").catch(() => null);
+      const store = new EventStore();
+      const r = await askUserModel(store, {
+        question, asker: "cli", source: "cli", provenance: { kind: "local", surface: "cli" },
+      }, engine);
+      store.close();
+      if (r.deferred) {
+        console.log(`Deferred (${r.reason}): ${r.answer}`);
+      } else {
+        console.log(`${r.answer}\n\nconfidence ${r.confidence.toFixed(2)} · ${r.evidence_event_ids.length} evidence event(s) · review at http://127.0.0.1:${DEFAULT_PORT}`);
+      }
       return;
     }
     case "voice": {

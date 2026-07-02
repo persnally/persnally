@@ -5,6 +5,7 @@
 
 import http from "node:http";
 import { readFileSync } from "node:fs";
+import { askUserModel } from "./ask.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { runConsolidation, shouldRunNow } from "./consolidate.js";
 import { allowedCategories, loadScopes, type Category } from "./permissions.js";
@@ -138,6 +139,57 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       }
       if (req.method === "GET" && url.pathname === "/engine/pull") {
         return json(res, 200, pull);
+      }
+      // The ask_user_model loop: agents ask about the user; the model answers
+      // with confidence or defers. Validation happens before engine selection
+      // so bad requests never spend inference.
+      if (req.method === "POST" && url.pathname === "/ask") {
+        if (!(req.headers["content-type"] ?? "").includes("application/json")) {
+          return json(res, 415, { error: "Content-Type must be application/json" });
+        }
+        const body = (await readBody(req)) as { question?: unknown; client?: unknown; asker?: unknown };
+        const question = typeof body.question === "string" ? body.question.trim() : "";
+        if (!question || question.length > 500) {
+          return json(res, 400, { error: "question required (1–500 chars)" });
+        }
+        const client = typeof body.client === "string" && body.client
+          ? body.client.toLowerCase().replace(/[^a-z0-9._-]/g, "-")
+          : null;
+        const asker = typeof body.asker === "string" && body.asker ? body.asker : (client ?? "dashboard");
+        const engine = await chooseExtractor("extract").catch(() => null);
+        const result = await askUserModel(store, {
+          question,
+          asker,
+          source: client ? `mcp:${client}` : "dashboard",
+          provenance: client ? { kind: "mcp", client } : { kind: "local", surface: "dashboard" },
+          allowed: client ? allowedCategories(client) : null,
+        }, engine);
+        return json(res, 200, result);
+      }
+      if (req.method === "GET" && url.pathname === "/questions") {
+        return json(res, 200, store.askHistory(num(url, "limit", 50)));
+      }
+      // The feedback half of the loop: the user labels an answer right/wrong
+      // on the dashboard — the labeled examples the behavior model learns from.
+      if (req.method === "POST" && url.pathname === "/feedback") {
+        if (!(req.headers["content-type"] ?? "").includes("application/json")) {
+          return json(res, 415, { error: "Content-Type must be application/json" });
+        }
+        const body = (await readBody(req)) as { answer_id?: unknown; verdict?: unknown };
+        const verdict = body.verdict;
+        if (verdict !== "approved" && verdict !== "edited" && verdict !== "vetoed") {
+          return json(res, 400, { error: "verdict must be approved | edited | vetoed" });
+        }
+        const answerId = typeof body.answer_id === "string" ? body.answer_id : "";
+        const subject = store.getEvents([answerId])[0];
+        if (!subject || subject.type !== "agent.answer") {
+          return json(res, 404, { error: "no such answer" });
+        }
+        const event = newEvent("feedback.signal", "dashboard",
+          { subject_id: answerId, verdict },
+          { kind: "local", surface: "dashboard" });
+        store.append([event]);
+        return json(res, 201, { ok: true, id: event.id });
       }
       if (req.method === "GET" && url.pathname === "/events") {
         const ids = url.searchParams.get("ids");

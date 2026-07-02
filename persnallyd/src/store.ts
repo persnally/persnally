@@ -59,6 +59,28 @@ export interface Activity {
   daily: { date: string; reads: number }[]; // last 14 days, oldest→newest
 }
 
+export interface AskRow {
+  question_id: string;
+  answer_id: string;
+  ts: string;
+  asker: string;
+  question: string;
+  answer: string;
+  confidence: number;
+  deferred: boolean;
+  verdict: "approved" | "edited" | "vetoed" | null;
+}
+
+export interface AskStats {
+  asked: number;
+  answered: number;
+  deferred: number;
+  approved: number;
+  edited: number;
+  vetoed: number;
+  precision: number | null; // approved / labeled; edited and vetoed both count against — conservative on purpose
+}
+
 export class EventStore {
   private db: Database.Database;
 
@@ -243,6 +265,48 @@ export class EventStore {
       retainedWeek2: firstReadMs !== null && now >= firstReadMs + 14 * DAY ? week2Read : null,
       daily: [...daily.entries()].map(([date, r]) => ({ date, reads: r })),
     };
+  }
+
+  /** agent.question/agent.answer exchanges joined with the user's feedback —
+      the precision surface of the ask_user_model loop. */
+  askHistory(limit = 50): { items: AskRow[]; stats: AskStats } {
+    const questions = new Map(this.query({ type: "agent.question", limit: 1_000_000 }).map((e) => [e.id, e]));
+    // query() returns ts DESC, so the first verdict seen per answer is the latest one.
+    const verdicts = new Map<string, AskRow["verdict"]>();
+    for (const e of this.query({ type: "feedback.signal", limit: 1_000_000 })) {
+      const p = e.payload as { subject_id: string; verdict: AskRow["verdict"] };
+      if (!verdicts.has(p.subject_id)) verdicts.set(p.subject_id, p.verdict);
+    }
+
+    const all = this.query({ type: "agent.answer", limit: 1_000_000 });
+    const stats: AskStats = { asked: all.length, answered: 0, deferred: 0, approved: 0, edited: 0, vetoed: 0, precision: null };
+    for (const a of all) {
+      if ((a.payload as { deferred: boolean }).deferred) stats.deferred++;
+      else stats.answered++;
+      const v = verdicts.get(a.id);
+      if (v === "approved") stats.approved++;
+      else if (v === "edited") stats.edited++;
+      else if (v === "vetoed") stats.vetoed++;
+    }
+    const labeled = stats.approved + stats.edited + stats.vetoed;
+    if (labeled) stats.precision = stats.approved / labeled;
+
+    const items = all.slice(0, limit).map((a): AskRow => {
+      const p = a.payload as { question_id: string; answer: string; confidence: number; deferred: boolean };
+      const qp = questions.get(p.question_id)?.payload as { question?: string; asker?: string } | undefined;
+      return {
+        question_id: p.question_id,
+        answer_id: a.id,
+        ts: a.ts,
+        asker: qp?.asker ?? "",
+        question: qp?.question ?? "",
+        answer: p.answer,
+        confidence: p.confidence,
+        deferred: p.deferred,
+        verdict: verdicts.get(a.id) ?? null,
+      };
+    });
+    return { items, stats };
   }
 
   topics(limit = 50): TopicRow[] {
