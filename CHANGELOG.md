@@ -2,6 +2,30 @@
 
 All notable changes to Persnally will be documented in this file.
 
+## [2.7.0] - 2026-07-04
+
+### Added
+- **`persnally_ask` — agents ask your model instead of interrupting you.** A new MCP tool (the 5th) lets any connected agent ask questions about you — "would they want tests with this change?", "new dependency or hand-roll it?" — and get an answer synthesized from your accumulated history (profile, decayed interests, assertions, voice) with a confidence score. Below the confidence threshold it **defers**: the agent is told to ask you directly, never handed a guess. Also available as `persnallyd ask "<question>"` from the terminal.
+- **"What your AIs asked" dashboard section.** Every question, answer, and deferral is recorded and shown with its confidence; you judge answers ✓ right / ✗ wrong, and a conservative precision stat (approved ÷ judged) tracks how often your model is actually right. Every exchange is an auditable event pair, same as everything else in the store.
+- Daemon endpoints backing the loop: `POST /ask`, `GET /questions`, `POST /feedback`.
+
+### Notes
+- Scoped clients get answers built only from their allowed categories — the cross-category profile and assertions never leak past a scope, same boundary as `/profile`.
+- An empty store or missing engine defers immediately without spending any inference.
+
+## [2.6.2] - 2026-06-29
+
+### Fixed
+- "How you write" no longer picks up machine noise (pasted logs, command output) as style patterns — the stylometry corpus is cleaned before fingerprinting, and the voice pack re-derives on synthesize/reflect so stale patterns clear themselves.
+
+## [2.6.1] - 2026-06-27
+
+### Added
+- **Local-first engine onboarding.** The dashboard walks a key-less install through its choices — save an Anthropic key, or pull a local Ollama model with one click (progress shown live) — so the mirror never dead-ends on "no engine."
+
+### Changed
+- Profile synthesis upgraded to Opus 4.8 by default.
+
 ## [2.6.0] - 2026-06-27
 
 ### Added
