@@ -267,6 +267,22 @@ export class EventStore {
     };
   }
 
+  /** Corrections the user stated (action edit/contradict — deletes are
+      tombstones, not statements). Newest first; the authoritative layer that
+      ask and profile synthesis must weight above derived signals. */
+  corrections(limit = 50): { id: string; ts: string; subject: string; correction: string }[] {
+    return this.query({ type: "user.correction", limit: 1_000_000 })
+      .filter((e) => {
+        const p = e.payload as { action: string; reason: string };
+        return p.action !== "delete" && p.reason.trim().length > 0;
+      })
+      .slice(0, limit)
+      .map((e) => {
+        const p = e.payload as { target_id: string; reason: string };
+        return { id: e.id, ts: e.ts, subject: p.target_id, correction: p.reason };
+      });
+  }
+
   /** agent.question/agent.answer exchanges joined with the user's feedback —
       the precision surface of the ask_user_model loop. */
   askHistory(limit = 50): { items: AskRow[]; stats: AskStats } {

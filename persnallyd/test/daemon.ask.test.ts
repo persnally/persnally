@@ -13,6 +13,8 @@ const postJson = (path: string, body: unknown, contentType = "application/json")
   fetch(BASE + path, { method: "POST", headers: { "Content-Type": contentType }, body: JSON.stringify(body) });
 
 const dir = mkdtempSync(join(tmpdir(), "daemon-ask-test-"));
+process.env.PERSNALLY_DIR = dir;      // isolate config reads from the real ~/.persnally
+delete process.env.ANTHROPIC_API_KEY; // asks must resolve engine-less (defer), never spend real inference
 const store = new EventStore(join(dir, "test.db"));
 let server: ReturnType<typeof startDaemon>;
 
@@ -70,4 +72,20 @@ test("POST /feedback records the verdict and it lands in /questions", async () =
   assert.equal(body.items[0]!.verdict, "approved");
   assert.equal(body.stats.approved, 1);
   assert.equal(body.stats.precision, 1);
+});
+
+// Last test in the file: it exhausts the shared in-memory ask budget.
+test("POST /ask rate-limits after 20 asks in the window", async () => {
+  // No key + no Ollama in the test env → every ask defers engine-less (no inference),
+  // but each one still consumes rate budget — the guard runs before engine selection.
+  for (let i = 0; i < 20; i++) {
+    const r = await postJson("/ask", { question: `q${i}` });
+    assert.equal(r.status, 200, `ask ${i} inside the budget must pass`);
+    assert.equal(((await r.json()) as { deferred: boolean }).deferred, true);
+  }
+  const over = await postJson("/ask", { question: "one too many" });
+  assert.equal(over.status, 429);
+  assert.match(((await over.json()) as { error: string }).error, /ask limit reached/);
+  // Validation failures never consume budget — they still 400, not 429.
+  assert.equal((await postJson("/ask", { question: "" })).status, 400);
 });

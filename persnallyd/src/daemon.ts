@@ -13,6 +13,7 @@ import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Prov
 import { importNewClaudeCodeSessions } from "./importers/claude-code.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
 import { synthesizeProfile } from "./profile.js";
+import { searchContext } from "./search.js";
 import { refreshVoice } from "./voice.js";
 import type { EventStore } from "./store.js";
 
@@ -27,6 +28,19 @@ export const VERSION: string = pkg.version;
 // In-flight local-model download — module state so progress survives across poll requests.
 type PullState = { state: "idle" | "pulling" | "done" | "error"; model: string; percent: number; status: string; error: string };
 let pull: PullState = { state: "idle", model: "", percent: 0, status: "", error: "" };
+
+// /ask spends inference per call — bound what a looping agent can burn.
+// Sliding window, in-memory: resets on daemon restart, which is fine for a
+// budget guard (this is cost control, not security).
+const ASK_LIMIT = 20;
+const ASK_WINDOW_MS = 10 * 60 * 1000;
+const askTimes: number[] = [];
+function askAllowed(now: number): boolean {
+  while (askTimes.length && now - askTimes[0]! > ASK_WINDOW_MS) askTimes.shift();
+  if (askTimes.length >= ASK_LIMIT) return false;
+  askTimes.push(now);
+  return true;
+}
 
 export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server {
   const localHosts = [`127.0.0.1:${port}`, `localhost:${port}`];
@@ -156,6 +170,9 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
           ? body.client.toLowerCase().replace(/[^a-z0-9._-]/g, "-")
           : null;
         const asker = typeof body.asker === "string" && body.asker ? body.asker : (client ?? "dashboard");
+        if (!askAllowed(Date.now())) {
+          return json(res, 429, { error: `ask limit reached (${ASK_LIMIT} per ${ASK_WINDOW_MS / 60000} min) — protects your inference budget from a looping agent` });
+        }
         const engine = await chooseExtractor("extract").catch(() => null);
         const result = await askUserModel(store, {
           question,
@@ -168,6 +185,16 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       }
       if (req.method === "GET" && url.pathname === "/questions") {
         return json(res, 200, store.askHistory(num(url, "limit", 50)));
+      }
+      // Targeted lookup — deterministic and offline, so no rate limit needed.
+      if (req.method === "GET" && url.pathname === "/search") {
+        const q = (url.searchParams.get("q") ?? "").trim();
+        if (!q || q.length > 200) return json(res, 400, { error: "q required (1–200 chars)" });
+        const client = url.searchParams.get("client");
+        return json(res, 200, searchContext(store, q, {
+          limit: num(url, "limit", 10),
+          allowed: client ? allowedCategories(client) : null,
+        }));
       }
       // The feedback half of the loop: the user labels an answer right/wrong
       // on the dashboard — the labeled examples the behavior model learns from.

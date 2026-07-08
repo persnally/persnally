@@ -30,6 +30,7 @@ import { newEvent } from "./events.js";
 import { refreshVoice } from "./voice.js";
 import { renderProfile, synthesizeProfile } from "./profile.js";
 import { askUserModel } from "./ask.js";
+import { renderHits, searchContext } from "./search.js";
 import { DEFAULT_DB_PATH, EventStore } from "./store.js";
 
 const USAGE = `persnallyd ${VERSION} — so every AI finally knows you
@@ -46,6 +47,8 @@ Usage:
   persnallyd import git <path> [--author <email>]   Import repo activity (offline, no LLM); path = repo or folder of repos
   persnallyd profile                Synthesize your profile from the store
   persnallyd ask "<question>"       Ask your model a question the way an agent would (answers or defers)
+  persnallyd search "<topic>"       What Persnally knows about a specific subject (offline, no LLM)
+  persnallyd correct "<truth>" [--about <subject>]   Correct something it believes about you (authoritative)
   persnallyd voice                  Refresh your voice fingerprint from Claude Code transcripts (offline, no LLM)
   persnallyd consolidate            Reflect now: refresh decay, add behavior patterns, re-synthesize
   persnallyd show [topics|events|profile]   Show topics (default), recent events, or the profile
@@ -354,6 +357,33 @@ async function main(): Promise<void> {
       }
       return;
     }
+    case "correct": {
+      // --about names the subject; the rest is the corrected truth.
+      const aboutIdx = args.indexOf("--about");
+      const subject = aboutIdx >= 0 ? (args[aboutIdx + 1] ?? "") : "";
+      const rest = aboutIdx >= 0 ? [...args.slice(0, aboutIdx), ...args.slice(aboutIdx + 2)] : args;
+      const correction = rest.join(" ").trim();
+      if (!correction) return die('Usage: persnallyd correct "<what\'s actually true>" [--about <subject>]');
+      const store = new EventStore();
+      store.append([newEvent(
+        "user.correction",
+        "cli",
+        { target_id: subject, action: "contradict", reason: correction },
+        { kind: "local", surface: "cli" },
+      )]);
+      store.close();
+      console.log(`Recorded${subject ? ` (re ${subject})` : ""}: "${correction}" — corrections are authoritative; the profile picks it up on the next synthesis.`);
+      return;
+    }
+    case "search": {
+      const query = args.join(" ").trim();
+      if (!query) return die('Usage: persnallyd search "<topic>"');
+      const store = new EventStore();
+      const hits = searchContext(store, query);
+      store.close();
+      console.log(renderHits(hits, query));
+      return;
+    }
     case "voice": {
       // Deterministic, offline, re-runnable — refreshes the stylometry layer in place.
       const dir = args[0] || DEFAULT_TRANSCRIPTS_DIR;
@@ -408,10 +438,14 @@ async function main(): Promise<void> {
           out.push(`- ${t.topic} (${t.category}, ${t.dominant_intent}, weight ${t.weight.toFixed(2)})`);
         }
       }
-      // Hook-only: ask Claude to call persnally_track once at session end so
-      // live capture actually accrues. Not shown in plain `context` output.
+      // Hook-only: put the loop tools in the default path. Soft instructions
+      // are the only lever here — measured compliance is low (3% for track),
+      // so keep them few, specific, and high-value. Not shown in plain `context`.
       if (hook) {
         out.push(
+          "",
+          "# Persnally — in this session",
+          "Before interrupting the user with a question about their preferences, conventions, or how they'd decide, call persnally_ask first — it answers from their history or tells you to ask them.",
           "",
           "# Persnally — end-of-session",
           "When this session ends, call persnally_track with 1–3 topics it focused on (weight, intent, depth, category). Skip only if nothing substantial was discussed.",

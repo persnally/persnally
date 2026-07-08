@@ -39,6 +39,7 @@ export async function synthesizeProfile(
   if (!topics.length && !assertions.length) {
     throw new Error("Nothing to synthesize from — run an import first.");
   }
+  const corrections = store.corrections(25);
 
   const content = [
     "## Weighted interests (decayed)",
@@ -52,6 +53,12 @@ export async function synthesizeProfile(
       const p = e.payload as { claim: string; kind: string; confidence: number; evidence: string };
       return `- [${e.id}] (${p.kind}, conf ${p.confidence}) ${p.claim} — ${p.evidence}`;
     }),
+    // What the user explicitly corrected overrides anything inferred above.
+    ...(corrections.length ? [
+      "",
+      "## Corrections stated by the user (authoritative — where these conflict with anything above, the correction wins)",
+      ...corrections.map((c) => `- [${c.id}] ${c.subject ? `re ${c.subject}: ` : ""}${c.correction}`),
+    ] : []),
   ].join("\n");
 
   const raw = await extract({

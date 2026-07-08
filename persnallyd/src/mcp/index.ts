@@ -89,10 +89,14 @@ const STYLE_SCHEMA = z.object({
   confidence: z.number().min(0).max(1).default(0.6),
   evidence: z.string().default("").describe("a brief quote or why you believe it"),
 });
+const CORRECTION_SCHEMA = z.object({
+  subject: z.string().default("").describe("what the correction is about, if nameable (e.g. 'npm', 'my role')"),
+  correction: z.string().min(1).describe("the corrected truth, as the user stated it — e.g. 'uses pnpm, not npm', 'is a founder, not a contractor'"),
+});
 
 server.tool(
   "persnally_track",
-  `Track what builds the user's lasting context. Two kinds of signal, both optional — send whichever this conversation produced.
+  `Track what builds the user's lasting context. Three kinds of signal, all optional — send whichever this conversation produced.
 
 TOPICS — what they're engaged with (interests, decisions, accepted/rejected options).
 - 1-5 per conversation; weight = centrality (0.1 brief … 1.0 main focus); depth = mention|moderate|deep; sentiment 'negative' deprioritizes; entities are specific names ("Next.js", not "web framework").
@@ -101,24 +105,29 @@ STYLE — HOW they write and work, so every AI can answer like them. High value,
 - voice: "terse, no filler" · convention: "prefers pnpm over npm", "no default exports" · emphasis: "wants the falsification first" · format: "answers in bullet points" · workflow: "kills ideas fast".
 - Skip anything generic or already obvious. When unsure, don't.
 
+CORRECTIONS — when the user corrects something you (or their Persnally context) believed about them ("no, I actually…", "that's wrong, I…"). Record it VERBATIM in spirit — corrections become authoritative and outrank everything the model inferred. Send immediately when it happens, not at session end.
+
 The user opted in. Only these structured signals are stored, locally, never raw messages.`,
   {
     topics: z.array(TOPIC_SCHEMA).optional(),
     style: z.array(STYLE_SCHEMA).optional(),
+    corrections: z.array(CORRECTION_SCHEMA).optional(),
   },
-  async ({ topics, style }) =>
+  async ({ topics, style, corrections }) =>
     guarded(async () => {
-      logEvent("tool_call", { tool: "persnally_track", topics: topics?.length ?? 0, style: style?.length ?? 0 });
+      logEvent("tool_call", { tool: "persnally_track", topics: topics?.length ?? 0, style: style?.length ?? 0, corrections: corrections?.length ?? 0 });
       const client = clientSlug();
       const events = [
         ...(topics ?? []).map((t) => ({ type: "signal.topic", source: `mcp:${client}`, payload: t, provenance: { kind: "mcp", client } })),
         ...(style ?? []).map((s) => ({ type: "signal.style", source: `mcp:${client}`, payload: { ...s, basis: "observed" }, provenance: { kind: "mcp", client } })),
+        ...(corrections ?? []).map((c) => ({ type: "user.correction", source: `mcp:${client}`, payload: { target_id: c.subject, action: "contradict", reason: c.correction }, provenance: { kind: "mcp", client } })),
       ];
-      if (!events.length) return text("Nothing to track — pass topics and/or style signals.");
+      if (!events.length) return text("Nothing to track — pass topics, style, and/or corrections.");
       await daemonPost("/events", events);
       const parts: string[] = [];
       if (topics?.length) parts.push(`${topics.length} topic(s): ${topics.map((t) => t.topic).join(", ")}`);
       if (style?.length) parts.push(`${style.length} style signal(s)`);
+      if (corrections?.length) parts.push(`${corrections.length} correction(s) — now authoritative`);
       return text(`Recorded ${parts.join(" · ")}.`);
     }),
 );
@@ -165,6 +174,34 @@ Call this at the START of a conversation (or when personalization would improve 
       }
       await recordRead(detail, purpose, items);
       return text(out);
+    }),
+);
+
+// ── persnally_search — targeted context lookup ──────────────
+
+interface SearchHit {
+  kind: "topic" | "assertion";
+  text: string;
+  detail: string;
+}
+
+server.tool(
+  "persnally_search",
+  `Look up what Persnally knows about a SPECIFIC topic, tool, or subject — the user's stance, experience, and observed patterns around it. Use mid-conversation when a subject comes up and their history with it would sharpen your answer (e.g. before recommending a stack, check "rust" or "postgres").
+
+Complements persnally_context (the broad profile): search is narrow and targeted. Returns nothing if the subject has never appeared in their history.`,
+  {
+    query: z.string().min(1).max(200).describe("The subject to look up — a topic, technology, project, or theme (e.g. 'rust', 'fundraising', 'testing practices')"),
+  },
+  async ({ query }) =>
+    guarded(async () => {
+      logEvent("tool_call", { tool: "persnally_search" });
+      const client = encodeURIComponent(getClient());
+      const hits = await daemonGet<SearchHit[]>(`/search?q=${encodeURIComponent(query)}&client=${client}`) ?? [];
+      if (!hits.length) return text(`Persnally has nothing on "${query}" — the user's history doesn't cover it.`);
+      await recordRead("search", `looked up: ${query}`, hits.length);
+      const lines = hits.map((h) => `- [${h.kind === "topic" ? "interest" : "observed"}] ${h.text} (${h.detail})`);
+      return text(`What Persnally knows about "${query}":\n${lines.join("\n")}`);
     }),
 );
 

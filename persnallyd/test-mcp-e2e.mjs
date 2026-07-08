@@ -37,6 +37,12 @@ const mockDaemon = http.createServer((req, res) => {
     if (path === "/topics") return respond(200, [{ topic: "rust", category: "technology", weight: 0.9, signals: 3, dominant_intent: "building", sentiment_balance: 0.5, entities: [] }]);
     if (path === "/stats") return respond(200, { total: 4, first: "2026-01-01", last: "2026-06-11" });
     if (path === "/voice") return respond(200, { pack: "Write like this user: terse, no filler.", items: [{ dimension: "voice", pattern: "terse, no filler", polarity: "does", confidence: 0.8, evidence: "x", basis: "stylometry" }] });
+    if (path === "/search") {
+      const q = new URL(req.url, "http://x").searchParams.get("q");
+      return respond(200, q === "rust"
+        ? [{ kind: "topic", text: "rust", detail: "technology · building · weight 0.90 · 3 signal(s)", score: 4, event_ids: ["e1"] }]
+        : []);
+    }
     respond(404, { error: "not found" });
   });
 });
@@ -93,7 +99,7 @@ srv.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initiali
 
 // ── tools list ──
 const tools = (await rpc("tools/list", {})).result.tools.map((t) => t.name).sort();
-assert.deepEqual(tools, ["persnally_ask", "persnally_context", "persnally_forget", "persnally_interests", "persnally_track"]);
+assert.deepEqual(tools, ["persnally_ask", "persnally_context", "persnally_forget", "persnally_interests", "persnally_search", "persnally_track"]);
 console.log("✅ handshake + tool list");
 
 // ── track → daemon POST with provenance ──
@@ -118,6 +124,17 @@ assert.equal(styled[0].payload.basis, "observed", "live capture marks basis=obse
 assert.equal(styled[0].payload.pattern, "prefers pnpm over npm");
 assert.deepEqual(styled[0].provenance, { kind: "mcp", client: "e2e-test" });
 console.log("✅ track captures live style signals (basis observed)");
+
+// ── track corrections → user.correction with action contradict ──
+const corrText = await callTool("persnally_track", {
+  corrections: [{ subject: "npm", correction: "uses pnpm, not npm" }],
+});
+assert.match(corrText, /1 correction\(s\) — now authoritative/);
+const corrected = received.posts.find((p) => Array.isArray(p) && p[0]?.type === "user.correction");
+assert.ok(corrected, "corrections must POST a user.correction event");
+assert.deepEqual(corrected[0].payload, { target_id: "npm", action: "contradict", reason: "uses pnpm, not npm" });
+assert.deepEqual(corrected[0].provenance, { kind: "mcp", client: "e2e-test" });
+console.log("✅ track records corrections as authoritative user.correction events");
 
 // ── migration fired on initialize ──
 const migrated = received.posts.find((p) => Array.isArray(p) && p[0]?.provenance?.file === "interest-graph.json");
@@ -154,6 +171,18 @@ assert.equal(received.asks.length, 1, "ask must POST to the daemon");
 assert.equal(received.asks[0].question, "Would they want tests with this refactor?");
 assert.equal(received.asks[0].client, "e2e-test", "the daemon needs the client for scoping + provenance");
 console.log("✅ ask → daemon /ask with client identity");
+
+// ── search → GET /search; hits recorded as a context.read, misses not ──
+const searchHit = await callTool("persnally_search", { query: "rust" });
+assert.match(searchHit, /What Persnally knows about "rust"/);
+assert.match(searchHit, /\[interest\] rust/);
+const searchReads = () => received.posts.filter((p) => Array.isArray(p) && p[0]?.type === "context.read" && p[0]?.payload?.scope === "search");
+assert.equal(searchReads().length, 1, "a search that serves hits records a context.read");
+assert.equal(searchReads()[0][0].payload.client_purpose, "looked up: rust");
+const searchMiss = await callTool("persnally_search", { query: "cobol" });
+assert.match(searchMiss, /nothing on "cobol"/);
+assert.equal(searchReads().length, 1, "empty searches don't inflate the read metric");
+console.log("✅ search → targeted lookup with read recording");
 
 // ── interests + forget ──
 assert.match(await callTool("persnally_interests", {}), /rust — 0\.90/);
