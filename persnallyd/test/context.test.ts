@@ -38,6 +38,17 @@ test("context --hook emits a valid SessionStart envelope and records a read", as
   store2.close();
 });
 
+test("context --hook injects the loop instructions; plain context stays clean", async () => {
+  const { stdout: hooked } = await run("node", [CLI, "context", "--hook"], { env });
+  const ctx = JSON.parse(hooked).hookSpecificOutput.additionalContext as string;
+  assert.match(ctx, /call persnally_ask first/, "hook teaches the ask loop");
+  assert.match(ctx, /call persnally_track/, "hook keeps the end-of-session track instruction");
+
+  const { stdout: plain } = await run("node", [CLI, "context"], { env });
+  assert.doesNotMatch(plain, /persnally_ask/, "plain context output carries no tool instructions");
+  assert.doesNotMatch(plain, /persnally_track/);
+});
+
 test("context --hook emits nothing when the store is empty", async () => {
   const emptyDir = mkdtempSync(join(tmpdir(), "context-empty-"));
   try {

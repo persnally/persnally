@@ -408,10 +408,14 @@ async function main(): Promise<void> {
           out.push(`- ${t.topic} (${t.category}, ${t.dominant_intent}, weight ${t.weight.toFixed(2)})`);
         }
       }
-      // Hook-only: ask Claude to call persnally_track once at session end so
-      // live capture actually accrues. Not shown in plain `context` output.
+      // Hook-only: put the loop tools in the default path. Soft instructions
+      // are the only lever here — measured compliance is low (3% for track),
+      // so keep them few, specific, and high-value. Not shown in plain `context`.
       if (hook) {
         out.push(
+          "",
+          "# Persnally — in this session",
+          "Before interrupting the user with a question about their preferences, conventions, or how they'd decide, call persnally_ask first — it answers from their history or tells you to ask them.",
           "",
           "# Persnally — end-of-session",
           "When this session ends, call persnally_track with 1–3 topics it focused on (weight, intent, depth, category). Skip only if nothing substantial was discussed.",
