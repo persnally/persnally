@@ -30,6 +30,7 @@ import { newEvent } from "./events.js";
 import { refreshVoice } from "./voice.js";
 import { renderProfile, synthesizeProfile } from "./profile.js";
 import { askUserModel } from "./ask.js";
+import { renderHits, searchContext } from "./search.js";
 import { DEFAULT_DB_PATH, EventStore } from "./store.js";
 
 const USAGE = `persnallyd ${VERSION} — so every AI finally knows you
@@ -46,6 +47,7 @@ Usage:
   persnallyd import git <path> [--author <email>]   Import repo activity (offline, no LLM); path = repo or folder of repos
   persnallyd profile                Synthesize your profile from the store
   persnallyd ask "<question>"       Ask your model a question the way an agent would (answers or defers)
+  persnallyd search "<topic>"       What Persnally knows about a specific subject (offline, no LLM)
   persnallyd voice                  Refresh your voice fingerprint from Claude Code transcripts (offline, no LLM)
   persnallyd consolidate            Reflect now: refresh decay, add behavior patterns, re-synthesize
   persnallyd show [topics|events|profile]   Show topics (default), recent events, or the profile
@@ -352,6 +354,15 @@ async function main(): Promise<void> {
       } else {
         console.log(`${r.answer}\n\nconfidence ${r.confidence.toFixed(2)} · ${r.evidence_event_ids.length} evidence event(s) · review at http://127.0.0.1:${DEFAULT_PORT}`);
       }
+      return;
+    }
+    case "search": {
+      const query = args.join(" ").trim();
+      if (!query) return die('Usage: persnallyd search "<topic>"');
+      const store = new EventStore();
+      const hits = searchContext(store, query);
+      store.close();
+      console.log(renderHits(hits, query));
       return;
     }
     case "voice": {

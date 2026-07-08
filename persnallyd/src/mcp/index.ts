@@ -168,6 +168,34 @@ Call this at the START of a conversation (or when personalization would improve 
     }),
 );
 
+// ── persnally_search — targeted context lookup ──────────────
+
+interface SearchHit {
+  kind: "topic" | "assertion";
+  text: string;
+  detail: string;
+}
+
+server.tool(
+  "persnally_search",
+  `Look up what Persnally knows about a SPECIFIC topic, tool, or subject — the user's stance, experience, and observed patterns around it. Use mid-conversation when a subject comes up and their history with it would sharpen your answer (e.g. before recommending a stack, check "rust" or "postgres").
+
+Complements persnally_context (the broad profile): search is narrow and targeted. Returns nothing if the subject has never appeared in their history.`,
+  {
+    query: z.string().min(1).max(200).describe("The subject to look up — a topic, technology, project, or theme (e.g. 'rust', 'fundraising', 'testing practices')"),
+  },
+  async ({ query }) =>
+    guarded(async () => {
+      logEvent("tool_call", { tool: "persnally_search" });
+      const client = encodeURIComponent(getClient());
+      const hits = await daemonGet<SearchHit[]>(`/search?q=${encodeURIComponent(query)}&client=${client}`) ?? [];
+      if (!hits.length) return text(`Persnally has nothing on "${query}" — the user's history doesn't cover it.`);
+      await recordRead("search", `looked up: ${query}`, hits.length);
+      const lines = hits.map((h) => `- [${h.kind === "topic" ? "interest" : "observed"}] ${h.text} (${h.detail})`);
+      return text(`What Persnally knows about "${query}":\n${lines.join("\n")}`);
+    }),
+);
+
 // ── persnally_ask — the decision loop (Phase 3) ─────────────
 
 interface AskResult {

@@ -13,6 +13,7 @@ import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Prov
 import { importNewClaudeCodeSessions } from "./importers/claude-code.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
 import { synthesizeProfile } from "./profile.js";
+import { searchContext } from "./search.js";
 import { refreshVoice } from "./voice.js";
 import type { EventStore } from "./store.js";
 
@@ -184,6 +185,16 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       }
       if (req.method === "GET" && url.pathname === "/questions") {
         return json(res, 200, store.askHistory(num(url, "limit", 50)));
+      }
+      // Targeted lookup — deterministic and offline, so no rate limit needed.
+      if (req.method === "GET" && url.pathname === "/search") {
+        const q = (url.searchParams.get("q") ?? "").trim();
+        if (!q || q.length > 200) return json(res, 400, { error: "q required (1–200 chars)" });
+        const client = url.searchParams.get("client");
+        return json(res, 200, searchContext(store, q, {
+          limit: num(url, "limit", 10),
+          allowed: client ? allowedCategories(client) : null,
+        }));
       }
       // The feedback half of the loop: the user labels an answer right/wrong
       // on the dashboard — the labeled examples the behavior model learns from.
