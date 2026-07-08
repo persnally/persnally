@@ -1,18 +1,25 @@
 /**
- * Daemon lifecycle — pidfile, detached start/stop, and macOS launchd autostart.
+ * Daemon lifecycle — pidfile, detached start/stop, and login autostart
+ * (macOS launchd · Linux systemd user unit).
  * The pidfile is advisory: a stale one (dead pid) is detected and cleaned up.
  */
 
 import { execFileSync, spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { DATA_DIR } from "./paths.js";
 
 const PID_FILE = join(DATA_DIR, "daemon.pid");
 export const LOG_FILE = join(DATA_DIR, "daemon.log");
 const PLIST_LABEL = "com.persnally.daemon";
 const PLIST_PATH = join(homedir(), "Library", "LaunchAgents", `${PLIST_LABEL}.plist`);
+const UNIT_NAME = "persnally.service";
+
+// Resolved at call time so XDG_CONFIG_HOME overrides work in-process (tests).
+function unitPath(): string {
+  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "systemd", "user", UNIT_NAME);
+}
 
 function alive(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch { return false; }
@@ -71,11 +78,18 @@ export async function stopDaemon(): Promise<number | null> {
 }
 
 export function autostartInstalled(): boolean {
-  return existsSync(PLIST_PATH);
+  if (process.platform === "darwin") return existsSync(PLIST_PATH);
+  if (process.platform === "linux") return existsSync(unitPath());
+  return false;
 }
 
 export function installAutostart(cliPath: string, port: number): string {
-  if (process.platform !== "darwin") throw new Error("autostart is macOS-only for now (launchd)");
+  if (process.platform === "darwin") return installLaunchd(cliPath, port);
+  if (process.platform === "linux") return installSystemd(cliPath, port);
+  throw new Error("autostart is supported on macOS (launchd) and Linux (systemd) — on this platform use `persnallyd start`");
+}
+
+function installLaunchd(cliPath: string, port: number): string {
   // Paths carry the username/home dir; escape so an "&" or "<" in a path can't
   // produce a malformed plist that silently breaks autostart.
   const x = xmlEscape;
@@ -105,7 +119,53 @@ export function installAutostart(cliPath: string, port: number): string {
   return PLIST_PATH;
 }
 
+/** The systemd user unit, rendered for one install. Exported for tests. */
+export function renderSystemdUnit(cliPath: string, port: number): string {
+  // systemd unit quoting: double-quote each arg; escape backslash and quote
+  // (C-style) so a pathological path can't break out of its quotes.
+  const q = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  return `[Unit]
+Description=Persnally — local personal context engine
+After=default.target
+
+[Service]
+ExecStart=${q(process.execPath)} ${q(cliPath)} serve --port ${port}
+Restart=always
+RestartSec=2
+StandardOutput=append:${LOG_FILE}
+StandardError=append:${LOG_FILE}
+
+[Install]
+WantedBy=default.target
+`;
+}
+
+function installSystemd(cliPath: string, port: number): string {
+  const path = unitPath();
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, renderSystemdUnit(cliPath, port));
+  try {
+    execFileSync("systemctl", ["--user", "daemon-reload"]);
+    execFileSync("systemctl", ["--user", "enable", "--now", UNIT_NAME]);
+  } catch (e) {
+    // Don't leave a half-installed unit that autostartInstalled() would report as live.
+    rmSync(path, { force: true });
+    throw new Error(
+      `systemd user service could not be enabled (${e instanceof Error ? e.message : e}) — ` +
+      "is this a systemd distro with a user session? Fallback: `persnallyd start`.",
+    );
+  }
+  return path;
+}
+
 export function removeAutostart(): boolean {
+  if (process.platform === "linux") {
+    if (!existsSync(unitPath())) return false;
+    try { execFileSync("systemctl", ["--user", "disable", "--now", UNIT_NAME]); } catch { /* not enabled */ }
+    rmSync(unitPath(), { force: true });
+    try { execFileSync("systemctl", ["--user", "daemon-reload"]); } catch { /* best effort */ }
+    return true;
+  }
   if (!existsSync(PLIST_PATH)) return false;
   try { execFileSync("launchctl", ["unload", "-w", PLIST_PATH]); } catch { /* not loaded */ }
   rmSync(PLIST_PATH);

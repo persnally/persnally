@@ -63,7 +63,7 @@ Usage:
   persnallyd stop                   Stop the background daemon
   persnallyd restart                Restart the daemon (correctly handles autostart/launchd)
   persnallyd serve [--port N]       Run the daemon in the foreground (127.0.0.1:${DEFAULT_PORT})
-  persnallyd autostart [--remove]   Start the daemon at login and keep it alive (macOS)
+  persnallyd autostart [--remove]   Start the daemon at login and keep it alive (macOS launchd · Linux systemd)
   persnallyd config set-key <key>   Store the Anthropic API key (owner-only file) for the daemon
   persnallyd config                 Show config (key masked)
 `;
@@ -544,7 +544,7 @@ async function main(): Promise<void> {
     }
     case "stop": {
       if (autostartInstalled()) {
-        console.error("Note: autostart is installed — launchd will respawn the daemon. To restart cleanly use `persnallyd restart`; to stop it for good use `persnallyd autostart --remove`.");
+        console.error("Note: autostart is installed — the supervisor will respawn the daemon. To restart cleanly use `persnallyd restart`; to stop it for good use `persnallyd autostart --remove`.");
       }
       const pid = await stopDaemon();
       console.log(pid ? `Stopped daemon (pid ${pid}).` : "Daemon was not running.");
@@ -553,11 +553,12 @@ async function main(): Promise<void> {
     case "restart": {
       const port = parsePort(args);
       if (autostartInstalled()) {
-        // launchd owns the lifecycle — a plain stop just gets respawned. Reload the
-        // job so it comes back on the current install (also heals a drifted plist path).
+        // The supervisor (launchd/systemd) owns the lifecycle — a plain stop just gets
+        // respawned. Reload the job so it comes back on the current install (also heals
+        // a drifted plist/unit path).
         const health = await reloadAutostart(process.argv[1]!, port);
         if (health) {
-          console.log(`Restarted via launchd — daemon up on v${health.version}.`);
+          console.log(`Restarted via ${process.platform === "linux" ? "systemd" : "launchd"} — daemon up on v${health.version}.`);
           announceDashboard(port);
         } else {
           console.log("Reloaded autostart; daemon is still coming up — check: persnallyd status");
@@ -575,12 +576,15 @@ async function main(): Promise<void> {
         console.log(removeAutostart() ? "Autostart removed; daemon stopped." : "Autostart was not installed.");
         return;
       }
-      // A running daemon holds the pidfile and would put launchd in a retry loop — hand over first.
+      // A running daemon holds the pidfile and would put the supervisor in a retry loop — hand over first.
       const stopped = await stopDaemon();
-      if (stopped) console.log(`Stopped existing daemon (pid ${stopped}) — launchd takes over.`);
-      const plist = installAutostart(process.argv[1]!, parsePort(args));
-      console.log(`Autostart installed (${plist}). The daemon now runs at login and restarts if it exits.`);
-      announceDashboard(parsePort(args), false); // launchd brings it up async — show the link, don't open a not-yet-ready page
+      if (stopped) console.log(`Stopped existing daemon (pid ${stopped}) — the supervisor takes over.`);
+      const installed = installAutostart(process.argv[1]!, parsePort(args));
+      console.log(`Autostart installed (${installed}). The daemon now runs at login and restarts if it exits.`);
+      if (process.platform === "linux") {
+        console.log("Tip: user services stop at logout — to keep the daemon running, enable lingering once: loginctl enable-linger $USER");
+      }
+      announceDashboard(parsePort(args), false); // the supervisor brings it up async — show the link, don't open a not-yet-ready page
       return;
     }
     case "serve": {
