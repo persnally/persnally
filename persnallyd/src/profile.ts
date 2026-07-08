@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import { anthropicExtract, DEFAULT_PROFILE_MODEL, type LlmExtract } from "./llm.js";
+import { loadScopes, type Category } from "./permissions.js";
 import type { EventStore } from "./store.js";
 
 export const profileSchema = z.object({
@@ -72,6 +73,70 @@ export async function synthesizeProfile(
   const profile: Profile = { ...parsed, generated_at: new Date().toISOString(), model };
   store.saveProfile(profile);
   return profile;
+}
+
+/** Canonical cache key for one category set — order-insensitive, deduped. */
+export function scopeKey(categories: Category[]): string {
+  return [...new Set(categories)].sort().join(",");
+}
+
+const SCOPED_INSTRUCTION = `Write a sharp, evidence-grounded picture of this person WITHIN the listed domains only — it will be served to an AI tool that is allowed to see just this slice of them.
+
+Rules:
+- Cover only what the evidence supports: what they work on, how they engage, and what they care about within these domains. Do not speculate about their life outside them.
+- Be specific and concrete. Do not flatter.
+- Every section must list the event ids (given in [brackets]) of the signals it rests on.`;
+
+/** Synthesize a profile from ONLY the allowed categories' topics — no
+    cross-category assertions, corrections, or narrative can leak through it.
+    Returns null when the scope has nothing to say. */
+export async function synthesizeScopedProfile(
+  store: EventStore,
+  allowed: Category[],
+  extract: LlmExtract = anthropicExtract,
+  model: string = DEFAULT_PROFILE_MODEL,
+): Promise<Profile | null> {
+  const topics = store.topics(1000).filter((t) => allowed.includes(t.category as Category)).slice(0, 30);
+  if (!topics.length) return null;
+
+  const content = [
+    `Domains in scope: ${allowed.join(", ")}`,
+    "",
+    "## Weighted interests (decayed)",
+    ...topics.map((t) =>
+      `- [${t.event_ids[0] ?? ""}] ${t.topic} (${t.category}, weight ${t.weight.toFixed(2)}, ` +
+      `${t.dominant_intent}, ${t.signals} signals${t.entities.length ? `, entities: ${t.entities.slice(0, 5).join(", ")}` : ""})`,
+    ),
+  ].join("\n");
+
+  const raw = await extract({ model, instruction: SCOPED_INSTRUCTION, schema: profileSchema, content, maxTokens: 4000 });
+  const profile: Profile = { ...profileSchema.parse(raw), generated_at: new Date().toISOString(), model };
+  store.saveScopedProfile(scopeKey(allowed), profile);
+  return profile;
+}
+
+/** Re-synthesize every scope-set currently configured; prune caches whose
+    scope no longer exists. Failures are per-scope — one bad synthesis never
+    takes down the others or the caller. */
+export async function refreshScopedProfiles(
+  store: EventStore,
+  extract: LlmExtract = anthropicExtract,
+  model: string = DEFAULT_PROFILE_MODEL,
+): Promise<{ refreshed: number; pruned: number }> {
+  const active = new Set(Object.values(loadScopes()).map(scopeKey));
+  let pruned = 0;
+  for (const key of store.scopedProfileKeys()) {
+    if (!active.has(key)) { store.deleteScopedProfile(key); pruned++; }
+  }
+  let refreshed = 0;
+  for (const key of active) {
+    try {
+      if (await synthesizeScopedProfile(store, key.split(",") as Category[], extract, model)) refreshed++;
+    } catch (e) {
+      console.error(`scoped profile (${key}) failed:`, e instanceof Error ? e.message : e);
+    }
+  }
+  return { refreshed, pruned };
 }
 
 export function renderProfile(p: Profile): string {

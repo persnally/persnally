@@ -12,7 +12,7 @@ import { allowedCategories, loadScopes, type Category } from "./permissions.js";
 import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Provenance } from "./events.js";
 import { importNewClaudeCodeSessions } from "./importers/claude-code.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
-import { synthesizeProfile } from "./profile.js";
+import { refreshScopedProfiles, scopeKey, synthesizeProfile } from "./profile.js";
 import { searchContext } from "./search.js";
 import { refreshVoice } from "./voice.js";
 import type { EventStore } from "./store.js";
@@ -77,11 +77,14 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         return json(res, 200, topics);
       }
       if (req.method === "GET" && url.pathname === "/profile") {
-        // The synthesized profile is holistic prose — a scoped client gets only its
-        // allowed topics (above), never the cross-category narrative.
+        // The holistic profile is cross-category prose — a scoped client gets
+        // its scope's own synthesized narrative instead, never the full one.
         const client = url.searchParams.get("client");
-        if (client && allowedCategories(client) !== null) {
-          return json(res, 403, { error: "scoped: this client does not have profile access", scoped: true });
+        const allowed = client ? allowedCategories(client) : null;
+        if (allowed !== null) {
+          const scoped = store.getScopedProfile(scopeKey(allowed));
+          if (scoped) return json(res, 200, scoped);
+          return json(res, 403, { error: "scoped: no profile synthesized for this scope yet — run persnallyd profile or POST /synthesize", scoped: true });
         }
         const profile = store.getProfile();
         return profile ? json(res, 200, profile) : json(res, 404, { error: "no profile synthesized yet" });
@@ -102,6 +105,8 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         const engine = await chooseExtractor("profile");
         const profile = await synthesizeProfile(store, engine.extract, engine.model);
         safeRefreshVoice(store, "dashboard"); // keep "how you write" current with the portrait
+        // Scoped caches ride along; per-scope failures are logged, never fatal.
+        await refreshScopedProfiles(store, engine.extract, engine.model);
         return json(res, 200, profile);
       }
       if (req.method === "POST" && url.pathname === "/consolidate") {
