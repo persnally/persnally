@@ -10,7 +10,7 @@ import { z } from "zod";
 import { loadConfig, saveConfig } from "./config.js";
 import { newEvent, PAYLOAD_SCHEMAS, type PersnallyEvent } from "./events.js";
 import { chooseExtractor, type ChosenExtractor } from "./llm.js";
-import { synthesizeProfile } from "./profile.js";
+import { refreshScopedProfiles, synthesizeProfile } from "./profile.js";
 import type { EventStore } from "./store.js";
 
 const ASSERTION_MIN_SIGNALS = 5;
@@ -92,6 +92,7 @@ export async function runConsolidation(
   if (engine && newSignals.length >= PROFILE_MIN_SIGNALS) {
     const profileEngine = await chooseExtractor("profile");
     await synthesizeProfile(store, profileEngine.extract, profileEngine.model);
+    await refreshScopedProfiles(store, profileEngine.extract, profileEngine.model);
     profileRefreshed = true;
   }
 

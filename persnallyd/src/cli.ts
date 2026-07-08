@@ -28,7 +28,7 @@ import {
 } from "./lifecycle.js";
 import { newEvent } from "./events.js";
 import { refreshVoice } from "./voice.js";
-import { renderProfile, synthesizeProfile } from "./profile.js";
+import { refreshScopedProfiles, renderProfile, synthesizeProfile, synthesizeScopedProfile } from "./profile.js";
 import { askUserModel } from "./ask.js";
 import { renderHits, searchContext } from "./search.js";
 import { DEFAULT_DB_PATH, EventStore } from "./store.js";
@@ -209,6 +209,23 @@ async function main(): Promise<void> {
       if (invalid.length) return die(`unknown categor${invalid.length > 1 ? "ies" : "y"}: ${invalid.join(", ")}\nvalid: ${CATEGORIES.join(", ")}`);
       setScope(client, cats as Category[]);
       console.log(`${client} can now read only: ${cats.join(", ")}. Restart that client to apply.`);
+      // Give the scope its own narrative right away, so the client isn't profile-less.
+      const scopeEngine = await chooseExtractor("profile").catch(() => null);
+      if (scopeEngine) {
+        const store = new EventStore();
+        try {
+          const scoped = await synthesizeScopedProfile(store, cats as Category[], scopeEngine.extract, scopeEngine.model);
+          console.log(scoped
+            ? `Synthesized a ${cats.join("+")}-only profile for scoped clients.`
+            : `No ${cats.join("/")} topics yet — scoped clients get topics only until there's material.`);
+        } catch (e) {
+          console.error(`Scoped profile not synthesized (${e instanceof Error ? e.message : e}) — it will be built on the next synthesis.`);
+        } finally {
+          store.close();
+        }
+      } else {
+        console.log("No engine available — the scoped profile will be built on the next synthesis.");
+      }
       return;
     }
     case "connect": {
@@ -337,6 +354,8 @@ async function main(): Promise<void> {
       const store = new EventStore();
       console.error(`Synthesizing profile with ${engine.label}...`);
       const profile = await synthesizeProfile(store, engine.extract, engine.model);
+      const scoped = await refreshScopedProfiles(store, engine.extract, engine.model);
+      if (scoped.refreshed) console.error(`Also refreshed ${scoped.refreshed} scoped profile(s).`);
       store.close();
       console.log(renderProfile(profile));
       return;

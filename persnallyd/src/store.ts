@@ -138,6 +138,13 @@ export class EventStore {
         generated_at TEXT NOT NULL,
         model        TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS view_scoped_profile (
+        scope_key    TEXT PRIMARY KEY,
+        headline     TEXT NOT NULL,
+        sections     TEXT NOT NULL,
+        generated_at TEXT NOT NULL,
+        model        TEXT NOT NULL
+      );
     `);
     // ver 0 is either a fresh db or a pre-versioning one — rebuild whenever events already exist.
     if (ver < VIEW_SCHEMA_VERSION) {
@@ -401,6 +408,32 @@ export class EventStore {
     return row ? { ...row, sections: JSON.parse(row.sections) } : null;
   }
 
+  // Scoped profiles: one cached synthesis per distinct category set, so a
+  // scoped client gets a narrative built only from what it may read.
+  saveScopedProfile(scopeKey: string, p: StoredProfile): void {
+    this.db.prepare(
+      `INSERT INTO view_scoped_profile (scope_key, headline, sections, generated_at, model)
+       VALUES (@scope_key, @headline, @sections, @generated_at, @model)
+       ON CONFLICT(scope_key) DO UPDATE SET headline=@headline, sections=@sections, generated_at=@generated_at, model=@model`,
+    ).run({ ...p, scope_key: scopeKey, sections: JSON.stringify(p.sections) });
+  }
+
+  getScopedProfile(scopeKey: string): StoredProfile | null {
+    const row = this.db.prepare("SELECT * FROM view_scoped_profile WHERE scope_key = ?").get(scopeKey) as
+      | { headline: string; sections: string; generated_at: string; model: string }
+      | undefined;
+    return row ? { headline: row.headline, sections: JSON.parse(row.sections), generated_at: row.generated_at, model: row.model } : null;
+  }
+
+  scopedProfileKeys(): string[] {
+    return (this.db.prepare("SELECT scope_key FROM view_scoped_profile").all() as { scope_key: string }[])
+      .map((r) => r.scope_key);
+  }
+
+  deleteScopedProfile(scopeKey: string): void {
+    this.db.prepare("DELETE FROM view_scoped_profile WHERE scope_key = ?").run(scopeKey);
+  }
+
   /** Logical key for one style pattern — stable across re-imports/re-observations. */
   private styleKey(dimension: string, pattern: string): string {
     return `style:${dimension}|${pattern.toLowerCase()}`;
@@ -509,9 +542,9 @@ export class EventStore {
   }
 
   forgetAll(): void {
-    // Clear the profile too — it's prose derived from now-deleted events.
-    // Leaving it would serve a profile after a full wipe ("deletable for real").
-    this.db.exec("DELETE FROM events; DELETE FROM view_topics; DELETE FROM view_profile;");
+    // Clear the profiles too — they're prose derived from now-deleted events.
+    // Leaving them would serve a profile after a full wipe ("deletable for real").
+    this.db.exec("DELETE FROM events; DELETE FROM view_topics; DELETE FROM view_profile; DELETE FROM view_scoped_profile;");
   }
 
   close(): void {
