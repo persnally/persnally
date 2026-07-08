@@ -125,6 +125,17 @@ assert.equal(styled[0].payload.pattern, "prefers pnpm over npm");
 assert.deepEqual(styled[0].provenance, { kind: "mcp", client: "e2e-test" });
 console.log("✅ track captures live style signals (basis observed)");
 
+// ── track corrections → user.correction with action contradict ──
+const corrText = await callTool("persnally_track", {
+  corrections: [{ subject: "npm", correction: "uses pnpm, not npm" }],
+});
+assert.match(corrText, /1 correction\(s\) — now authoritative/);
+const corrected = received.posts.find((p) => Array.isArray(p) && p[0]?.type === "user.correction");
+assert.ok(corrected, "corrections must POST a user.correction event");
+assert.deepEqual(corrected[0].payload, { target_id: "npm", action: "contradict", reason: "uses pnpm, not npm" });
+assert.deepEqual(corrected[0].provenance, { kind: "mcp", client: "e2e-test" });
+console.log("✅ track records corrections as authoritative user.correction events");
+
 // ── migration fired on initialize ──
 const migrated = received.posts.find((p) => Array.isArray(p) && p[0]?.provenance?.file === "interest-graph.json");
 assert.ok(migrated, "v1 graph must be migrated");

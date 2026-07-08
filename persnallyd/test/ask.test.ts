@@ -140,6 +140,53 @@ test("unscoped material includes profile, assertions, and topics", async () => {
   store.close();
 });
 
+test("user corrections enter the material as authoritative; deletes and empty reasons don't", async () => {
+  const store = seededStore("corrections");
+  store.append([
+    newEvent("user.correction", "cli", { target_id: "npm", action: "contradict", reason: "uses pnpm, not npm" }, { kind: "local", surface: "cli" }),
+    newEvent("user.correction", "cli", { target_id: "style:voice|x", action: "delete", reason: "tombstone" }, { kind: "local", surface: "cli" }),
+    newEvent("user.correction", "cli", { target_id: "empty", action: "edit", reason: "  " }, { kind: "local", surface: "cli" }),
+  ]);
+  const calls = { n: 0, content: "" };
+  await askUserModel(store, CLI_OPTS, fakeEngine({ answer: "Yes.", confidence: 0.9 }, calls));
+  assert.match(calls.content, /Corrections stated by the user/);
+  assert.match(calls.content, /re npm: uses pnpm, not npm/);
+  assert.doesNotMatch(calls.content, /tombstone/, "delete tombstones are not statements");
+  assert.equal(store.corrections().length, 1, "only substantive corrections count");
+  store.close();
+});
+
+test("vetoed and edited answers feed back into the material; approved ones don't", async () => {
+  const store = seededStore("feedback-aware");
+  const engine = fakeEngine({ answer: "Use npm for everything.", confidence: 0.9 });
+  const bad = await askUserModel(store, { ...CLI_OPTS, question: "Which package manager?" }, engine);
+  const good = await askUserModel(store, { ...CLI_OPTS, question: "Tests before merge?" }, fakeEngine({ answer: "Always.", confidence: 0.9 }));
+  store.append([
+    newEvent("feedback.signal", "dashboard", { subject_id: bad.answer_id, verdict: "vetoed" }, { kind: "local", surface: "dashboard" }),
+    newEvent("feedback.signal", "dashboard", { subject_id: good.answer_id, verdict: "approved" }, { kind: "local", surface: "dashboard" }),
+  ]);
+
+  const calls = { n: 0, content: "" };
+  await askUserModel(store, CLI_OPTS, fakeEngine({ answer: "x", confidence: 0.9 }, calls));
+  assert.match(calls.content, /answers the user marked wrong/);
+  assert.match(calls.content, /Which package manager\? → rejected answer: Use npm for everything\./);
+  assert.doesNotMatch(calls.content, /Tests before merge\? → rejected/, "approved answers are not mistakes");
+  store.close();
+});
+
+test("scoped clients see neither corrections nor rejected-answer history", async () => {
+  const store = seededStore("scoped-fb");
+  store.append([
+    newEvent("user.correction", "cli", { target_id: "npm", action: "contradict", reason: "uses pnpm, not npm" }, { kind: "local", surface: "cli" }),
+  ]);
+  const calls = { n: 0, content: "" };
+  await askUserModel(store, {
+    ...CLI_OPTS, source: "mcp:cursor", provenance: { kind: "mcp", client: "cursor" }, allowed: ["technology"],
+  }, fakeEngine({ answer: "Yes.", confidence: 0.9 }, calls));
+  assert.doesNotMatch(calls.content, /Corrections stated/, "corrections are cross-category — scoped out");
+  store.close();
+});
+
 test("askHistory joins questions, answers, and feedback with conservative precision", async () => {
   const store = seededStore("history");
   const engine = fakeEngine({ answer: "Yes.", confidence: 0.9 });

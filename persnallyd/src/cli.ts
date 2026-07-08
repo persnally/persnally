@@ -48,6 +48,7 @@ Usage:
   persnallyd profile                Synthesize your profile from the store
   persnallyd ask "<question>"       Ask your model a question the way an agent would (answers or defers)
   persnallyd search "<topic>"       What Persnally knows about a specific subject (offline, no LLM)
+  persnallyd correct "<truth>" [--about <subject>]   Correct something it believes about you (authoritative)
   persnallyd voice                  Refresh your voice fingerprint from Claude Code transcripts (offline, no LLM)
   persnallyd consolidate            Reflect now: refresh decay, add behavior patterns, re-synthesize
   persnallyd show [topics|events|profile]   Show topics (default), recent events, or the profile
@@ -354,6 +355,24 @@ async function main(): Promise<void> {
       } else {
         console.log(`${r.answer}\n\nconfidence ${r.confidence.toFixed(2)} · ${r.evidence_event_ids.length} evidence event(s) · review at http://127.0.0.1:${DEFAULT_PORT}`);
       }
+      return;
+    }
+    case "correct": {
+      // --about names the subject; the rest is the corrected truth.
+      const aboutIdx = args.indexOf("--about");
+      const subject = aboutIdx >= 0 ? (args[aboutIdx + 1] ?? "") : "";
+      const rest = aboutIdx >= 0 ? [...args.slice(0, aboutIdx), ...args.slice(aboutIdx + 2)] : args;
+      const correction = rest.join(" ").trim();
+      if (!correction) return die('Usage: persnallyd correct "<what\'s actually true>" [--about <subject>]');
+      const store = new EventStore();
+      store.append([newEvent(
+        "user.correction",
+        "cli",
+        { target_id: subject, action: "contradict", reason: correction },
+        { kind: "local", surface: "cli" },
+      )]);
+      store.close();
+      console.log(`Recorded${subject ? ` (re ${subject})` : ""}: "${correction}" — corrections are authoritative; the profile picks it up on the next synthesis.`);
       return;
     }
     case "search": {

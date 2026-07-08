@@ -118,6 +118,23 @@ function buildMaterial(store: EventStore, allowed: Category[] | null): { content
         lines.push(`- [${e.id}] (${p.kind}, conf ${p.confidence}) ${p.claim}`);
       }
     }
+    // The feedback loop closing: what the user explicitly stated, and what
+    // they rejected, both condition future answers.
+    const corrections = store.corrections(25);
+    if (corrections.length) {
+      lines.push("", "## Corrections stated by the user (authoritative — these outrank everything above)");
+      for (const c of corrections) {
+        knownIds.add(c.id);
+        lines.push(`- [${c.id}] ${c.subject ? `re ${c.subject}: ` : ""}${c.correction}`);
+      }
+    }
+    const rejected = store.askHistory(200).items
+      .filter((i) => i.verdict === "vetoed" || i.verdict === "edited")
+      .slice(0, 10);
+    if (rejected.length) {
+      lines.push("", "## Past answers the user marked wrong (do not repeat these mistakes)");
+      for (const r of rejected) lines.push(`- Q: ${r.question} → rejected answer: ${r.answer}`);
+    }
   }
 
   const voice = store.voice();
