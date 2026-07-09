@@ -60,7 +60,7 @@ const jsonLd = {
   description,
   url: "https://persnally.com",
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-  license: "https://github.com/sidpan2011/persnally/blob/main/LICENSE",
+  license: "https://github.com/persnally/persnally/blob/main/LICENSE",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

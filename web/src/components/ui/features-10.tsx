@@ -32,10 +32,10 @@ export function Features() {
                 </span>
               </div>
               <div className="space-y-2">
-                <McpRow iconNode={<Glyph icon={icon("Claude")} className="size-4 text-ink" />} name="Claude" method="get_context" />
-                <McpRow iconNode={<Glyph icon={icon("Cursor")} className="size-4 text-ink" />} name="Cursor" method="get_context" />
-                <McpRow iconNode={<Glyph icon={icon("Claude")} className="size-4 text-ink" />} name="Claude Code" method="get_context" />
-                <McpRow iconNode={<Cpu className="size-4 text-electric" />} name="your agent" method="record_event" />
+                <McpRow iconNode={<Glyph icon={icon("Claude")} className="size-4 text-ink" />} name="Claude" method="persnally_context" />
+                <McpRow iconNode={<Glyph icon={icon("Cursor")} className="size-4 text-ink" />} name="Cursor" method="persnally_context" />
+                <McpRow iconNode={<Glyph icon={icon("Claude")} className="size-4 text-ink" />} name="Claude Code" method="persnally_ask" />
+                <McpRow iconNode={<Cpu className="size-4 text-electric" />} name="your agent" method="persnally_search" />
               </div>
               <p className="mt-4 text-center font-mono text-[11px] text-faint">
                 speaks MCP — adopted by every major AI
