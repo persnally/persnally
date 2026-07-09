@@ -7,13 +7,14 @@ import { SpotlightCard } from "./_components/SpotlightCard";
 import { Features } from "@/components/ui/features-10";
 import { GithubIcon, NpmIcon, Glyph, TOOLS } from "@/components/ui/logos";
 import { RepetitionFeed } from "./_components/RepetitionFeed";
-import { ArrowUpRight, Check, ChevronRight, Cpu, Database, Download, FileJson, Plug, Star, X } from "lucide-react";
+import { ProCard } from "./_components/ProCard";
+import { ArrowUpRight, Check, ChevronRight, Cpu, Database, Download, FileJson, Minus, Plug, Star, X } from "lucide-react";
 
 const EXT = { target: "_blank", rel: "noopener noreferrer" } as const;
 const arrowCls =
   "size-3.5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5";
 
-const GITHUB = "https://github.com/sidpan2011/persnally";
+const GITHUB = "https://github.com/persnally/persnally";
 const NPM = "https://www.npmjs.com/package/persnally";
 
 export default function Home() {
@@ -26,8 +27,11 @@ export default function Home() {
         <Wedge />
         <Features />
         <HowItWorks />
+        <AskProof />
+        <Compare />
         <Trust />
         <Positioning />
+        <Pricing />
         <GetStarted />
       </main>
       <Footer />
@@ -80,8 +84,14 @@ function Nav() {
           <a href="#how" className="transition-colors hover:text-ink">
             How it works
           </a>
+          <a href="#ask" className="transition-colors hover:text-ink">
+            Ask it
+          </a>
           <a href="#trust" className="transition-colors hover:text-ink">
             Your data
+          </a>
+          <a href="#pricing" className="transition-colors hover:text-ink">
+            Pricing
           </a>
           <a
             href={GITHUB}
@@ -140,8 +150,8 @@ function Hero() {
           style={{ animationDelay: "160ms" }}
         >
           Persnally learns who you are from your AI history — your chats, your code, your decisions —
-          and feeds it to every tool you use, so you stop re-explaining your stack, your conventions,
-          and yourself to every new AI. It lives on your machine, and it&apos;s yours.
+          so every tool you use stops treating you like a stranger. Your AIs read it, and can even
+          ask it what you&apos;d do. It lives on your machine, and it&apos;s yours.
         </p>
 
         <div
@@ -374,10 +384,167 @@ function ServeViz() {
       <div className="mt-3 rounded-lg border border-line bg-surface/60 px-3 py-2.5">
         <p className="font-mono text-[11px] text-electric">↳ loaded your context</p>
         <p className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-faint">
-          get_context <Check className="size-3 text-electric" /> 12ms
+          persnally_context <Check className="size-3 text-electric" /> 2ms
         </p>
       </div>
     </StepPanel>
+  );
+}
+
+/* ── AskProof — the answering loop + a real side-by-side ─────── */
+
+function AskProof() {
+  return (
+    <Section id="ask" className="py-28">
+      <div className="max-w-2xl">
+        <Eyebrow>Answers, not just recall</Eyebrow>
+        <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
+          The only context engine your AI can <span className="text-gradient">ask</span>.
+        </h2>
+        <p className="mt-6 text-lg leading-relaxed text-mute">
+          Other tools store facts about you. Persnally answers <em>what you&apos;d do</em> — your
+          agents ask it directly, get an answer with a confidence score, and it hands the question
+          back to you when the evidence is thin. No confident guessing.
+        </p>
+      </div>
+
+      {/* the two verified, uncontested capabilities */}
+      <div className="mt-12 grid gap-5 md:grid-cols-2">
+        <div className="rounded-2xl border border-line bg-surface p-6">
+          <h3 className="text-lg font-medium text-ink">It answers, or it defers</h3>
+          <p className="mt-2 text-[15px] leading-relaxed text-mute">
+            &ldquo;Would they want tests here?&rdquo; &ldquo;What tone for this email?&rdquo; Your
+            agent asks Persnally instead of interrupting you. Below its confidence bar it says so and
+            sends the agent back to you — never a made-up answer.
+          </p>
+          <div className="mt-5 rounded-xl border border-line bg-night/50 p-3.5 font-mono text-[12px]">
+            <p className="text-mute">persnally_ask <span className="text-faint">&ldquo;tests before I merge?&rdquo;</span></p>
+            <p className="mt-2 text-ink">↳ yes — you demand proof before merge; add e2e on the changed paths.</p>
+            <p className="mt-1 text-electric">confidence 0.92 · 3 evidence events</p>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-line bg-surface p-6">
+          <h3 className="text-lg font-medium text-ink">Correct it once, it sticks</h3>
+          <p className="mt-2 text-[15px] leading-relaxed text-mute">
+            Tell it it&apos;s wrong about you and the correction becomes authoritative — it outranks
+            everything the model inferred, and the wrong answer never comes back. The model gets
+            sharper every time you push back.
+          </p>
+          <div className="mt-5 rounded-xl border border-line bg-night/50 p-3.5 font-mono text-[12px]">
+            <p className="text-mute">persnally correct <span className="text-faint">&ldquo;I use pnpm, not npm&rdquo;</span></p>
+            <p className="mt-2 text-ink">↳ recorded — authoritative.</p>
+            <p className="mt-1 text-electric">every future answer respects it</p>
+          </div>
+        </div>
+      </div>
+
+      {/* the proof: real output, generic AI vs an AI that read your Persnally */}
+      <div className="mt-8 overflow-hidden rounded-2xl border border-line bg-surface">
+        <div className="border-b border-line px-6 py-4">
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">See the difference</p>
+          <p className="mt-1.5 text-[15px] text-mute">
+            Same prompt — <span className="text-ink">&ldquo;write a Slack message telling my team the deploy went out&rdquo;</span> —
+            asked of a blank AI and an AI that read your Persnally:
+          </p>
+        </div>
+        <div className="grid md:grid-cols-2">
+          <div className="border-b border-line p-6 md:border-b-0 md:border-r">
+            <p className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-faint">
+              <X className="size-3.5" strokeWidth={2} /> Generic AI
+            </p>
+            <p className="text-[14px] leading-relaxed text-mute">
+              🚀 <b className="text-mute">Deploy is live!</b> Just pushed the latest changes to
+              production. Everything looks good so far — let me know if you spot anything unexpected.
+            </p>
+          </div>
+          <div className="bg-gradient-to-b from-electric/[0.06] to-transparent p-6">
+            <p className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-electric">
+              <Check className="size-3.5" strokeWidth={2.25} /> AI + Persnally
+            </p>
+            <p className="text-[14px] leading-relaxed text-ink">
+              deploy is out. watching sentry/logs for the next hour, will confirm clean or flag
+              issues here.
+            </p>
+          </div>
+        </div>
+      </div>
+      <p className="mt-4 text-center text-[13px] text-faint">
+        Terse, lowercase, no emoji, and it knew to watch Sentry — because that&apos;s how you actually
+        work. Not configured; learned.
+      </p>
+    </Section>
+  );
+}
+
+/* ── Compare — the honest, verified capability table ─────────── */
+
+function Compare() {
+  // ✓ has · ~ partial · ✗ no — verified against each product's own docs/repos, July 2026.
+  const cols = ["Persnally", "claude-mem", "Mem0 · Supermemory", "Unabyss · cloud vaults"];
+  const rows: { cap: string; marks: ("y" | "p" | "n")[] }[] = [
+    { cap: "Your AI can ask it — answer with a confidence score, defers when unsure", marks: ["y", "n", "n", "n"] },
+    { cap: "Learns when you correct it — the correction outranks everything inferred", marks: ["y", "n", "p", "p"] },
+    { cap: "Synthesizes a model of you — taste, voice, how you decide", marks: ["y", "n", "p", "p"] },
+    { cap: "Local plaintext on your machine + source you can audit", marks: ["y", "y", "p", "n"] },
+    { cap: "Reads your chat exports + git history", marks: ["y", "p", "p", "p"] },
+  ];
+  const Mark = ({ m }: { m: "y" | "p" | "n" }) =>
+    m === "y" ? <Check className="mx-auto size-4 text-electric" strokeWidth={2.5} />
+    : m === "p" ? <Minus className="mx-auto size-4 text-faint" strokeWidth={2} />
+    : <X className="mx-auto size-4 text-line" strokeWidth={2} />;
+
+  return (
+    <Section id="compare" className="py-28">
+      <div className="max-w-2xl">
+        <Eyebrow>How it compares</Eyebrow>
+        <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
+          Everyone remembers. Persnally <span className="text-gradient">answers</span>.
+        </h2>
+        <p className="mt-6 text-lg leading-relaxed text-mute">
+          The category is full of memory. What no one else does: answer what you&apos;d do, learn when
+          you correct it, and let you verify all of it on your own machine.
+        </p>
+      </div>
+
+      <div className="mt-12 overflow-x-auto rounded-2xl border border-line bg-surface">
+        <table className="w-full min-w-[680px] border-collapse text-left">
+          <thead>
+            <tr className="border-b border-line">
+              <th className="p-4 text-[13px] font-normal text-faint">Capability</th>
+              {cols.map((c, i) => (
+                <th
+                  key={c}
+                  className={`p-4 text-center text-[13px] font-medium ${i === 0 ? "text-electric" : "text-mute"}`}
+                >
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.cap} className="border-b border-line/60 last:border-0">
+                <td className="p-4 text-[14px] leading-snug text-ink">{r.cap}</td>
+                {r.marks.map((m, i) => (
+                  <td key={i} className={`p-4 ${i === 0 ? "bg-electric/[0.05]" : ""}`}>
+                    <Mark m={m} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="mx-auto mt-6 max-w-3xl text-center text-[13px] leading-relaxed text-faint">
+        <Check className="inline size-3 text-electric" /> has it ·{" "}
+        <Minus className="inline size-3 text-faint" /> partial ·{" "}
+        <X className="inline size-3 text-line" /> no. Verified against each product&apos;s own docs and
+        repos, July 2026. claude-mem is genuinely local and open-source too — our edge isn&apos;t
+        custody alone, it&apos;s the answering loop and modeling <em>you</em> across every AI, not just
+        your code.
+      </p>
+    </Section>
   );
 }
 
@@ -461,9 +628,8 @@ function ProofPanel({ children }: { children: React.ReactNode }) {
 
 function LocalProof() {
   const files = [
-    { icon: <Database className="size-3.5" />, name: "events.db" },
-    { icon: <FileJson className="size-3.5" />, name: "profile.json" },
-    { icon: <FileJson className="size-3.5" />, name: "interests.json" },
+    { icon: <Database className="size-3.5" />, name: "persnally.db" },
+    { icon: <FileJson className="size-3.5" />, name: "config.json" },
   ];
   return (
     <ProofPanel>
@@ -533,7 +699,7 @@ function SourceProof() {
     >
       <div className="flex items-center gap-2 text-ink">
         <GithubIcon className="size-4" />
-        <span className="font-mono text-[12px]">sidpan2011/persnally</span>
+        <span className="font-mono text-[12px]">persnally/persnally</span>
         <ArrowUpRight className="ml-auto size-3.5 text-faint transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
       </div>
       <div className="mt-2.5 flex items-center gap-3 font-mono text-[10px] text-faint">
@@ -552,16 +718,16 @@ function SourceProof() {
 
 function Positioning() {
   const them = [
-    "Your context lives in their cloud",
-    "They own what it knows about you",
-    "Locked to one app — every other AI starts over",
+    "A database of you — you save, you search, you retrieve",
+    "Recalls facts; can't answer what you'd decide",
+    "Correct it? Delete a memory, at best",
     "A black box — it can't tell you why",
   ];
   const us = [
-    "Knows you across every AI you use",
-    "Yours — you own it outright, no vendor holds it",
-    "Every claim cites its evidence — ask it why",
-    "See it, audit it, delete it — for real",
+    "A model of you your AI can ask — with a confidence score",
+    "Answers what you'd do; defers to you when unsure",
+    "Correct it once and it sticks — outranks everything inferred",
+    "Every claim cites its evidence — local, auditable, deletable",
   ];
   return (
     <Section className="py-28">
@@ -584,7 +750,7 @@ function Positioning() {
             <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
               Every other memory tool
             </p>
-            <p className="mt-1.5 text-sm italic text-faint">“memory that lives in someone’s cloud”</p>
+            <p className="mt-1.5 text-sm italic text-faint">“a place to store facts about you”</p>
             <ul className="mt-6 space-y-3.5">
               {them.map((x) => (
                 <li key={x} className="flex items-start gap-3 text-[15px] text-mute">
@@ -610,9 +776,9 @@ function Positioning() {
         </div>
 
         <p className="mx-auto mt-10 max-w-xl text-center text-sm leading-relaxed text-faint">
-          Every memory tool now promises your context is &ldquo;yours.&rdquo; Persnally is the one
-          where that&apos;s true — it knows you everywhere, you own it outright, and you can see and
-          delete everything it knows.
+          Everyone can remember facts about you. Persnally is the one your AI can <em>ask</em> — it
+          answers what you&apos;d do, defers when it&apos;s unsure, and learns the moment you correct
+          it. All of it on your machine, and yours.
         </p>
 
         <div className="mt-8 flex justify-center">
@@ -624,6 +790,63 @@ function Positioning() {
           </a>
         </div>
       </div>
+    </Section>
+  );
+}
+
+/* ── Pricing ─────────────────────────────────────────────────── */
+
+function Pricing() {
+  const free = [
+    "The full engine — import, learn, synthesize your profile",
+    "Serve your context to every AI over MCP",
+    "The dashboard: inspect, audit provenance, delete",
+    "Bring your own key, or run fully local with Ollama",
+  ];
+  return (
+    <Section id="pricing" className="py-28">
+      <div className="mx-auto max-w-2xl text-center">
+        <Eyebrow>Pricing</Eyebrow>
+        <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
+          The engine is free. Forever.
+        </h2>
+        <p className="mt-6 text-lg leading-relaxed text-mute">
+          Everything that touches your data runs on your machine and costs nothing. Pro adds cloud
+          conveniences on top — and the cloud only ever carries ciphertext, never your plaintext.
+        </p>
+      </div>
+
+      <div className="mx-auto mt-14 grid max-w-3xl gap-5 md:grid-cols-2">
+        <div className="flex flex-col rounded-2xl border border-line bg-night/40 p-7">
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">Free</p>
+          <p className="mt-3 text-3xl font-semibold text-ink">
+            $0 <span className="text-sm font-normal text-faint">forever</span>
+          </p>
+          <ul className="mt-6 space-y-3.5">
+            {free.map((x) => (
+              <li key={x} className="flex items-start gap-3 text-[15px] text-mute">
+                <Check className="mt-0.5 size-4 shrink-0 text-electric" strokeWidth={2} />
+                {x}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-auto pt-7">
+            <a
+              href="#start"
+              className="block rounded-xl border border-line bg-surface/60 px-4 py-2.5 text-center text-sm font-medium text-ink transition-colors hover:border-electric/50"
+            >
+              Install now
+            </a>
+          </div>
+        </div>
+
+        <ProCard />
+      </div>
+
+      <p className="mx-auto mt-10 max-w-xl text-center text-sm leading-relaxed text-faint">
+        Privacy is never the paid tier. The local engine, the dashboard, and deletion stay free —
+        Pro is convenience on top, not a wall around your own data.
+      </p>
     </Section>
   );
 }
@@ -648,7 +871,7 @@ function GetStarted() {
       <div className="relative mx-auto mt-10 max-w-2xl">
         <SetupTabs />
         <p className="mt-5 text-center font-mono text-[12px] text-faint">
-          macOS · Linux · Windows · Node 20+ · bring your own key, or run fully local with Ollama
+          macOS · Linux · Windows · Node 20+ · background autostart on macOS &amp; Linux · bring your own key, or run fully local with Ollama
         </p>
         <div className="mt-6 flex justify-center">
           <a
