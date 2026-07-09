@@ -2,6 +2,23 @@
 
 All notable changes to Persnally will be documented in this file.
 
+## [2.8.0] - 2026-07-10
+
+The context loop closes: your AIs consult your model, look things up, learn when you correct them, respect per-tool scopes with their own profile — and Linux joins macOS for autostart.
+
+### Added
+- **`persnally_search` — targeted lookup.** A new MCP tool (and `persnallyd search "<topic>"`) lets a connected AI look up what Persnally knows about a *specific* subject mid-conversation ("rust", "testing practices") instead of only the broad profile. Offline, deterministic, no LLM; returns nothing when the subject never appears in your history.
+- **Corrections that stick.** When you correct something an AI believed about you, it records a `user.correction` (via `persnally_track`, or `persnallyd correct "<truth>" [--about <subject>]`). Corrections are **authoritative** — both the ask loop and profile synthesis weight them above anything inferred.
+- **The ask loop learns from feedback.** Answers you mark wrong on the dashboard feed back into future answers as "don't repeat this"; approved ones don't.
+- **Scoped clients get their own profile.** A client scoped to a subset of categories now receives a profile synthesized from *only* those categories — no cross-category narrative, assertions, or corrections leak through. Previously a scoped client lost `/profile` entirely.
+- **Linux autostart.** `persnallyd autostart` now installs a systemd user unit on Linux (first-class alongside macOS launchd), with a `loginctl enable-linger` tip so the daemon survives logout.
+
+### Changed
+- The Claude Code SessionStart hook now nudges the session to call `persnally_ask` before interrupting you with a preference question — putting the loop in the default path.
+
+### Security
+- `POST /ask` is rate-limited (20 per 10-minute window) so a looping agent can't burn your inference budget.
+
 ## [2.7.0] - 2026-07-04
 
 ### Added
