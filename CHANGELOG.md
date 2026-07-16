@@ -2,6 +2,15 @@
 
 All notable changes to Persnally will be documented in this file.
 
+## [2.9.0] - 2026-07-17
+
+Your permission surface, complete — see and control exactly what each AI can read, from connect to revoke. And the interfaces others build against are now versioned open specs.
+
+### Added
+- **"What each AI can read" — dashboard access control.** Every connected client now shows on the dashboard with exactly what it may read (everything / limited to categories / revoked), and a one-click **revoke** and **restore**. Backed by new daemon endpoints (`POST /scopes`, `DELETE /scopes/:client`). Revoked means it reads *nothing* until you restore it.
+- **Scope a client as you connect it.** `persnallyd connect cursor --scope technology,career` connects and limits the client in one step — no separate command afterward.
+- **Versioned open specs.** The event schema ([docs/EVENT_SCHEMA.md](./docs/EVENT_SCHEMA.md)) and the MCP interface ([docs/MCP_INTERFACE.md](./docs/MCP_INTERFACE.md)) are now implementable, versioned contracts (spec 1.0, CC-BY) with stability policies and conformance criteria — build a compatible producer, consumer, or client from the docs alone. The schema doc is synced to the shipped code (adds the previously undocumented `signal.style` voice layer and `local` provenance).
+
 ## [2.8.0] - 2026-07-10
 
 The context loop closes: your AIs consult your model, look things up, learn when you correct them, respect per-tool scopes with their own profile — and Linux joins macOS for autostart.
