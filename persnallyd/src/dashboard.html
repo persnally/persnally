@@ -155,6 +155,10 @@
   .read .what .l1 b { color: var(--text); } .read .what .l1 .p { color: var(--dim); }
   .read .what .l2 { font-size: 11px; color: var(--faint); margin-top: 2px; }
   .read .when { font-size: 11.5px; color: var(--dim); white-space: nowrap; }
+  .acc { font-size: 11px; }
+  .acc.full { color: var(--dim); }
+  .acc.limited { color: #FFB454; }
+  .acc.revoked { color: var(--faint); }
   .engage { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--dim); margin: 0 0 16px; }
   .engage b { color: var(--text); font-weight: 600; }
   .engage .spark { display: inline-flex; align-items: flex-end; gap: 2px; height: 22px; }
@@ -303,6 +307,11 @@
     </div>
     <div class="engage" id="engage"></div>
     <div class="card" id="reads" style="padding:6px 16px"></div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.22s" id="accessSection">
+    <div class="sec-head"><h2>What each AI can read</h2><span class="aside">your permission surface · revoke anytime</span></div>
+    <div class="card" id="access" style="padding:6px 16px"></div>
   </section>
 
   <section class="reveal" style="animation-delay:.25s" id="reflSection">
@@ -509,6 +518,44 @@ function renderReads(reads, total) {
       <div class="what"><div class="l1"><b>${esc(prettyClient(c))}</b> read ${esc(String(p.items ?? "your"))} item${p.items===1?"":"s"}${purpose}</div>
       <div class="l2">${esc(p.scope || "context")}</div></div><div class="when">${esc(timeAgo(r.ts))}</div></div>`;
   }).join("");
+}
+
+/* ── access control: what each connected AI may read, with one-click revoke ── */
+function renderAccess(reads, scopes) {
+  scopes = scopes || {};
+  // Connected clients = anything that has read + anything with a configured scope.
+  const clients = new Set(Object.keys(scopes));
+  for (const r of reads) { const c = clientOf(r); if (c && c !== "cli" && c !== "dashboard") clients.add(c); }
+  const host = $("access");
+  if (!clients.size) {
+    host.innerHTML = `<div class="empty">No AI connected yet. Run <code>persnally connect</code> — then each one shows here with exactly what it can read, and a revoke button.</div>`;
+    return;
+  }
+  host.innerHTML = [...clients].sort().map(c => {
+    const s = scopes[c]; // undefined = full access; [] = revoked; [cats] = limited
+    let state, cls;
+    if (s === undefined) { state = "reads everything"; cls = "full"; }
+    else if (!s.length) { state = "revoked — reads nothing"; cls = "revoked"; }
+    else { state = "limited: " + s.join(", "); cls = "limited"; }
+    const revoked = Array.isArray(s) && !s.length;
+    const btn = revoked
+      ? `<button class="del" data-client="${esc(c)}" data-act="restore">restore</button>`
+      : `<button class="del" data-client="${esc(c)}" data-act="revoke">revoke</button>`;
+    return `<div class="read"><div class="who">${esc(clientInitials(c))}</div>
+      <div class="what"><div class="l1"><b>${esc(prettyClient(c))}</b></div>
+      <div class="l2"><span class="acc ${cls}">${esc(state)}</span></div></div>${btn}</div>`;
+  }).join("");
+  host.querySelectorAll(".del[data-client]").forEach(b => b.addEventListener("click", async () => {
+    if (DEMO) return alert("Preview mode — start persnallyd to change access.");
+    const client = b.dataset.client;
+    if (b.dataset.act === "revoke") {
+      if (!confirm(`Revoke ${prettyClient(client)}? It will read nothing until you restore it.`)) return;
+      await fetch("/scopes", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ client, categories: [] }) });
+    } else {
+      await fetch(`/scopes/${encodeURIComponent(client)}`, { method:"DELETE" });
+    }
+    const s = await get("/scopes"); renderAccess(reads, s || {});
+  }));
 }
 
 /* ── engagement (retention pulse) ── */
@@ -849,6 +896,7 @@ async function loadAll() {
     DEMO = true; $("ribbon").classList.add("show");
     ({ stats, profile, topics, reads, assertions, voice, activity, asks } = DEMO_DATA());
   }
+  const scopes = DEMO ? { cursor: ["technology"] } : (await get("/scopes") || {});
   topics = topics||[]; reads = reads||[]; assertions = assertions||[];
   const engine = DEMO ? null : await get("/engine");
   const st = $("status");
@@ -864,6 +912,7 @@ async function loadAll() {
   renderTopicList(topics);
   renderMap(topics);
   renderReads(reads, total);
+  renderAccess(reads, scopes);
   renderEngage(activity);
   renderReflections(assertions);
   renderAsks(asks);

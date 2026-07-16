@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { askUserModel } from "./ask.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { runConsolidation, shouldRunNow } from "./consolidate.js";
-import { allowedCategories, loadScopes, type Category } from "./permissions.js";
+import { allowedCategories, CATEGORIES, clearScope, loadScopes, setScope, type Category } from "./permissions.js";
 import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Provenance } from "./events.js";
 import { importNewClaudeCodeSessions } from "./importers/claude-code.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
@@ -100,6 +100,28 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       }
       if (req.method === "GET" && url.pathname === "/scopes") {
         return json(res, 200, loadScopes());
+      }
+      // Set a client's category allowlist (empty array = revoke: it reads nothing).
+      if (req.method === "POST" && url.pathname === "/scopes") {
+        if (!(req.headers["content-type"] ?? "").includes("application/json")) {
+          return json(res, 415, { error: "Content-Type must be application/json" });
+        }
+        const body = (await readBody(req)) as { client?: unknown; categories?: unknown };
+        const client = typeof body.client === "string" ? body.client.trim() : "";
+        if (!client) return json(res, 400, { error: "client required" });
+        if (!Array.isArray(body.categories)) return json(res, 400, { error: "categories must be an array" });
+        const cats = body.categories.filter((c): c is Category => CATEGORIES.includes(c as Category));
+        if (cats.length !== body.categories.length) {
+          return json(res, 400, { error: `unknown category; valid: ${CATEGORIES.join(", ")}` });
+        }
+        setScope(client, cats);
+        return json(res, 200, { client, categories: cats });
+      }
+      // Clear a client's scope → back to default-open (full access).
+      if (req.method === "DELETE" && url.pathname.startsWith("/scopes/")) {
+        const client = decodeURIComponent(url.pathname.slice("/scopes/".length));
+        if (!client) return json(res, 400, { error: "client required" });
+        return json(res, 200, { cleared: clearScope(client) });
       }
       if (req.method === "POST" && url.pathname === "/synthesize") {
         const engine = await chooseExtractor("profile");
