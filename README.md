@@ -106,7 +106,7 @@ Early and moving fast — see [ROADMAP.md](./ROADMAP.md). Today: import from Cla
 
 ## License
 
-[FSL-1.1-MIT](./LICENSE) — read it, audit it, run it, fork it for anything except reselling it as a competing service. Every release automatically becomes plain MIT two years after it ships. The [event schema](./docs/EVENT_SCHEMA.md) and MCP interface are an open spec — build against them freely.
+[FSL-1.1-MIT](./LICENSE) — read it, audit it, run it, fork it for anything except reselling it as a competing service. Every release automatically becomes plain MIT two years after it ships. The [event schema](./docs/EVENT_SCHEMA.md) and [MCP interface](./docs/MCP_INTERFACE.md) are versioned open specs (CC-BY) — build against them freely.
 
 ## Contributing
 

@@ -1,8 +1,22 @@
-# Persnally v2 — Event Schema
+# Persnally Event Schema — Open Spec
 
-> Phase 0 design artifact. Everything downstream — context graph, profile, behavior model —
-> is a **derived view over the event log**. Views can always be deleted and re-derived;
-> events are the only source of truth.
+**Spec version: 1.0** · Status: **Stable** · License: open specification (CC-BY-4.0) — anyone may
+implement compatible producers/consumers, no permission needed.
+
+> Everything downstream — context graph, profile, behavior model — is a **derived view over
+> the event log**. Views can always be deleted and re-derived; events are the only source of truth.
+
+**Stability policy.** Within spec 1.x: existing event types, payload fields, and their meanings
+never change; new *optional* fields and new *event types* may be added in minor revisions (a
+consumer must ignore unknown fields and reject unknown types, per §Versioning). Breaking changes
+(removing/renaming fields, changing semantics) require spec 2.0 and a new per-event `schema_ver`.
+The normative reference implementation is [`persnallyd/src/events.ts`](../persnallyd/src/events.ts)
+(`PAYLOAD_SCHEMAS`); where this document and that file disagree, the code is truth and the doc
+has a bug — file an issue.
+
+**Conformance.** A *producer* is conformant if every event it emits validates against §Envelope +
+the payload shape for its type + a §Provenance kind. A *consumer* is conformant if it treats the
+log as append-only, resolves provenance without copying source content, and honors §Deletion.
 
 ## Design principles
 
@@ -93,16 +107,34 @@ From the git importer (framework→skill detection in `persnallyd/src/importers/
 { "skill": "fastapi", "domain": "backend", "proficiency": 0.6, "basis": "repo-activity" }
 ```
 
+### `signal.style` — how the user writes and works (the voice layer)
+Produced by deterministic stylometry at import, by live MCP capture (`persnally_track`), and by
+corrections. Dedupes by `pattern`; consumers serve the richest/newest signal per pattern.
+
+```jsonc
+{
+  "dimension": "emphasis",        // voice|convention|emphasis|format|workflow
+  "pattern": "wants the falsification first",  // a short, reusable instruction
+  "polarity": "insists",          // does|avoids|prefers|insists
+  "confidence": 0.8,              // 0–1
+  "evidence": "repeated across 40+ prompts",
+  "basis": "stylometry"           // observed (live capture) | stylometry (derived) | correction
+}
+```
+
 ### `context.read` — an AI client consumed context (Phase 2)
 ```jsonc
 { "scope": "projects", "client_purpose": "system-prompt injection", "items": 12 }
 ```
 
-### `agent.question` / `agent.answer` — decision loop (Phase 3)
+### `agent.question` / `agent.answer` — the ask loop
+An agent asked the user's model a question; the model answered with confidence or deferred.
+The answer carries `provenance.kind: "derived"` pointing at its question.
+
 ```jsonc
 // agent.question
-{ "question": "would the user want tests included?", "asker": "mcp:cursor" }
-// agent.answer
+{ "question": "would the user want tests included?", "asker": "cursor" }
+// agent.answer — deferred:true means "ask the human"; answer text may still carry the low-confidence draft
 { "question_id": "<event id>", "answer": "yes", "confidence": 0.92, "deferred": false }
 ```
 
@@ -111,11 +143,16 @@ From the git importer (framework→skill detection in `persnallyd/src/importers/
 { "subject_id": "<event id of answer/suggestion>", "verdict": "approved" }  // approved|edited|vetoed
 ```
 
-### `user.correction` — user edited/contradicted the profile
-From dashboard/CLI. Highest-authority signal; extractors must weight it above inference.
+### `user.correction` — user edited/contradicted the model
+From dashboard/CLI/MCP. **Highest-authority signal; consumers must weight it above anything
+inferred.** Two established uses:
+- `action: "contradict"` with `reason` = the corrected truth (`target_id` = subject, may be `""`) —
+  feeds ask/profile synthesis as authoritative.
+- `action: "delete"` with `target_id: "style:<dimension>|<pattern>"` — a permanent tombstone: that
+  style pattern must never be re-derived.
 
 ```jsonc
-{ "target_id": "<event id or view assertion id>", "action": "delete", "reason": "wrong" }
+{ "target_id": "npm", "action": "contradict", "reason": "uses pnpm, not npm" }
 ```
 
 ### `system.import` — import batch marker
@@ -140,6 +177,9 @@ Every event answers "where did this come from?" without copying content:
 
 // Derived (synthesis over other events)
 { "kind": "derived", "from": ["<event id>", "<event id>"] }
+
+// Local user action (CLI or dashboard)
+{ "kind": "local", "surface": "cli" }   // surface: cli|dashboard
 ```
 
 `kind: derived` is what makes "why does it think this?" a graph walk instead of a guess.
