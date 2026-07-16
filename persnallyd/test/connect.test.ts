@@ -42,6 +42,19 @@ test("connect rejects unknown clients", async () => {
   await assert.rejects(run("node", [CLI, "connect", "vscode"], { env }), /unknown client/);
 });
 
+test("connect --scope sets the client's allowlist inline", async () => {
+  const { stdout } = await run("node", [CLI, "connect", "cursor", "--scope", "technology,career"], { env });
+  assert.match(stdout, /Connected cursor/);
+  assert.match(stdout, /scoped cursor to: technology, career/);
+  const cfg = JSON.parse(readFileSync(join(home, ".persnally", "config.json"), "utf-8"));
+  assert.deepEqual(cfg.client_scopes.cursor, ["technology", "career"]);
+});
+
+test("connect --scope rejects invalid categories and --all", async () => {
+  await assert.rejects(run("node", [CLI, "connect", "cursor", "--scope", "bogus"], { env }), /valid categories/);
+  await assert.rejects(run("node", [CLI, "connect", "--all", "--scope", "technology"], { env }), /specific client/);
+});
+
 test("connect claude-code installs the SessionStart hook, merging + upgrading idempotently", async () => {
   const settings = join(home, ".claude", "settings.json");
   mkdirSync(join(home, ".claude"), { recursive: true });
