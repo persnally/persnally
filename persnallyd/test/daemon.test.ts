@@ -170,3 +170,35 @@ test("DELETE /topics/:topic hard-deletes and rebuilds", async () => {
   const topics = await (await fetch(BASE + "/topics")).json() as unknown[];
   assert.equal(topics.length, 0);
 });
+
+test("POST /scopes sets a client allowlist and GET /scopes reflects it", async () => {
+  const r = await postJson("/scopes", { client: "cursor", categories: ["technology", "career"] });
+  assert.equal(r.status, 200);
+  const scopes = await (await fetch(BASE + "/scopes")).json() as Record<string, string[]>;
+  assert.deepEqual(scopes.cursor, ["technology", "career"]);
+});
+
+test("POST /scopes with [] revokes (client reads nothing) — enforced on /profile", async () => {
+  await postJson("/scopes", { client: "cursor", categories: [] });
+  // A revoked client is 'scoped' → /profile is scoped-out (403 unless a scoped profile exists).
+  assert.equal((await fetch(BASE + "/profile?client=cursor")).status, 403);
+});
+
+test("POST /scopes validates: unknown category 400, missing client 400, non-JSON 415", async () => {
+  assert.equal((await postJson("/scopes", { client: "cursor", categories: ["bogus"] })).status, 400);
+  assert.equal((await postJson("/scopes", { categories: ["technology"] })).status, 400);
+  assert.equal((await postJson("/scopes", { client: "cursor", categories: "technology" })).status, 400);
+  const r = await fetch(BASE + "/scopes", { method: "POST", headers: { "Content-Type": "text/plain" }, body: "{}" });
+  assert.equal(r.status, 415);
+});
+
+test("DELETE /scopes/:client clears the scope (restores full access)", async () => {
+  await postJson("/scopes", { client: "cursor", categories: ["technology"] });
+  const r = await fetch(BASE + "/scopes/cursor", { method: "DELETE" });
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { cleared: true });
+  const scopes = await (await fetch(BASE + "/scopes")).json() as Record<string, string[]>;
+  assert.equal(scopes.cursor, undefined);
+  // Cleared → unrestricted again: /profile no longer scoped-out (404 = none synthesized, not 403).
+  assert.equal((await fetch(BASE + "/profile?client=cursor")).status, 404);
+});
