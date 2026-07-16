@@ -37,7 +37,7 @@ const USAGE = `persnallyd ${VERSION} — so every AI finally knows you
 
 Usage:
   persnallyd setup                  One command: find exports, import, synthesize, connect, open
-  persnallyd connect [client|--all] Add Persnally to claude-code | claude-desktop | cursor
+  persnallyd connect [client|--all] [--scope cats]  Add Persnally to claude-code | claude-desktop | cursor (optionally scope it inline)
   persnallyd scope <client> <categories|--clear>   Limit what a client can read (e.g. scope cursor technology,career)
   persnallyd scope                  Show all client scopes
   persnallyd init                   Create the local store (~/.persnally/persnally.db)
@@ -229,11 +229,30 @@ async function main(): Promise<void> {
       return;
     }
     case "connect": {
-      const target = args[0] === "--all" || !args[0] ? null : (args[0] as Client);
+      // Optional inline scope: `connect <client> --scope tech,career`. Strip it
+      // out first so it doesn't get read as the client positional.
+      const rest = [...args];
+      let scopeCats: Category[] | null = null;
+      const si = rest.indexOf("--scope");
+      if (si >= 0) {
+        const spec = rest[si + 1] ?? "";
+        rest.splice(si, spec && !spec.startsWith("--") ? 2 : 1);
+        const cats = spec.split(",").map((c) => c.trim()).filter(Boolean);
+        const invalid = cats.filter((c) => !CATEGORIES.includes(c as Category));
+        if (!cats.length || invalid.length) return die(`--scope needs valid categories: ${CATEGORIES.join(", ")}`);
+        scopeCats = cats as Category[];
+      }
+      const target = rest[0] === "--all" || !rest[0] ? null : (rest[0] as Client);
       if (target && !CLIENTS.includes(target)) return die(`unknown client — use ${CLIENTS.join(" | ")} | --all`);
+      if (scopeCats && !target) return die("--scope needs a specific client (not --all)");
       const results = target ? [{ client: target, file: connectClient(target) }] : connectAll();
       for (const { client, file } of results) {
         console.log(file ? `Connected ${client} (${file})` : `${client} not installed — skipped`);
+      }
+      // Inline scope applies to the named client (it's config; takes effect whenever that client reads).
+      if (scopeCats && target) {
+        setScope(target, scopeCats);
+        console.log(`  ↳ scoped ${target} to: ${scopeCats.join(", ")} (it reads only these)`);
       }
       // Claude Code also gets a SessionStart hook so every session injects context automatically.
       if (results.some((r) => r.client === "claude-code" && r.file)) {
