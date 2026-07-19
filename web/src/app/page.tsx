@@ -294,6 +294,19 @@ function Wedge() {
 
 /* ── № 02 · How it works ─────────────────────────────────────── */
 
+/* an engraved vignette with its meaning spelled out underneath */
+function Vignette({ src, cap, h = "h-44" }: { src: string; cap: string; h?: string }) {
+  return (
+    <figure className="mt-5">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" aria-hidden width={640} height={540} className={`w-full ${h} object-contain mix-blend-multiply`} />
+      <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
+        {cap}
+      </figcaption>
+    </figure>
+  );
+}
+
 function HowItWorks() {
   const steps = [
     {
@@ -301,6 +314,7 @@ function HowItWorks() {
       label: "Import",
       t: "Import your history",
       d: "One command finds your Claude & ChatGPT exports, your Claude Code sessions, and your git repos, and reads them.",
+      art: <Vignette src="/art/press.webp" cap="the press — your history, taken in" />,
       visual: <ImportViz />,
     },
     {
@@ -308,6 +322,7 @@ function HowItWorks() {
       label: "Learn · local",
       t: "It learns, on your machine",
       d: "A local daemon turns that history into an evidence-linked model of you — never our cloud.",
+      art: <Vignette src="/art/compositors.webp" cap="the compositors — studied, locally" />,
       visual: <LearnViz />,
     },
     {
@@ -315,6 +330,7 @@ function HowItWorks() {
       label: "Serve · MCP",
       t: "Every AI reads it",
       d: "Over MCP — the protocol your tools already speak — Claude, Cursor, and your agents read it the moment a session starts.",
+      art: <Vignette src="/art/mercury.webp" cap="the messenger — served to every tool" />,
       visual: <ServeViz />,
     },
   ];
@@ -331,6 +347,7 @@ function HowItWorks() {
             </div>
             <h3 className="font-display mt-5 text-2xl text-ink">{s.t}</h3>
             <p className="mt-2.5 text-[15px] leading-relaxed text-mute">{s.d}</p>
+            {s.art}
             <div className="mt-auto pt-6">{s.visual}</div>
           </div>
         ))}
@@ -450,31 +467,31 @@ function ConfidenceGauge() {
   );
 }
 
-/* one correction as a stamped ledger page: the inferred belief struck out
-   in blue, yours written over it, and the rubber stamp that makes it law */
+/* the correction, written in your own hand — a 1657 author's quill with the
+   rubber stamp that makes it law pressed over the plate */
 function CorrectionLedger() {
   return (
-    <div className="relative my-5 border-y border-ink/20 py-4 font-mono text-[13px]">
-      <div className="flex items-baseline gap-4">
-        <span className="w-24 shrink-0 text-[10px] uppercase tracking-[0.12em] text-faint">believed</span>
-        <span className="text-mute line-through decoration-electric/80 decoration-2">uses npm</span>
-      </div>
-      <div className="mt-3 flex items-baseline gap-4">
-        <span className="w-24 shrink-0 text-[10px] uppercase tracking-[0.12em] text-faint">corrected</span>
-        <span className="text-ink">uses pnpm</span>
-      </div>
-      <div className="mt-3 flex items-baseline gap-4">
-        <span className="w-24 shrink-0 text-[10px] uppercase tracking-[0.12em] text-faint">outranks</span>
-        <span className="text-mute">everything inferred</span>
-      </div>
+    <figure className="relative mt-5">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/art/author.webp"
+        alt=""
+        aria-hidden
+        width={640}
+        height={435}
+        className="w-full mix-blend-multiply"
+      />
       <span
         aria-hidden
-        className="absolute right-2 top-1/2 -translate-y-1/2 rotate-[-8deg] border-2 border-electric/80 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-electric/90"
-        style={{ boxShadow: "inset 0 0 0 1.5px var(--color-paper), inset 0 0 0 2.5px color-mix(in oklab, var(--color-electric) 80%, transparent)" }}
+        className="absolute bottom-12 right-4 rotate-[-8deg] border-2 border-electric bg-paper/60 px-3 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.18em] text-electric"
+        style={{ boxShadow: "inset 0 0 0 2px var(--color-paper), inset 0 0 0 3.5px var(--color-electric)" }}
       >
         Authoritative
       </span>
-    </div>
+      <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
+        written in your own hand — outranks everything inferred
+      </figcaption>
+    </figure>
   );
 }
 
@@ -955,6 +972,7 @@ function Pricing() {
             <p className="font-display mt-3 text-4xl text-ink">
               $0 <span className="text-lg text-faint">forever</span>
             </p>
+            <Vignette src="/art/loom.webp" cap="the loom — the whole engine, at home" h="h-32" />
             <ul className="mt-6 space-y-3.5">
               {free.map((x) => (
                 <li key={x} className="flex items-start gap-3 text-[15px] text-mute">
@@ -1049,8 +1067,7 @@ function Footer() {
 
       <Section className="pt-8">
         <p className="font-mono text-[10px] leading-relaxed text-faint">
-          Engravings: “Chart of Mental Geometry” (Frederick Bridges, c. 1860) and phrenological
-          plates —{" "}
+          Engravings: “Chart of Mental Geometry” (Frederick Bridges, c. 1860) and period plates —{" "}
           <a
             href="https://wellcomecollection.org/works"
             {...EXT}

@@ -30,6 +30,20 @@ export function ProCard() {
       <div className="mt-3">
         <PriceToggle annual={annual} onChange={setAnnual} />
       </div>
+      <figure className="mt-5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/art/key.webp"
+          alt=""
+          aria-hidden
+          width={560}
+          height={275}
+          className="mx-auto h-24 w-full object-contain mix-blend-multiply"
+        />
+        <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
+          the key — yours alone · the cloud sees ciphertext
+        </figcaption>
+      </figure>
       <ul className="mt-6 space-y-3.5">
         {PRO.map((x) => (
           <li key={x} className="flex items-start gap-3 text-[15px] text-ink">
