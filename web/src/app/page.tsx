@@ -294,45 +294,6 @@ function Wedge() {
 
 /* ── № 02 · How it works ─────────────────────────────────────── */
 
-/* the whole system in one drawn line: your history → the daemon on your
-   machine → every AI. Same instrument language as the gauge. */
-function PipelineStrip() {
-  const src = ["your chats", "your code", "your git"];
-  const dst = ["Claude", "Cursor", "your agents"];
-  return (
-    <svg viewBox="0 0 900 150" role="img" aria-label="Your chats, code, and git flow into the persnallyd daemon on your machine, and out to Claude, Cursor, and your agents" className="mt-10 hidden w-full text-ink md:block">
-      {src.map((s, i) => (
-        <g key={s}>
-          <text x={120} y={35 + i * 40} textAnchor="end" className="font-mono" fontSize={15} fill="currentColor" opacity={0.7}>
-            {s}
-          </text>
-          <path d={`M 132 ${30 + i * 40} L 210 ${30 + i * 40} L 260 70 L 330 70`} fill="none" stroke="var(--color-electric)" strokeWidth={1.5} opacity={0.75} />
-        </g>
-      ))}
-      <rect x={335} y={38} width={230} height={64} fill="none" stroke="currentColor" strokeWidth={1.5} />
-      <rect x={341} y={44} width={218} height={52} fill="none" stroke="currentColor" strokeWidth={0.75} opacity={0.4} />
-      <text x={450} y={66} textAnchor="middle" className="font-mono" fontSize={16} fill="currentColor">
-        persnallyd
-      </text>
-      <text x={450} y={86} textAnchor="middle" className="font-mono" fontSize={11.5} fill="var(--color-electric)">
-        on your machine
-      </text>
-      {dst.map((d, i) => (
-        <g key={d}>
-          <path d={`M 570 70 L 640 ${30 + i * 40} L 700 ${30 + i * 40}`} fill="none" stroke="var(--color-electric)" strokeWidth={1.5} opacity={0.75} />
-          <path d={`M 700 ${30 + i * 40} l -9 -4.5 v 9 z`} fill="var(--color-electric)" opacity={0.85} />
-          <text x={712} y={35 + i * 40} className="font-mono" fontSize={15} fill="currentColor" opacity={0.85}>
-            {d}
-          </text>
-        </g>
-      ))}
-      <text x={450} y={138} textAnchor="middle" className="font-mono" fontSize={11} fill="currentColor" opacity={0.55}>
-        one model of you · read everywhere · written nowhere else
-      </text>
-    </svg>
-  );
-}
-
 function HowItWorks() {
   const steps = [
     {
@@ -360,9 +321,8 @@ function HowItWorks() {
   return (
     <Section id="how" className="py-24">
       <SectionHead n="02" eyebrow="How it works" title="Your context, in every tool you touch." />
-      <PipelineStrip />
 
-      <div className="mt-10 grid gap-5 lg:grid-cols-3">
+      <div className="mt-12 grid gap-5 lg:grid-cols-3">
         {steps.map((s) => (
           <div key={s.k} className="plate flex flex-col p-6">
             <div className="flex items-baseline justify-between border-b border-ink/20 pb-4">
@@ -490,23 +450,30 @@ function ConfidenceGauge() {
   );
 }
 
-/* one correction, ledger-style: the inferred belief struck out, yours on top */
+/* one correction as a stamped ledger page: the inferred belief struck out
+   in blue, yours written over it, and the rubber stamp that makes it law */
 function CorrectionLedger() {
   return (
-    <div className="my-5 border-y border-ink/20 py-3.5 font-mono text-[12px]">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="uppercase tracking-[0.12em] text-faint">believed</span>
-        <span className="text-mute line-through decoration-ink/50">uses npm</span>
+    <div className="relative my-5 border-y border-ink/20 py-4 font-mono text-[13px]">
+      <div className="flex items-baseline gap-4">
+        <span className="w-24 shrink-0 text-[10px] uppercase tracking-[0.12em] text-faint">believed</span>
+        <span className="text-mute line-through decoration-electric/80 decoration-2">uses npm</span>
       </div>
-      <div className="mt-2.5 flex items-baseline justify-between gap-4">
-        <span className="uppercase tracking-[0.12em] text-electric">corrected</span>
-        <span className="text-ink">
-          uses pnpm{" "}
-          <span className="ml-1.5 border border-electric/50 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-electric">
-            authoritative
-          </span>
-        </span>
+      <div className="mt-3 flex items-baseline gap-4">
+        <span className="w-24 shrink-0 text-[10px] uppercase tracking-[0.12em] text-faint">corrected</span>
+        <span className="text-ink">uses pnpm</span>
       </div>
+      <div className="mt-3 flex items-baseline gap-4">
+        <span className="w-24 shrink-0 text-[10px] uppercase tracking-[0.12em] text-faint">outranks</span>
+        <span className="text-mute">everything inferred</span>
+      </div>
+      <span
+        aria-hidden
+        className="absolute right-2 top-1/2 -translate-y-1/2 rotate-[-8deg] border-2 border-electric/80 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-electric/90"
+        style={{ boxShadow: "inset 0 0 0 1.5px var(--color-paper), inset 0 0 0 2.5px color-mix(in oklab, var(--color-electric) 80%, transparent)" }}
+      >
+        Authoritative
+      </span>
     </div>
   );
 }
@@ -966,7 +933,7 @@ function Pricing() {
   return (
     <section id="pricing" className="bg-electric py-24 text-paper">
       <div className="mx-auto w-full max-w-6xl px-6">
-        <div className="border-t border-paper/70 pt-7 text-center">
+        <div className="text-center">
           <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-paper/70">
             <span className="text-paper">№ 08</span> — Pricing
           </span>
