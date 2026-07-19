@@ -451,7 +451,7 @@ function AskProof() {
       </div>
 
       {/* the proof: real output, generic AI vs an AI that read your Persnally */}
-      <div className="plate-double mt-8 p-1">
+      <div className="plate mt-8">
         <div className="border-b border-ink/20 px-6 py-4">
           <Eyebrow>See the difference</Eyebrow>
           <p className="mt-2 text-[15px] text-mute">
@@ -791,7 +791,7 @@ function Positioning() {
           </ul>
         </div>
 
-        <div className="plate-double border-electric p-7">
+        <div className="plate border-electric p-7">
           <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-electric">Persnally</p>
           <p className="mt-1.5 text-sm italic text-mute">your own context engine</p>
           <ul className="mt-6 space-y-3.5">

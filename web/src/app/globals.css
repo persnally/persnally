@@ -86,42 +86,24 @@
 }
 
 /* ── Plate furniture — the museum-catalog card language ──────── */
+/* In the components layer so utilities (e.g. border-electric) can override. */
+@layer components {
+  /* single hairline plate */
+  .plate {
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper);
+  }
 
-/* single hairline plate */
-.plate {
-  border: 1px solid var(--color-ink);
-  background: var(--color-paper);
-}
-
-/* double-rule plate: outer hairline + inset hairline, like an engraving mount */
-.plate-double {
-  border: 1px solid var(--color-ink);
-  background: var(--color-paper);
-  position: relative;
-}
-.plate-double::before {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border: 1px solid color-mix(in oklab, var(--color-ink) 32%, transparent);
-  pointer-events: none;
-}
-
-/* section rule with centered ornament */
-.rule {
-  border: 0;
-  border-top: 1px solid var(--color-ink);
-}
-
-/* terminal block — the machine stays dark, an actual terminal on the desk */
-.terminal {
-  background: var(--color-ink);
-  color: var(--color-paper);
-  border: 1px solid var(--color-ink);
-}
-.terminal ::selection {
-  background: var(--color-paper);
-  color: var(--color-ink);
+  /* terminal block — the machine stays dark, an actual terminal on the desk */
+  .terminal {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border: 1px solid var(--color-ink);
+  }
+  .terminal ::selection {
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
 }
 
 /* ── Engraving animation — lines draw themselves in ──────────── */

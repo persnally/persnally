@@ -163,7 +163,7 @@ function Note({
 
 export function EngravedSelf() {
   return (
-    <figure className="plate-double p-4 sm:p-6">
+    <figure className="plate p-4 sm:p-6">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         role="img"
