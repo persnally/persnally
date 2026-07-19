@@ -1,50 +1,50 @@
 @import "tailwindcss";
 
-/* ── Design system — electric blue (#2c67ff) on black ────────── */
+/* ── Design system — "The Engraved Self": ink on paper, one electric accent ──
+   Warm paper field, near-black ink, ultramarine #2418ff reserved for the
+   machine (terminal, CTAs, checks). Serif for the story, mono for the proof. */
 @theme {
   /* canvas */
-  --color-night: #000000;
-  --color-surface: #08090d;
-  --color-panel: #0e1016;
-  --color-line: #1b1e26;
+  --color-paper: #f2efe6;
+  --color-card: #efecdf;
+  --color-plate: #eae6d7;
+  --color-line: #d5d0bf;
 
-  /* text */
-  --color-ink: #f5f6f8;
-  --color-mute: #8b90a0;
-  --color-faint: #565b67;
+  /* ink */
+  --color-ink: #171512;
+  --color-mute: #57534a;
+  --color-faint: #8d8878;
 
-  /* accent — #2c67ff is the single signature blue (fills, text, lines, glow);
-     electric-deep is the one darker shade, for hover/active states */
-  --color-electric: #2c67ff;
-  --color-electric-deep: #275be0;
+  /* accent — one ultramarine; deep for hover/active, glow for on-ink surfaces */
+  --color-electric: #2418ff;
+  --color-electric-deep: #1b10d8;
+  --color-electric-glow: #9a94ff;
 
-  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-instrument), "Times New Roman", serif;
+  --font-sans: var(--font-newsreader), Georgia, serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
 }
 
-/* ── shadcn token bridge — maps shadcn vars to electric (#2c67ff) + black,
-   so any shadcn / 21st.dev component renders in-brand out of the box ──── */
+/* ── shadcn token bridge — paper/ink so third-party blocks render in-brand ── */
 :root {
-  --background: 0 0% 0%;
-  --foreground: 220 14% 96%;
-  --card: 222 22% 4%;
-  --card-foreground: 220 14% 96%;
-  --muted: 222 18% 8%;
-  --muted-foreground: 220 9% 60%;
-  --primary: 223 100% 59%; /* #2c67ff */
-  --primary-foreground: 0 0% 100%;
-  --border: 223 16% 14%;
+  --background: 48 29% 93%;
+  --foreground: 40 10% 8%;
+  --card: 47 30% 91%;
+  --card-foreground: 40 10% 8%;
+  --muted: 46 24% 88%;
+  --muted-foreground: 40 8% 32%;
+  --primary: 243 100% 55%; /* #2418ff */
+  --primary-foreground: 48 29% 93%;
+  --border: 45 21% 79%;
 }
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
-  --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-border: hsl(var(--border));
 }
 
 @layer base {
@@ -53,20 +53,19 @@
     overflow-x: clip;
   }
   body {
-    background: var(--color-night);
+    background: var(--color-paper);
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
   ::selection {
-    background: color-mix(in oklab, var(--color-electric) 55%, transparent);
-    color: #fff;
+    background: var(--color-electric);
+    color: var(--color-paper);
   }
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--color-line) transparent;
-    /* shadcn convention: bare `border` uses the themed border color */
     border-color: hsl(var(--border));
   }
   /* Tailwind v4 dropped the default pointer on buttons — restore it. */
@@ -78,95 +77,77 @@
   }
 }
 
-/* ── Atmosphere ──────────────────────────────────────────────── */
+/* ── Editorial type ──────────────────────────────────────────── */
 
-/* electric aurora — where #2c67ff reads as pure energy on black */
-.aurora {
-  position: absolute;
-  inset: -25% -10% auto -10%;
-  height: 760px;
-  filter: blur(90px);
-  opacity: 0.55;
-  background:
-    radial-gradient(42% 60% at 25% 28%, color-mix(in oklab, var(--color-electric) 75%, transparent), transparent 70%),
-    radial-gradient(46% 55% at 76% 24%, color-mix(in oklab, var(--color-electric) 45%, transparent), transparent 70%),
-    radial-gradient(40% 50% at 55% 62%, color-mix(in oklab, var(--color-electric) 55%, transparent), transparent 70%);
-  background-size: 200% 200%;
-  animation: aurora 16s ease-in-out infinite alternate;
-}
-@keyframes aurora {
-  0% {
-    background-position: 0% 50%;
-    transform: rotate(-2deg) scale(1.05);
-  }
-  100% {
-    background-position: 100% 50%;
-    transform: rotate(3deg) scale(1.15);
-  }
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.015em;
 }
 
-/* ── Type & accents ──────────────────────────────────────────── */
+/* ── Plate furniture — the museum-catalog card language ──────── */
 
-/* bright electric sheen — stays readable on black (no dark dip) */
-.text-gradient {
-  background: linear-gradient(
-    100deg,
-    #ffffff 8%,
-    color-mix(in oklab, var(--color-electric) 70%, #ffffff) 50%,
-    #ffffff 92%
-  );
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: sheen 6s linear infinite;
-}
-@keyframes sheen {
-  to {
-    background-position: 200% center;
-  }
+/* single hairline plate */
+.plate {
+  border: 1px solid var(--color-ink);
+  background: var(--color-paper);
 }
 
-/* electric gradient hairline */
-.border-glow {
+/* double-rule plate: outer hairline + inset hairline, like an engraving mount */
+.plate-double {
+  border: 1px solid var(--color-ink);
+  background: var(--color-paper);
   position: relative;
 }
-.border-glow::before {
+.plate-double::before {
   content: "";
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(140deg, color-mix(in oklab, var(--color-electric) 80%, transparent), transparent 42%);
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+  inset: 4px;
+  border: 1px solid color-mix(in oklab, var(--color-ink) 32%, transparent);
   pointer-events: none;
 }
 
-/* shimmer sweep for the primary CTA */
-.shimmer {
-  position: relative;
-  overflow: hidden;
+/* section rule with centered ornament */
+.rule {
+  border: 0;
+  border-top: 1px solid var(--color-ink);
 }
-.shimmer::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.22) 50%, transparent 65%);
-  transform: translateX(-100%);
-  animation: shimmer 3.2s ease-in-out infinite;
+
+/* terminal block — the machine stays dark, an actual terminal on the desk */
+.terminal {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border: 1px solid var(--color-ink);
 }
-@keyframes shimmer {
-  60%,
-  100% {
-    transform: translateX(100%);
+.terminal ::selection {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+/* ── Engraving animation — lines draw themselves in ──────────── */
+
+.engrave-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: engrave 1.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes engrave {
+  to {
+    stroke-dashoffset: 0;
   }
 }
 
-/* ── Marquee ─────────────────────────────────────────────────── */
+.fade-label {
+  opacity: 0;
+  animation: fadeLabel 0.7s ease-out forwards;
+}
+@keyframes fadeLabel {
+  to {
+    opacity: 1;
+  }
+}
+
+/* ── Marquee — newspaper ticker ──────────────────────────────── */
 .marquee {
   display: flex;
   overflow: hidden;
@@ -190,7 +171,7 @@
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
@@ -199,19 +180,22 @@
 }
 .rise {
   opacity: 0;
-  animation: rise 0.85s cubic-bezier(0.2, 0.65, 0.2, 1) forwards;
+  animation: rise 0.8s cubic-bezier(0.2, 0.65, 0.2, 1) forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .rise,
-  .aurora,
-  .text-gradient,
-  .shimmer::after,
-  .marquee-track {
+  .marquee-track,
+  .fade-label {
     animation: none !important;
   }
-  .rise {
+  .rise,
+  .fade-label {
     opacity: 1;
+  }
+  .engrave-line {
+    animation: none !important;
+    stroke-dashoffset: 0;
   }
   html {
     scroll-behavior: auto;

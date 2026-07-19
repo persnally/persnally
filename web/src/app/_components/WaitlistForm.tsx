@@ -35,7 +35,7 @@ export function WaitlistForm({ plan, amount }: { plan?: "monthly" | "annual"; am
 
   if (state === "done") {
     return (
-      <p className="rounded-xl border border-electric/30 bg-electric/10 px-4 py-3 text-center text-sm text-ink">
+      <p className="border border-electric/40 px-4 py-3 text-center text-sm text-ink">
         You&apos;re on the list — we&apos;ll email you when Pro opens.
       </p>
     );
@@ -54,17 +54,17 @@ export function WaitlistForm({ plan, amount }: { plan?: "monthly" | "annual"; am
           }}
           placeholder="you@example.com"
           aria-label="Email address"
-          className="min-w-0 flex-1 rounded-xl border border-line bg-night/50 px-4 py-2.5 text-sm text-ink placeholder:text-faint focus:border-electric/50 focus:outline-none"
+          className="min-w-0 flex-1 rounded-[2px] border border-ink/40 bg-paper px-4 py-2.5 text-sm text-ink placeholder:text-faint focus:border-electric focus:outline-none"
         />
         <button
           type="submit"
           disabled={state === "sending"}
-          className="shrink-0 rounded-xl bg-electric px-4 py-2.5 text-sm font-medium text-white shadow-[0_0_28px_-6px_var(--color-electric)] transition-colors hover:bg-electric-deep disabled:opacity-60"
+          className="shrink-0 rounded-[2px] bg-electric px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-paper transition-colors hover:bg-electric-deep disabled:opacity-60"
         >
           {state === "sending" ? "Joining…" : "Join waitlist"}
         </button>
       </div>
-      {state === "error" && <p className="text-xs text-red-400">{message}</p>}
+      {state === "error" && <p className="text-xs text-red-700">{message}</p>}
     </form>
   );
 }

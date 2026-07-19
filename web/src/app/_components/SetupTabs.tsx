@@ -32,12 +32,8 @@ export function SetupTabs() {
 
   return (
     <div className="w-full">
-      {/* segmented control */}
-      <div
-        role="tablist"
-        aria-label="Setup method"
-        className="mx-auto flex w-fit items-center gap-1 rounded-lg border border-line bg-surface p-1"
-      >
+      {/* editorial tabs: mono labels, active gets the ink underline */}
+      <div role="tablist" aria-label="Setup method" className="mx-auto flex w-fit items-center gap-6 border-b border-ink/25">
         {(
           [
             ["terminal", "Terminal"],
@@ -52,8 +48,8 @@ export function SetupTabs() {
               setTab(key);
               setCopied(false);
             }}
-            className={`rounded-md px-3.5 py-1.5 text-sm transition-colors ${
-              tab === key ? "bg-panel text-ink" : "text-mute hover:text-ink"
+            className={`-mb-px border-b-2 px-1 pb-2 font-mono text-[12px] uppercase tracking-[0.12em] transition-colors ${
+              tab === key ? "border-ink text-ink" : "border-transparent text-faint hover:text-mute"
             }`}
           >
             {label}
@@ -62,32 +58,34 @@ export function SetupTabs() {
       </div>
 
       {/* panel */}
-      <div className="relative mt-4 rounded-xl border border-line bg-surface/80">
+      <div className="terminal relative mt-5 rounded-[2px]">
         <button
           onClick={copy}
           aria-label="Copy"
-          className="absolute right-3 top-3 z-10 rounded-md border border-line bg-night/60 px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-faint transition-colors hover:border-electric/50 hover:text-electric"
+          className={`absolute right-3 top-3 z-10 border border-paper/25 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] transition-opacity ${
+            copied ? "text-electric-glow" : "opacity-60 hover:opacity-100"
+          }`}
         >
           {copied ? "copied" : "copy"}
         </button>
 
         {tab === "terminal" ? (
-          <div className="flex items-center gap-3 px-4 py-3 pr-16">
-            <span className="select-none text-electric" aria-hidden>
+          <div className="flex items-center gap-3 px-4 py-3.5 pr-16">
+            <span className="select-none font-mono text-electric-glow" aria-hidden>
               $
             </span>
-            <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[12px] text-ink sm:text-[13.5px] [scrollbar-width:none]">
+            <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[12px] sm:text-[13.5px] [scrollbar-width:none]">
               {COMMAND}
             </code>
           </div>
         ) : (
-          <pre className="whitespace-pre-wrap break-words px-4 py-4 pr-16 font-mono text-[12.5px] leading-relaxed text-mute">
+          <pre className="whitespace-pre-wrap break-words px-4 py-4 pr-16 font-mono text-[12.5px] leading-relaxed opacity-90">
             {PROMPT}
           </pre>
         )}
       </div>
 
-      <p className="mt-3 text-center text-[13px] text-faint">
+      <p className="mt-3 text-center text-[14px] italic text-faint">
         {tab === "terminal"
           ? "Paste in your terminal."
           : "Paste into Claude Code, Cursor, or any agent — let it set itself up."}

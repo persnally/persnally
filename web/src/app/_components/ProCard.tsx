@@ -20,10 +20,10 @@ export function ProCard() {
   const amount = annual ? ANNUAL_PER_MONTH : MONTHLY;
 
   return (
-    <div className="border-glow flex flex-col rounded-2xl border border-electric/30 bg-gradient-to-b from-electric/[0.07] to-surface p-7">
+    <div className="plate-double flex flex-col border-electric p-7">
       <div className="flex items-center justify-between">
         <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-electric">Pro</p>
-        <span className="rounded-full border border-electric/30 bg-electric/10 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-electric">
+        <span className="border border-electric/40 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-electric">
           Coming soon
         </span>
       </div>

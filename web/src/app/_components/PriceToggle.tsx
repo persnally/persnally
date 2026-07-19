@@ -10,11 +10,7 @@ export function PriceToggle({ annual, onChange }: { annual: boolean; onChange: (
   const price = annual ? ANNUAL_PER_MONTH : MONTHLY;
   return (
     <div>
-      <div
-        role="tablist"
-        aria-label="Billing period"
-        className="inline-flex items-center gap-1 rounded-lg border border-line bg-night/40 p-0.5"
-      >
+      <div role="tablist" aria-label="Billing period" className="inline-flex items-center gap-4 border-b border-ink/25">
         {([["monthly", "Monthly"], ["annual", "Annual · save 25%"]] as const).map(([key, label]) => {
           const isAnnual = key === "annual";
           const active = annual === isAnnual;
@@ -24,8 +20,8 @@ export function PriceToggle({ annual, onChange }: { annual: boolean; onChange: (
               role="tab"
               aria-selected={active}
               onClick={() => onChange(isAnnual)}
-              className={`rounded-md px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors ${
-                active ? "bg-electric/15 text-electric" : "text-faint hover:text-mute"
+              className={`-mb-px border-b-2 px-0.5 pb-1.5 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors ${
+                active ? "border-electric text-electric" : "border-transparent text-faint hover:text-mute"
               }`}
             >
               {label}
@@ -33,9 +29,9 @@ export function PriceToggle({ annual, onChange }: { annual: boolean; onChange: (
           );
         })}
       </div>
-      <p className="mt-3 text-3xl font-semibold text-ink">
+      <p className="font-display mt-3 text-4xl text-ink">
         ${price}{" "}
-        <span className="text-sm font-normal text-faint">
+        <span className="text-base text-faint">
           / month{annual ? " · billed annually" : ""} · founding price
         </span>
       </p>
