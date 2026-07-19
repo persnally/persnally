@@ -36,25 +36,33 @@ function Note({
   };
   return (
     <g className="fade-label" style={{ animationDelay: `${delay}ms` }}>
-      <circle cx={anchor[0]} cy={anchor[1]} r={5} fill="none" stroke="currentColor" strokeWidth={2} />
+      <circle cx={anchor[0]} cy={anchor[1]} r={6} fill="none" stroke="var(--color-electric)" strokeWidth={2.5} />
       <path
         d={`M ${anchor[0]} ${anchor[1]} L ${elbow[0]} ${elbow[1]} L ${at[0]} ${at[1]}`}
         fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        opacity={0.65}
+        stroke="var(--color-electric)"
+        strokeWidth={1.75}
+        opacity={0.8}
       />
-      <text x={tx} y={at[1] - 5} textAnchor={align} className="font-mono" fontSize={24} fill="currentColor" style={halo}>
+      <text
+        x={tx}
+        y={at[1] - 5}
+        textAnchor={align}
+        className="font-mono"
+        fontSize={27}
+        fill="var(--color-electric)"
+        style={halo}
+      >
         {title}
       </text>
       <text
         x={tx}
-        y={at[1] + 26}
+        y={at[1] + 27}
         textAnchor={align}
         className="font-mono"
-        fontSize={24}
+        fontSize={23}
         fill="currentColor"
-        opacity={0.6}
+        opacity={0.75}
         style={halo}
       >
         {detail}
@@ -75,7 +83,7 @@ export function EngravedSelf() {
           alt="Engraving of a head in profile whose brain is drawn as dozens of tiny scenes from a life — annotated with the model Persnally builds: interests, decisions, voice, conventions, provenance"
           width={W}
           height={H}
-          className="block w-full mix-blend-multiply"
+          className="block w-full mix-blend-multiply [filter:brightness(1.07)contrast(0.93)]"
         />
         <svg viewBox={`0 0 ${W} ${H}`} aria-hidden className="absolute inset-0 h-full w-full text-ink">
           <Note

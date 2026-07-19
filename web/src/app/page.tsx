@@ -386,44 +386,101 @@ function ServeViz() {
 
 /* ── № 03 · Ask ──────────────────────────────────────────────── */
 
+/* the deferral rule as an instrument: needle at a real answer (0.92),
+   dashed mark at the confidence bar (0.70) below which it hands back to you */
+function ConfidenceGauge() {
+  const C = { x: 170, y: 160 };
+  const pt = (v: number, r: number) => {
+    const a = Math.PI * (1 - v);
+    return [C.x + r * Math.cos(a), C.y - r * Math.sin(a)] as const;
+  };
+  const ticks = Array.from({ length: 11 }, (_, i) => i / 10);
+  const [nx, ny] = pt(0.92, 104);
+  const [t1x, t1y] = pt(0.7, 130);
+  const [t2x, t2y] = pt(0.7, 86);
+  return (
+    <svg viewBox="0 0 340 185" role="img" aria-label="Confidence gauge: answers at 0.92, defers to you below 0.70" className="mx-auto my-5 w-full max-w-[280px] text-ink">
+      <path d="M 40 160 A 130 130 0 0 1 300 160" fill="none" stroke="currentColor" strokeWidth={1.5} />
+      {ticks.map((v) => {
+        const major = v === 0 || v === 0.5 || v === 1;
+        const [x1, y1] = pt(v, 130);
+        const [x2, y2] = pt(v, major ? 114 : 121);
+        return <line key={v} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth={major ? 1.5 : 1} opacity={0.75} />;
+      })}
+      <line x1={t1x} y1={t1y} x2={t2x} y2={t2y} stroke="var(--color-electric)" strokeWidth={1.5} strokeDasharray="4 4" />
+      <text x={t2x - 6} y={t2y - 8} textAnchor="middle" className="font-mono" fontSize={11} fill="var(--color-electric)">
+        0.70
+      </text>
+      <text x={t2x - 6} y={t2y + 6} textAnchor="middle" className="font-mono" fontSize={10} fill="currentColor" opacity={0.55}>
+        defers below
+      </text>
+      <line x1={C.x} y1={C.y} x2={nx} y2={ny} stroke="var(--color-electric)" strokeWidth={3} strokeLinecap="round" />
+      <circle cx={C.x} cy={C.y} r={5} fill="var(--color-electric)" />
+      <text x={nx + 8} y={ny - 8} className="font-mono" fontSize={15} fill="var(--color-electric)">
+        0.92
+      </text>
+      <text x={40} y={178} className="font-mono" fontSize={11} fill="currentColor" opacity={0.55}>
+        0
+      </text>
+      <text x={294} y={178} className="font-mono" fontSize={11} fill="currentColor" opacity={0.55}>
+        1
+      </text>
+      <text x={C.x} y={181} textAnchor="middle" className="font-mono" fontSize={11} fill="currentColor" opacity={0.7}>
+        answers · in your voice
+      </text>
+    </svg>
+  );
+}
+
+/* one correction, ledger-style: the inferred belief struck out, yours on top */
+function CorrectionLedger() {
+  return (
+    <div className="my-5 border-y border-ink/20 py-3.5 font-mono text-[12px]">
+      <div className="flex items-baseline justify-between gap-4">
+        <span className="uppercase tracking-[0.12em] text-faint">believed</span>
+        <span className="text-mute line-through decoration-ink/50">uses npm</span>
+      </div>
+      <div className="mt-2.5 flex items-baseline justify-between gap-4">
+        <span className="uppercase tracking-[0.12em] text-electric">corrected</span>
+        <span className="text-ink">
+          uses pnpm{" "}
+          <span className="ml-1.5 border border-electric/50 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-electric">
+            authoritative
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function AskProof() {
   return (
     <Section id="ask" className="py-24">
-      <div className="relative">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/art/physiometer.webp"
-          alt=""
-          aria-hidden
-          width={260}
-          height={160}
-          className="absolute right-0 top-6 hidden w-[240px] mix-blend-multiply opacity-90 lg:block"
-        />
-        <SectionHead
-          n="03"
-          eyebrow="Answers, not just recall"
-          title={
-            <>
-              The only context engine your AI can <Em>ask.</Em>
-            </>
-          }
-          lede={
-            <>
-              Other tools store facts. Persnally answers <em>what you&apos;d do</em> — with a
-              confidence score, deferring to you when the evidence is thin.
-            </>
-          }
-        />
-      </div>
+      <SectionHead
+        n="03"
+        eyebrow="Answers, not just recall"
+        title={
+          <>
+            The only context engine your AI can <Em>ask.</Em>
+          </>
+        }
+        lede={
+          <>
+            Other tools store facts. Persnally answers <em>what you&apos;d do</em> — with a
+            confidence score, deferring to you when the evidence is thin.
+          </>
+        }
+      />
 
       <div className="mt-12 grid gap-5 md:grid-cols-2">
-        <div className="plate p-6">
+        <div className="plate flex flex-col p-6">
           <h3 className="font-display text-2xl text-ink">It answers, or it defers</h3>
           <p className="mt-2.5 text-[15px] leading-relaxed text-mute">
             Your agent asks Persnally instead of interrupting you. Below its confidence bar, it
             sends the agent back to you — never a made-up answer.
           </p>
-          <div className="mt-5">
+          <ConfidenceGauge />
+          <div className="mt-auto">
             <Terminal>
               <p className="font-mono text-[12px] opacity-75">
                 persnally_ask <span className="opacity-60">&ldquo;tests before I merge?&rdquo;</span>
@@ -435,13 +492,14 @@ function AskProof() {
             </Terminal>
           </div>
         </div>
-        <div className="plate p-6">
+        <div className="plate flex flex-col p-6">
           <h3 className="font-display text-2xl text-ink">Correct it once, it sticks</h3>
           <p className="mt-2.5 text-[15px] leading-relaxed text-mute">
             Tell it it&apos;s wrong and the correction becomes authoritative — it outranks everything
             inferred, and the wrong answer never comes back.
           </p>
-          <div className="mt-5">
+          <CorrectionLedger />
+          <div className="mt-auto">
             <Terminal>
               <p className="font-mono text-[12px] opacity-75">
                 persnally correct <span className="opacity-60">&ldquo;I use pnpm, not npm&rdquo;</span>
@@ -496,23 +554,12 @@ function AskProof() {
 function Engine() {
   return (
     <Section className="py-24">
-      <div className="relative">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/art/geometric-head.webp"
-          alt=""
-          aria-hidden
-          width={200}
-          height={200}
-          className="absolute -top-2 right-0 hidden w-[170px] mix-blend-multiply opacity-90 lg:block"
-        />
-        <SectionHead
-          n="04"
-          eyebrow="Under the hood"
-          title="More than memory. An engine."
-          lede="Structured events, derived views, a walkable provenance graph — decay-aware, and entirely your own."
-        />
-      </div>
+      <SectionHead
+        n="04"
+        eyebrow="Under the hood"
+        title="More than memory. An engine."
+        lede="Structured events, derived views, a walkable provenance graph — decay-aware, and entirely your own."
+      />
 
       <div className="mt-12 grid gap-5 lg:grid-cols-2">
         <div className="plate p-6">
@@ -783,7 +830,16 @@ function Positioning() {
   return (
     <Section className="py-24">
       <SectionHead n="07" eyebrow="The difference" title={<></>} center />
-      <p className="font-display mx-auto -mt-2 max-w-3xl text-balance text-center text-4xl leading-[1.05] sm:text-6xl">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/art/geometric-head.webp"
+        alt=""
+        aria-hidden
+        width={140}
+        height={140}
+        className="mx-auto -mt-2 w-[120px] mix-blend-multiply opacity-90"
+      />
+      <p className="font-display mx-auto mt-4 max-w-3xl text-balance text-center text-4xl leading-[1.05] sm:text-6xl">
         Every AI knows <span className="text-mute">you.</span> And it&apos;s <Em>yours.</Em>
       </p>
 
