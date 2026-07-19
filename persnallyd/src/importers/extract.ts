@@ -12,6 +12,26 @@ import { analyzeVoice } from "../stylometry.js";
 
 const MAX_CONVO_CHARS = 30_000;
 const MAX_IMPORT_FILE_BYTES = 400 * 1024 * 1024; // ~400 MB — under Node's ~512 MB string cap; larger needs streaming
+const DEFAULT_CONCURRENCY = 4;
+
+/** In-flight extraction ceiling: PERSNALLY_IMPORT_CONCURRENCY, clamped to [1, 16]. */
+function importConcurrency(): number {
+  const n = Number(process.env.PERSNALLY_IMPORT_CONCURRENCY);
+  return Number.isInteger(n) && n >= 1 ? Math.min(n, 16) : DEFAULT_CONCURRENCY;
+}
+
+/** Maps items with at most `limit` calls in flight; results keep item order. `fn` must not throw. */
+async function mapBounded<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (let i = next++; i < items.length; i = next++) {
+      results[i] = await fn(items[i]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
 
 /** Reads an export file, refusing oversized ones with a clear message instead of an opaque OOM/crash. */
 export function readImportFile(path: string, maxBytes: number = MAX_IMPORT_FILE_BYTES): string {
@@ -72,17 +92,25 @@ export async function extractEvents(
   opts: { source: string; importer: string; file: string },
   extract: LlmExtract = anthropicExtract,
   model = DEFAULT_EXTRACT_MODEL,
+  concurrency = importConcurrency(),
 ): Promise<ImportResult> {
   const batch = uuidv7();
   const events: PersnallyEvent[] = [];
   const voiceCorpus: string[] = []; // clean prose for the deterministic voice fingerprint
 
+  const jobs: { convo: ParsedConversation; text: string }[] = [];
   for (const convo of parsed.conversations) {
     if (!convo.userMessages.length) continue;
     const joined = convo.userMessages.join("\n");
     voiceCorpus.push(...proseLines(joined)); // prose feeds the deterministic voice fingerprint even if topic extraction fails
     const text = stripNoise(joined).slice(0, MAX_CONVO_CHARS); // strip pasted paths/URLs/logs before the LLM sees it
     if (!text) continue;
+    jobs.push({ convo, text });
+  }
+
+  // Extraction calls run concurrently (each conversation is independent); events
+  // are appended in conversation order below, so output is identical to a serial run.
+  const topicsPerConvo = await mapBounded(jobs, concurrency, async ({ convo, text }) => {
     try {
       const result = await extract({
         model,
@@ -91,20 +119,24 @@ export async function extractEvents(
         schema: topicsExtraction,
         content: `Conversation title: ${convo.name}\n\nUser messages:\n${text}`,
       });
-      const { topics } = topicsExtraction.parse(result);
-      for (const t of topics) {
-        events.push(newEvent("signal.topic", opts.source, t,
-          { kind: "import", batch, file: opts.file, conversation_uuid: convo.uuid },
-          safeIso(convo.created_at),
-        ));
-      }
+      return topicsExtraction.parse(result).topics;
     } catch (e) {
       // One malformed extraction (e.g. the model returns an out-of-enum value)
       // must not abort a whole multi-conversation import. Skip it — leaving no
       // conversation_uuid marker, so the next pass retries it — and keep the rest.
       console.error(`extract: skipped "${convo.name}" — ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
+      return [];
     }
-  }
+  });
+
+  jobs.forEach(({ convo }, i) => {
+    for (const t of topicsPerConvo[i]!) {
+      events.push(newEvent("signal.topic", opts.source, t,
+        { kind: "import", batch, file: opts.file, conversation_uuid: convo.uuid },
+        safeIso(convo.created_at),
+      ));
+    }
+  });
 
   if (parsed.memoryText.trim() || parsed.projects.length) {
     const context = [
