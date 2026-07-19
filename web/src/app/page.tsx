@@ -174,8 +174,7 @@ function Hero() {
             style={{ animationDelay: "160ms" }}
           >
             Persnally learns who you are from your AI history — your chats, your code, your
-            decisions — so every tool you use stops treating you like a stranger. Your AIs read it,
-            and can even ask it what you&apos;d do. It lives on your machine, and it&apos;s yours.
+            decisions — and serves it to every AI you use. On your machine. Yours.
           </p>
 
           <div className="rise mt-9 flex max-w-xl flex-col gap-4" style={{ animationDelay: "240ms" }}>
@@ -265,12 +264,8 @@ function Wedge() {
         <div>
           <p className="text-lg leading-relaxed text-mute">
             ChatGPT doesn&apos;t know what you told Claude. Your coding agent relearns your stack
-            every session, or stops to ask. So you paste the same context — your tools, your
-            conventions, your taste — into tool after tool.
-          </p>
-          <p className="mt-4 text-[16px] leading-relaxed text-faint">
-            Each meets you as a stranger. And the model vendors can&apos;t fix it — their business
-            is keeping you inside their walls, not sharing you across them.
+            every session. Each tool meets you as a stranger — and the vendors can&apos;t fix it,
+            because their business is keeping you inside their walls.
           </p>
         </div>
         <RepetitionFeed />
@@ -294,14 +289,14 @@ function HowItWorks() {
       k: "II",
       label: "Learn · local",
       t: "It learns, on your machine",
-      d: "A local daemon turns that activity into a structured, evidence-linked model of who you are — kept on your machine, never our cloud.",
+      d: "A local daemon turns that history into an evidence-linked model of you — never our cloud.",
       visual: <LearnViz />,
     },
     {
       k: "III",
       label: "Serve · MCP",
       t: "Every AI reads it",
-      d: "Connected over MCP — the open protocol your AI tools already speak — Claude, Cursor, and your agents read your context the moment a session starts.",
+      d: "Over MCP — the protocol your tools already speak — Claude, Cursor, and your agents read it the moment a session starts.",
       visual: <ServeViz />,
     },
   ];
@@ -394,29 +389,38 @@ function ServeViz() {
 function AskProof() {
   return (
     <Section id="ask" className="py-24">
-      <SectionHead
-        n="03"
-        eyebrow="Answers, not just recall"
-        title={
-          <>
-            The only context engine your AI can <Em>ask.</Em>
-          </>
-        }
-        lede={
-          <>
-            Other tools store facts about you. Persnally answers <em>what you&apos;d do</em> — your
-            agents ask it directly, get an answer with a confidence score, and it hands the question
-            back to you when the evidence is thin. No confident guessing.
-          </>
-        }
-      />
+      <div className="relative">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/art/physiometer.webp"
+          alt=""
+          aria-hidden
+          width={260}
+          height={160}
+          className="absolute right-0 top-6 hidden w-[240px] mix-blend-multiply opacity-90 lg:block"
+        />
+        <SectionHead
+          n="03"
+          eyebrow="Answers, not just recall"
+          title={
+            <>
+              The only context engine your AI can <Em>ask.</Em>
+            </>
+          }
+          lede={
+            <>
+              Other tools store facts. Persnally answers <em>what you&apos;d do</em> — with a
+              confidence score, deferring to you when the evidence is thin.
+            </>
+          }
+        />
+      </div>
 
       <div className="mt-12 grid gap-5 md:grid-cols-2">
         <div className="plate p-6">
           <h3 className="font-display text-2xl text-ink">It answers, or it defers</h3>
           <p className="mt-2.5 text-[15px] leading-relaxed text-mute">
-            &ldquo;Would they want tests here?&rdquo; &ldquo;What tone for this email?&rdquo; Your
-            agent asks Persnally instead of interrupting you. Below its confidence bar it says so and
+            Your agent asks Persnally instead of interrupting you. Below its confidence bar, it
             sends the agent back to you — never a made-up answer.
           </p>
           <div className="mt-5">
@@ -434,9 +438,8 @@ function AskProof() {
         <div className="plate p-6">
           <h3 className="font-display text-2xl text-ink">Correct it once, it sticks</h3>
           <p className="mt-2.5 text-[15px] leading-relaxed text-mute">
-            Tell it it&apos;s wrong about you and the correction becomes authoritative — it outranks
-            everything the model inferred, and the wrong answer never comes back. The model gets
-            sharper every time you push back.
+            Tell it it&apos;s wrong and the correction becomes authoritative — it outranks everything
+            inferred, and the wrong answer never comes back.
           </p>
           <div className="mt-5">
             <Terminal>
@@ -493,12 +496,23 @@ function AskProof() {
 function Engine() {
   return (
     <Section className="py-24">
-      <SectionHead
-        n="04"
-        eyebrow="Under the hood"
-        title="More than memory. An engine."
-        lede="Structured events, derived views, and a walkable provenance graph — explainable, decay-aware, and entirely your own."
-      />
+      <div className="relative">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/art/geometric-head.webp"
+          alt=""
+          aria-hidden
+          width={200}
+          height={200}
+          className="absolute -top-2 right-0 hidden w-[170px] mix-blend-multiply opacity-90 lg:block"
+        />
+        <SectionHead
+          n="04"
+          eyebrow="Under the hood"
+          title="More than memory. An engine."
+          lede="Structured events, derived views, a walkable provenance graph — decay-aware, and entirely your own."
+        />
+      </div>
 
       <div className="mt-12 grid gap-5 lg:grid-cols-2">
         <div className="plate p-6">
@@ -604,7 +618,7 @@ function Compare() {
             Everyone remembers. Persnally <Em>answers.</Em>
           </>
         }
-        lede="The category is full of memory. What no one else does: answer what you'd do, learn when you correct it, and let you verify all of it on your own machine."
+        lede="No one else answers what you'd do, learns when you correct it, and lets you verify all of it on your own machine."
       />
 
       <div className="plate mt-12 overflow-x-auto">
@@ -642,10 +656,8 @@ function Compare() {
       <p className="mx-auto mt-6 max-w-3xl text-center text-[13.5px] leading-relaxed text-faint">
         <Check className="inline size-3 text-electric" /> has it ·{" "}
         <Minus className="inline size-3 text-faint" /> partial ·{" "}
-        <X className="inline size-3 text-line" /> no. Verified against each product&apos;s own docs and
-        repos, July 2026. claude-mem is genuinely local and open-source too — our edge isn&apos;t
-        custody alone, it&apos;s the answering loop and modeling <em>you</em> across every AI, not just
-        your code.
+        <X className="inline size-3 text-line" /> no. Verified against each product&apos;s own docs
+        and repos, July 2026.
       </p>
     </Section>
   );
@@ -657,7 +669,7 @@ function Trust() {
   const pillars = [
     {
       t: "Local-first",
-      d: "Your context lives in ~/.persnally on your machine — not our cloud, not any vendor's silo. Serving it to an AI is a local read: instant, offline, free.",
+      d: "Your context lives in ~/.persnally — not our cloud, not any vendor's silo.",
       viz: (
         <Terminal>
           <p className="font-mono text-[11px] opacity-60">~/.persnally</p>
@@ -671,7 +683,7 @@ function Trust() {
     },
     {
       t: "Truly deletable",
-      d: "Forget a topic and it erases the events and everything derived from them, then rebuilds. No tombstones, no residue.",
+      d: "Forget a topic and everything derived from it is erased, then rebuilt.",
       viz: (
         <Terminal>
           <p className="font-mono text-[12px]">
@@ -687,7 +699,7 @@ function Trust() {
     },
     {
       t: "Provenance-complete",
-      d: "Every claim links to the exact events behind it. “Why does it think this?” is a real lookup, never a guess.",
+      d: "“Why does it think this?” is a real lookup, never a guess.",
       viz: (
         <Terminal>
           <p className="font-mono text-[11px]">↳ why &ldquo;guards user trust&rdquo;?</p>
@@ -702,7 +714,7 @@ function Trust() {
     },
     {
       t: "Source-available",
-      d: "Read the engine, audit the claims, run it yourself. The event schema and MCP interface are an open spec.",
+      d: "Read the engine, audit the claims, run it yourself. The schema and MCP interface are an open spec.",
       viz: (
         <a href={GITHUB} {...EXT} className="group block">
           <Terminal>
@@ -805,13 +817,7 @@ function Positioning() {
         </div>
       </div>
 
-      <p className="mx-auto mt-10 max-w-xl text-center text-[15px] italic leading-relaxed text-faint">
-        Everyone can remember facts about you. Persnally is the one your AI can <em>ask</em> — it
-        answers what you&apos;d do, defers when it&apos;s unsure, and learns the moment you correct
-        it. All of it on your machine, and yours.
-      </p>
-
-      <div className="mt-8 flex justify-center">
+      <div className="mt-10 flex justify-center">
         <BlueButton href="#start">Make every AI yours</BlueButton>
       </div>
     </Section>
@@ -833,7 +839,7 @@ function Pricing() {
         n="08"
         eyebrow="Pricing"
         title="The engine is free. Forever."
-        lede="Everything that touches your data runs on your machine and costs nothing. Pro adds cloud conveniences on top — and the cloud only ever carries ciphertext, never your plaintext."
+        lede="Everything that touches your data runs on your machine, free. Pro adds cloud conveniences — carrying ciphertext only, never your plaintext."
         center
       />
 
@@ -932,6 +938,20 @@ function Footer() {
             FSL-1.1-MIT
           </a>
         </div>
+      </Section>
+
+      <Section className="pt-8">
+        <p className="font-mono text-[10px] leading-relaxed text-faint">
+          Engravings: “Chart of Mental Geometry” (Frederick Bridges, c. 1860) —{" "}
+          <a
+            href="https://wellcomecollection.org/works"
+            {...EXT}
+            className="underline decoration-ink/30 underline-offset-2 transition-colors hover:text-ink"
+          >
+            Wellcome Collection
+          </a>
+          , CC BY 4.0.
+        </p>
       </Section>
 
       {/* Giant engraved wordmark — outlined serif, like the plate lettering */}
