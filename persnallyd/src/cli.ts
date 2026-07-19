@@ -249,6 +249,11 @@ async function main(): Promise<void> {
       for (const { client, file } of results) {
         console.log(file ? `Connected ${client} (${file})` : `${client} not installed — skipped`);
       }
+      // Connect mints the client's identity token into its MCP env — a running
+      // client keeps the old env until relaunched.
+      if (results.some((r) => r.file)) {
+        console.log("  ↳ identity token issued — restart the client(s) to pick it up");
+      }
       // Inline scope applies to the named client (it's config; takes effect whenever that client reads).
       if (scopeCats && target) {
         setScope(target, scopeCats);

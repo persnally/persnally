@@ -42,6 +42,21 @@ test("connect rejects unknown clients", async () => {
   await assert.rejects(run("node", [CLI, "connect", "vscode"], { env }), /unknown client/);
 });
 
+test("connect issues an identity token: env in the client config, secret in ours, rotated per connect", async () => {
+  await run("node", [CLI, "connect", "cursor"], { env });
+  const mcp = () => JSON.parse(readFileSync(join(home, ".cursor", "mcp.json"), "utf-8")).mcpServers.persnally.env;
+  const cfg = () => JSON.parse(readFileSync(join(home, ".persnally", "config.json"), "utf-8")).client_tokens;
+
+  const first = mcp();
+  assert.equal(first.PERSNALLY_CLIENT, "cursor", "identity pinned to the connect-time name");
+  assert.ok(first.PERSNALLY_CLIENT_TOKEN.length >= 32, "token is a real secret");
+  assert.equal(cfg().cursor, first.PERSNALLY_CLIENT_TOKEN, "daemon config holds the same token");
+
+  await run("node", [CLI, "connect", "cursor"], { env });
+  assert.notEqual(mcp().PERSNALLY_CLIENT_TOKEN, first.PERSNALLY_CLIENT_TOKEN, "re-connect rotates");
+  assert.equal(cfg().cursor, mcp().PERSNALLY_CLIENT_TOKEN, "both sides rotate together");
+});
+
 test("connect --scope sets the client's allowlist inline", async () => {
   const { stdout } = await run("node", [CLI, "connect", "cursor", "--scope", "technology,career"], { env });
   assert.match(stdout, /Connected cursor/);
