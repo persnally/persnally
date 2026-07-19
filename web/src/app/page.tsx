@@ -267,6 +267,24 @@ function Wedge() {
             every session. Each tool meets you as a stranger — and the vendors can&apos;t fix it,
             because their business is keeping you inside their walls.
           </p>
+          <figure className="mt-10">
+            <div className="grid grid-cols-3 items-end gap-4 bg-paper">
+              {[
+                { src: "/art/head-front.webp", tool: "what Claude knows" },
+                { src: "/art/head-top.webp", tool: "what ChatGPT knows" },
+                { src: "/art/head-profile.webp", tool: "what Cursor knows" },
+              ].map((h) => (
+                <div key={h.src} className="text-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={h.src} alt="" aria-hidden width={480} height={480} className="mx-auto w-full max-w-[150px] mix-blend-multiply" />
+                  <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.1em] text-mute">{h.tool}</p>
+                </div>
+              ))}
+            </div>
+            <figcaption className="mt-4 border-t border-ink/30 pt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
+              Fig. 2 — three tools, three partial strangers. The same you.
+            </figcaption>
+          </figure>
         </div>
         <RepetitionFeed />
       </div>
@@ -275,6 +293,45 @@ function Wedge() {
 }
 
 /* ── № 02 · How it works ─────────────────────────────────────── */
+
+/* the whole system in one drawn line: your history → the daemon on your
+   machine → every AI. Same instrument language as the gauge. */
+function PipelineStrip() {
+  const src = ["your chats", "your code", "your git"];
+  const dst = ["Claude", "Cursor", "your agents"];
+  return (
+    <svg viewBox="0 0 900 150" role="img" aria-label="Your chats, code, and git flow into the persnallyd daemon on your machine, and out to Claude, Cursor, and your agents" className="mt-10 hidden w-full text-ink md:block">
+      {src.map((s, i) => (
+        <g key={s}>
+          <text x={120} y={35 + i * 40} textAnchor="end" className="font-mono" fontSize={15} fill="currentColor" opacity={0.7}>
+            {s}
+          </text>
+          <path d={`M 132 ${30 + i * 40} L 210 ${30 + i * 40} L 260 70 L 330 70`} fill="none" stroke="var(--color-electric)" strokeWidth={1.5} opacity={0.75} />
+        </g>
+      ))}
+      <rect x={335} y={38} width={230} height={64} fill="none" stroke="currentColor" strokeWidth={1.5} />
+      <rect x={341} y={44} width={218} height={52} fill="none" stroke="currentColor" strokeWidth={0.75} opacity={0.4} />
+      <text x={450} y={66} textAnchor="middle" className="font-mono" fontSize={16} fill="currentColor">
+        persnallyd
+      </text>
+      <text x={450} y={86} textAnchor="middle" className="font-mono" fontSize={11.5} fill="var(--color-electric)">
+        on your machine
+      </text>
+      {dst.map((d, i) => (
+        <g key={d}>
+          <path d={`M 570 70 L 640 ${30 + i * 40} L 700 ${30 + i * 40}`} fill="none" stroke="var(--color-electric)" strokeWidth={1.5} opacity={0.75} />
+          <path d={`M 700 ${30 + i * 40} l -9 -4.5 v 9 z`} fill="var(--color-electric)" opacity={0.85} />
+          <text x={712} y={35 + i * 40} className="font-mono" fontSize={15} fill="currentColor" opacity={0.85}>
+            {d}
+          </text>
+        </g>
+      ))}
+      <text x={450} y={138} textAnchor="middle" className="font-mono" fontSize={11} fill="currentColor" opacity={0.55}>
+        one model of you · read everywhere · written nowhere else
+      </text>
+    </svg>
+  );
+}
 
 function HowItWorks() {
   const steps = [
@@ -303,8 +360,9 @@ function HowItWorks() {
   return (
     <Section id="how" className="py-24">
       <SectionHead n="02" eyebrow="How it works" title="Your context, in every tool you touch." />
+      <PipelineStrip />
 
-      <div className="mt-12 grid gap-5 lg:grid-cols-3">
+      <div className="mt-10 grid gap-5 lg:grid-cols-3">
         {steps.map((s) => (
           <div key={s.k} className="plate flex flex-col p-6">
             <div className="flex items-baseline justify-between border-b border-ink/20 pb-4">
@@ -598,11 +656,22 @@ function Engine() {
               ↳ why does it think this? <span className="ml-1 text-faint">3 events</span>
             </p>
           </div>
-          <ul className="mt-4 space-y-2.5 border-l border-ink/25 pl-4 font-mono text-[12px] text-mute">
-            <li>#128 · imported 142 Claude conversations</li>
-            <li>#412 · vetoed telemetry without consent</li>
-            <li>#087 · chose local-first storage</li>
+          {/* the claim hangs from its evidence — the hero's leader-line language */}
+          <ul className="ml-6 border-l-2 border-electric/50 font-mono text-[12px] text-mute">
+            {[
+              ["#128", "imported 142 Claude conversations"],
+              ["#412", "vetoed telemetry without consent"],
+              ["#087", "chose local-first storage"],
+            ].map(([id, t]) => (
+              <li key={id} className="relative py-2 pl-5">
+                <span aria-hidden className="absolute left-0 top-1/2 h-px w-3.5 bg-electric/50" />
+                <span className="text-electric">{id}</span> · {t}
+              </li>
+            ))}
           </ul>
+          <p className="ml-6 pt-1 font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
+            3 events · 0 guesses · each one deletable
+          </p>
         </div>
 
         <div className="plate p-6 lg:col-span-2">
@@ -830,16 +899,20 @@ function Positioning() {
   return (
     <Section className="py-24">
       <SectionHead n="07" eyebrow="The difference" title={<></>} center />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/art/geometric-head.webp"
-        alt=""
-        aria-hidden
-        width={140}
-        height={140}
-        className="mx-auto -mt-2 w-[120px] mix-blend-multiply opacity-90"
-      />
-      <p className="font-display mx-auto mt-4 max-w-3xl text-balance text-center text-4xl leading-[1.05] sm:text-6xl">
+      <figure className="mx-auto -mt-2 w-fit text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/art/geometric-head.webp"
+          alt="Engraving of a head divided into measured, lettered sections"
+          width={240}
+          height={240}
+          className="mx-auto w-[210px] mix-blend-multiply"
+        />
+        <figcaption className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
+          Fig. 6 — the model of you, measured. Held by its subject.
+        </figcaption>
+      </figure>
+      <p className="font-display mx-auto mt-8 max-w-3xl text-balance text-center text-4xl leading-[1.05] sm:text-6xl">
         Every AI knows <span className="text-mute">you.</span> And it&apos;s <Em>yours.</Em>
       </p>
 
@@ -889,48 +962,59 @@ function Pricing() {
     "The dashboard: inspect, audit provenance, delete",
     "Bring your own key, or run fully local with Ollama",
   ];
+  // The page's one full-bleed color moment: pricing on the electric field.
   return (
-    <Section id="pricing" className="py-24">
-      <SectionHead
-        n="08"
-        eyebrow="Pricing"
-        title="The engine is free. Forever."
-        lede="Everything that touches your data runs on your machine, free. Pro adds cloud conveniences — carrying ciphertext only, never your plaintext."
-        center
-      />
-
-      <div className="mx-auto mt-12 grid max-w-3xl gap-5 md:grid-cols-2">
-        <div className="plate flex flex-col p-7">
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">Free</p>
-          <p className="font-display mt-3 text-4xl text-ink">
-            $0 <span className="text-lg text-faint">forever</span>
+    <section id="pricing" className="bg-electric py-24 text-paper">
+      <div className="mx-auto w-full max-w-6xl px-6">
+        <div className="border-t border-paper/70 pt-7 text-center">
+          <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-paper/70">
+            <span className="text-paper">№ 08</span> — Pricing
+          </span>
+          <h2 className="font-display mx-auto mt-6 max-w-3xl text-balance text-4xl leading-[1.02] sm:text-6xl">
+            The engine is free. <em className="italic">Forever.</em>
+          </h2>
+          <p className="mt-5 font-mono text-[12px] uppercase tracking-[0.22em] text-paper/70">
+            Free · Pro · Teams later
           </p>
-          <ul className="mt-6 space-y-3.5">
-            {free.map((x) => (
-              <li key={x} className="flex items-start gap-3 text-[15px] text-mute">
-                <Check className="mt-0.5 size-4 shrink-0 text-electric" strokeWidth={2} />
-                {x}
-              </li>
-            ))}
-          </ul>
-          <div className="mt-auto pt-7">
-            <a
-              href="#start"
-              className="block border border-ink px-4 py-2.5 text-center font-mono text-[12px] uppercase tracking-[0.14em] text-ink transition-colors hover:bg-ink hover:text-paper"
-            >
-              Install now
-            </a>
-          </div>
+          <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-paper/80">
+            Everything that touches your data runs on your machine, free. Pro adds cloud
+            conveniences — carrying ciphertext only, never your plaintext.
+          </p>
         </div>
 
-        <ProCard />
-      </div>
+        <div className="mx-auto mt-12 grid max-w-3xl gap-5 md:grid-cols-2">
+          <div className="plate flex flex-col p-7">
+            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">Free</p>
+            <p className="font-display mt-3 text-4xl text-ink">
+              $0 <span className="text-lg text-faint">forever</span>
+            </p>
+            <ul className="mt-6 space-y-3.5">
+              {free.map((x) => (
+                <li key={x} className="flex items-start gap-3 text-[15px] text-mute">
+                  <Check className="mt-0.5 size-4 shrink-0 text-electric" strokeWidth={2} />
+                  {x}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-auto pt-7">
+              <a
+                href="#start"
+                className="block border border-ink px-4 py-2.5 text-center font-mono text-[12px] uppercase tracking-[0.14em] text-ink transition-colors hover:bg-ink hover:text-paper"
+              >
+                Install now
+              </a>
+            </div>
+          </div>
 
-      <p className="mx-auto mt-10 max-w-xl text-center text-[15px] italic leading-relaxed text-faint">
-        Privacy is never the paid tier. The local engine, the dashboard, and deletion stay free —
-        Pro is convenience on top, not a wall around your own data.
-      </p>
-    </Section>
+          <ProCard />
+        </div>
+
+        <p className="mx-auto mt-10 max-w-xl text-center text-[15px] italic leading-relaxed text-paper/75">
+          Privacy is never the paid tier. The local engine, the dashboard, and deletion stay free —
+          Pro is convenience on top, not a wall around your own data.
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -998,7 +1082,8 @@ function Footer() {
 
       <Section className="pt-8">
         <p className="font-mono text-[10px] leading-relaxed text-faint">
-          Engravings: “Chart of Mental Geometry” (Frederick Bridges, c. 1860) —{" "}
+          Engravings: “Chart of Mental Geometry” (Frederick Bridges, c. 1860) and phrenological
+          plates —{" "}
           <a
             href="https://wellcomecollection.org/works"
             {...EXT}
