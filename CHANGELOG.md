@@ -2,6 +2,18 @@
 
 All notable changes to Persnally will be documented in this file.
 
+## [2.10.0] - 2026-07-19
+
+Identity gets real and imports get fast: connected AIs now prove who they are — so your scopes and revocations actually bind — and large exports land about 4× faster.
+
+### Added
+- **Per-client identity tokens.** `persnally connect` now issues each client a secret token (rotated on every connect) and pins its identity to it. The daemon refuses a client name that has a token but doesn't present it, refuses a token claiming another client's name, and holds event writes to the same rule — so a client can no longer read past its scope, ignore a revocation, or write events under another client's name by just claiming a different identity. Never-connected clients behave exactly as before; after upgrading, re-run `persnally connect` (or `setup`) once and restart your clients to turn enforcement on.
+
+### Changed
+- **Imports run in parallel.** Conversation extraction now processes up to 4 conversations concurrently (`PERSNALLY_IMPORT_CONCURRENCY` to tune, 1–16), roughly 4× faster on large exports — with output identical to a serial run and one bad conversation still never aborting the batch.
+- `connect` prints a reminder to restart the client so it picks up its new identity token.
+- MCP tools surface the daemon's actionable auth messages (e.g. "re-run `persnallyd connect cursor`") instead of a raw error dump.
+
 ## [2.9.0] - 2026-07-17
 
 Your permission surface, complete — see and control exactly what each AI can read, from connect to revoke. And the interfaces others build against are now versioned open specs.
