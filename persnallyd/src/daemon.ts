@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { askUserModel } from "./ask.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { runConsolidation, shouldRunNow } from "./consolidate.js";
-import { allowedCategories, CATEGORIES, clearScope, loadScopes, setScope, type Category } from "./permissions.js";
+import { allowedCategories, CATEGORIES, clearScope, clientForToken, hasToken, loadScopes, setScope, type Category } from "./permissions.js";
 import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Provenance } from "./events.js";
 import { importNewClaudeCodeSessions } from "./importers/claude-code.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
@@ -42,6 +42,27 @@ function askAllowed(now: number): boolean {
   return true;
 }
 
+/**
+ * Token-verified client identity. A name with an issued token can only be used
+ * by presenting that token, so scopes and revocations hold against clients
+ * that misreport who they are. Names never issued a token (or no name at all)
+ * pass through unchanged — the pre-token default-open behavior.
+ */
+function resolveClient(req: http.IncomingMessage, claimed: string | null): { client: string | null; error?: string } {
+  const auth = req.headers.authorization ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (token) {
+    const owner = clientForToken(token);
+    if (!owner) return { client: null, error: "unrecognized client token — reconnect with: persnallyd connect <client>, then restart the client" };
+    if (claimed && claimed !== owner) return { client: null, error: `token identifies '${owner}' but the request claims '${claimed}'` };
+    return { client: owner };
+  }
+  if (claimed && hasToken(claimed)) {
+    return { client: null, error: `client '${claimed}' has an identity token and must present it — re-run: persnallyd connect ${claimed}, then restart the client` };
+  }
+  return { client: claimed };
+}
+
 export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server {
   const localHosts = [`127.0.0.1:${port}`, `localhost:${port}`];
   const server = http.createServer(async (req, res) => {
@@ -70,8 +91,9 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         return json(res, 200, store.activity());
       }
       if (req.method === "GET" && url.pathname === "/topics") {
-        const client = url.searchParams.get("client");
-        const allowed = client ? allowedCategories(client) : null;
+        const id = resolveClient(req, url.searchParams.get("client"));
+        if (id.error) return json(res, 401, { error: id.error });
+        const allowed = id.client ? allowedCategories(id.client) : null;
         let topics = store.topics(num(url, "limit", 50));
         if (allowed) topics = topics.filter((t) => allowed.includes(t.category as Category));
         return json(res, 200, topics);
@@ -79,8 +101,9 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       if (req.method === "GET" && url.pathname === "/profile") {
         // The holistic profile is cross-category prose — a scoped client gets
         // its scope's own synthesized narrative instead, never the full one.
-        const client = url.searchParams.get("client");
-        const allowed = client ? allowedCategories(client) : null;
+        const id = resolveClient(req, url.searchParams.get("client"));
+        if (id.error) return json(res, 401, { error: id.error });
+        const allowed = id.client ? allowedCategories(id.client) : null;
         if (allowed !== null) {
           const scoped = store.getScopedProfile(scopeKey(allowed));
           if (scoped) return json(res, 200, scoped);
@@ -193,9 +216,12 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         if (!question || question.length > 500) {
           return json(res, 400, { error: "question required (1–500 chars)" });
         }
-        const client = typeof body.client === "string" && body.client
+        const claimed = typeof body.client === "string" && body.client
           ? body.client.toLowerCase().replace(/[^a-z0-9._-]/g, "-")
           : null;
+        const id = resolveClient(req, claimed);
+        if (id.error) return json(res, 401, { error: id.error });
+        const client = id.client;
         const asker = typeof body.asker === "string" && body.asker ? body.asker : (client ?? "dashboard");
         if (!askAllowed(Date.now())) {
           return json(res, 429, { error: `ask limit reached (${ASK_LIMIT} per ${ASK_WINDOW_MS / 60000} min) — protects your inference budget from a looping agent` });
@@ -217,10 +243,11 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       if (req.method === "GET" && url.pathname === "/search") {
         const q = (url.searchParams.get("q") ?? "").trim();
         if (!q || q.length > 200) return json(res, 400, { error: "q required (1–200 chars)" });
-        const client = url.searchParams.get("client");
+        const id = resolveClient(req, url.searchParams.get("client"));
+        if (id.error) return json(res, 401, { error: id.error });
         return json(res, 200, searchContext(store, q, {
           limit: num(url, "limit", 10),
-          allowed: client ? allowedCategories(client) : null,
+          allowed: id.client ? allowedCategories(id.client) : null,
         }));
       }
       // The feedback half of the loop: the user labels an answer right/wrong
@@ -275,6 +302,18 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
                 typeof r.ts === "string" ? r.ts : undefined,
               );
         });
+        // Writes claiming an MCP client identity are held to the same token
+        // binding as reads — otherwise a client could poison provenance by
+        // writing events under another client's name.
+        const claimedClients = new Set<string>();
+        for (const e of events) {
+          if (e.provenance.kind === "mcp") claimedClients.add(e.provenance.client);
+          if (e.source.startsWith("mcp:")) claimedClients.add(e.source.slice(4));
+        }
+        for (const c of claimedClients) {
+          const id = resolveClient(req, c);
+          if (id.error) return json(res, 401, { error: id.error });
+        }
         store.append(events);
         // Views derive only from signal.* events — skip the O(all-events) rebuild
         // for telemetry writes like context.read.

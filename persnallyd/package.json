@@ -1,6 +1,6 @@
 {
   "name": "persnally",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "license": "FSL-1.1-MIT",
   "description": "Your own context engine — local-first, across every AI. So every AI finally knows you.",
   "type": "module",

@@ -18,7 +18,9 @@ export function setClient(name: string | undefined): void {
 }
 
 export function getClient(): string {
-  return clientName;
+  // The connect-time env pin wins over the handshake's self-reported name —
+  // identity must match the name the daemon issued a token for.
+  return process.env.PERSNALLY_CLIENT || clientName;
 }
 
 export function logEvent(event: string, data: Record<string, unknown> = {}): void {

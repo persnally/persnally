@@ -6,6 +6,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { issueToken } from "./permissions.js";
 
 export const CLIENTS = ["claude-code", "claude-desktop", "cursor"] as const;
 export type Client = (typeof CLIENTS)[number];
@@ -59,7 +60,14 @@ export function connectClient(client: Client): string | null {
     }
   }
   const servers = (cfg.mcpServers ??= {}) as Record<string, unknown>;
-  servers.persnally = { command: "node", args: [mcpServerPath()] };
+  // Each connect mints (or rotates) this client's identity token — the daemon
+  // then refuses this client name without it, so scopes/revocations can't be
+  // bypassed by a client claiming someone else's name.
+  servers.persnally = {
+    command: "node",
+    args: [mcpServerPath()],
+    env: { PERSNALLY_CLIENT: client, PERSNALLY_CLIENT_TOKEN: issueToken(client) },
+  };
   writeJsonAtomic(file, cfg);
   return file;
 }

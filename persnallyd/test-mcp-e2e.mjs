@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const MOCK_PORT = 49832;
-const received = { posts: [], deletes: [], asks: [] };
+const received = { posts: [], postAuths: [], deletes: [], asks: [] };
 
 const mockDaemon = http.createServer((req, res) => {
   let body = "";
@@ -19,6 +19,7 @@ const mockDaemon = http.createServer((req, res) => {
     const respond = (code, obj) => { res.writeHead(code, { "Content-Type": "application/json" }); res.end(JSON.stringify(obj)); };
     if (req.method === "POST" && req.url === "/events") {
       received.posts.push(JSON.parse(body));
+      received.postAuths.push(req.headers.authorization ?? null);
       return respond(201, { inserted: JSON.parse(body).length ?? 1, ids: ["x"] });
     }
     if (req.method === "POST" && req.url === "/ask") {
@@ -61,34 +62,38 @@ writeFileSync(join(home, ".persnally", "interest-graph.json"), JSON.stringify({
 
 await new Promise((r) => mockDaemon.listen(MOCK_PORT, "127.0.0.1", r));
 
+function wire(proc) {
+  let nextId = 0;
+  const pending = new Map();
+  proc.stdout.on("data", (d) => {
+    for (const line of d.toString().split("\n").filter(Boolean)) {
+      const msg = JSON.parse(line);
+      if (msg.id !== undefined && pending.has(msg.id)) {
+        pending.get(msg.id)(msg);
+        pending.delete(msg.id);
+      }
+    }
+  });
+  const rpc = (method, params) => {
+    const id = ++nextId;
+    return new Promise((resolve, reject) => {
+      pending.set(id, resolve);
+      proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+      setTimeout(() => reject(new Error(`timeout: ${method}`)), 8000);
+    });
+  };
+  const callTool = async (name, args) => {
+    const r = await rpc("tools/call", { name, arguments: args });
+    return r.result.content[0].text;
+  };
+  return { rpc, callTool };
+}
+
 const srv = spawn("node", ["build/src/mcp/index.js"], {
   env: { ...process.env, HOME: home, PERSNALLYD_URL: `http://127.0.0.1:${MOCK_PORT}` },
   stdio: ["pipe", "pipe", "inherit"],
 });
-
-let nextId = 0;
-const pending = new Map();
-srv.stdout.on("data", (d) => {
-  for (const line of d.toString().split("\n").filter(Boolean)) {
-    const msg = JSON.parse(line);
-    if (msg.id !== undefined && pending.has(msg.id)) {
-      pending.get(msg.id)(msg);
-      pending.delete(msg.id);
-    }
-  }
-});
-function rpc(method, params) {
-  const id = ++nextId;
-  return new Promise((resolve, reject) => {
-    pending.set(id, resolve);
-    srv.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
-    setTimeout(() => reject(new Error(`timeout: ${method}`)), 8000);
-  });
-}
-const callTool = async (name, args) => {
-  const r = await rpc("tools/call", { name, arguments: args });
-  return r.result.content[0].text;
-};
+const { rpc, callTool } = wire(srv);
 
 // ── handshake ──
 const init = await rpc("initialize", {
@@ -195,6 +200,31 @@ const forgetStyleText = await callTool("persnally_forget", { style: { dimension:
 assert.match(forgetStyleText, /Forgot "be 100% sure"/);
 assert.ok(received.deletes.some((u) => u === "/voice/emphasis/be%20100%25%20sure"), "forget must DELETE /voice/:dimension/:pattern");
 console.log("✅ forget a style pattern");
+
+// ── connect-issued identity: env pin beats the handshake name, bearer rides every request ──
+const srv2 = spawn("node", ["build/src/mcp/index.js"], {
+  env: {
+    ...process.env, HOME: home, PERSNALLYD_URL: `http://127.0.0.1:${MOCK_PORT}`,
+    PERSNALLY_CLIENT: "cursor", PERSNALLY_CLIENT_TOKEN: "tok-e2e",
+  },
+  stdio: ["pipe", "pipe", "inherit"],
+});
+const w2 = wire(srv2);
+await w2.rpc("initialize", {
+  protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "lying-client", version: "0" },
+});
+srv2.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
+await w2.callTool("persnally_track", {
+  topics: [{ topic: "auth", weight: 0.5, intent: "building", sentiment: "neutral", depth: "moderate", category: "technology", entities: [] }],
+});
+const pinnedIdx = received.posts.findIndex((p) => Array.isArray(p) && p[0]?.payload?.topic === "auth");
+assert.ok(pinnedIdx >= 0, "pinned-identity track must POST");
+assert.equal(received.posts[pinnedIdx][0].source, "mcp:cursor", "identity comes from the connect env, not the handshake name");
+assert.deepEqual(received.posts[pinnedIdx][0].provenance, { kind: "mcp", client: "cursor" });
+assert.equal(received.postAuths[pinnedIdx], "Bearer tok-e2e", "the connect-issued token authenticates the write");
+assert.ok(received.postAuths.slice(0, pinnedIdx).every((a) => a === null), "the un-connected instance sent no token");
+srv2.kill();
+console.log("✅ env-pinned identity + bearer token on the wire");
 
 srv.kill();
 mockDaemon.close();
