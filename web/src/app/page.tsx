@@ -199,7 +199,7 @@ function Wedge() {
             because their business is keeping you inside their walls.
           </p>
           <figure className="mt-10">
-            <div className="grid grid-cols-3 items-end gap-4 bg-paper">
+            <div className="grid grid-cols-3 items-start gap-4 bg-paper">
               {[
                 { src: "/art/head-front.webp", tool: "what Claude knows" },
                 { src: "/art/head-top.webp", tool: "what ChatGPT knows" },
