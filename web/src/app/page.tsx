@@ -421,52 +421,6 @@ function ServeViz() {
 
 /* ── № 03 · Ask ──────────────────────────────────────────────── */
 
-/* the deferral rule as an instrument: needle at a real answer (0.92),
-   dashed mark at the confidence bar (0.70) below which it hands back to you */
-function ConfidenceGauge() {
-  const C = { x: 170, y: 160 };
-  const pt = (v: number, r: number) => {
-    const a = Math.PI * (1 - v);
-    return [C.x + r * Math.cos(a), C.y - r * Math.sin(a)] as const;
-  };
-  const ticks = Array.from({ length: 11 }, (_, i) => i / 10);
-  const [nx, ny] = pt(0.92, 104);
-  const [t1x, t1y] = pt(0.7, 130);
-  const [t2x, t2y] = pt(0.7, 86);
-  return (
-    <svg viewBox="0 0 340 185" role="img" aria-label="Confidence gauge: answers at 0.92, defers to you below 0.70" className="mx-auto my-5 w-full max-w-[280px] text-ink">
-      <path d="M 40 160 A 130 130 0 0 1 300 160" fill="none" stroke="currentColor" strokeWidth={1.5} />
-      {ticks.map((v) => {
-        const major = v === 0 || v === 0.5 || v === 1;
-        const [x1, y1] = pt(v, 130);
-        const [x2, y2] = pt(v, major ? 114 : 121);
-        return <line key={v} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth={major ? 1.5 : 1} opacity={0.75} />;
-      })}
-      <line x1={t1x} y1={t1y} x2={t2x} y2={t2y} stroke="var(--color-electric)" strokeWidth={1.5} strokeDasharray="4 4" />
-      <text x={t2x - 6} y={t2y - 8} textAnchor="middle" className="font-mono" fontSize={11} fill="var(--color-electric)">
-        0.70
-      </text>
-      <text x={t2x - 6} y={t2y + 6} textAnchor="middle" className="font-mono" fontSize={10} fill="currentColor" opacity={0.55}>
-        defers below
-      </text>
-      <line x1={C.x} y1={C.y} x2={nx} y2={ny} stroke="var(--color-electric)" strokeWidth={3} strokeLinecap="round" />
-      <circle cx={C.x} cy={C.y} r={5} fill="var(--color-electric)" />
-      <text x={nx + 8} y={ny - 8} className="font-mono" fontSize={15} fill="var(--color-electric)">
-        0.92
-      </text>
-      <text x={40} y={178} className="font-mono" fontSize={11} fill="currentColor" opacity={0.55}>
-        0
-      </text>
-      <text x={294} y={178} className="font-mono" fontSize={11} fill="currentColor" opacity={0.55}>
-        1
-      </text>
-      <text x={C.x} y={181} textAnchor="middle" className="font-mono" fontSize={11} fill="currentColor" opacity={0.7}>
-        answers · in your voice
-      </text>
-    </svg>
-  );
-}
-
 /* the correction, written in your own hand — a 1657 author's quill with the
    rubber stamp that makes it law pressed over the plate */
 function CorrectionLedger() {
@@ -521,7 +475,7 @@ function AskProof() {
             Your agent asks Persnally instead of interrupting you. Below its confidence bar, it
             sends the agent back to you — never a made-up answer.
           </p>
-          <ConfidenceGauge />
+          <Vignette src="/art/justice.webp" cap="the evidence, weighed — below the bar, it defers to you" h="h-64" />
           <div className="mt-auto">
             <Terminal>
               <p className="font-mono text-[12px] opacity-75">
@@ -607,6 +561,7 @@ function Engine() {
         <div className="plate p-6">
           <Eyebrow>Cross-vendor · MCP</Eyebrow>
           <h3 className="font-display mt-4 text-2xl text-ink">One context, every tool reads it.</h3>
+          <Vignette src="/art/fountain.webp" cap="the well — one source, every tool draws" h="h-40" />
           <div className="mt-5 space-y-0 border-t border-ink/20">
             {[
               { icon: <Glyph icon={claudeIcon} className="size-4" />, name: "Claude", method: "persnally_context" },
@@ -661,7 +616,9 @@ function Engine() {
         <div className="plate p-6 lg:col-span-2">
           <Eyebrow>Per-client scopes</Eyebrow>
           <h3 className="font-display mt-4 text-2xl text-ink">Decide exactly what each AI can see.</h3>
-          <div className="mt-5 grid gap-x-8 gap-y-0 sm:grid-cols-2">
+          <div className="mt-5 grid items-center gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+            <Vignette src="/art/cards.webp" cap="the card table — each player sees only its own hand" h="h-48" />
+            <div className="grid gap-x-8 gap-y-0 sm:grid-cols-1">
             {[
               { name: "Claude", icon: <Glyph icon={claudeIcon} className="size-4" />, state: "allowed" },
               { name: "Cursor", icon: <Glyph icon={TOOLS.find((t) => t.name === "Cursor")!.icon} className="size-4" />, state: "allowed" },
@@ -680,6 +637,7 @@ function Engine() {
                 </span>
               </div>
             ))}
+            </div>
           </div>
         </div>
       </div>
@@ -769,6 +727,7 @@ function Trust() {
   const pillars = [
     {
       t: "Local-first",
+      art: <Vignette src="/art/lock.webp" cap="the lock — your data, behind your own door" h="h-36" />,
       d: "Your context lives in ~/.persnally — not our cloud, not any vendor's silo.",
       viz: (
         <Terminal>
@@ -783,6 +742,7 @@ function Trust() {
     },
     {
       t: "Truly deletable",
+      art: <Vignette src="/art/bonfire.webp" cap="the bonfire — records truly destroyed" h="h-36" />,
       d: "Forget a topic and everything derived from it is erased, then rebuilt.",
       viz: (
         <Terminal>
@@ -799,6 +759,7 @@ function Trust() {
     },
     {
       t: "Provenance-complete",
+      art: <Vignette src="/art/microscope.webp" cap="the microscope — every claim, under the instrument" h="h-36" />,
       d: "“Why does it think this?” is a real lookup, never a guess.",
       viz: (
         <Terminal>
@@ -814,6 +775,7 @@ function Trust() {
     },
     {
       t: "Source-available",
+      art: <Vignette src="/art/ecorche.webp" cap="the écorché — opened for inspection, nothing hidden" h="h-36" />,
       d: "Read the engine, audit the claims, run it yourself. The schema and MCP interface are an open spec.",
       viz: (
         <a href={GITHUB} {...EXT} className="group block">
@@ -840,10 +802,11 @@ function Trust() {
 
       <div className="mt-12 grid gap-5 md:grid-cols-2">
         {pillars.map((p) => (
-          <div key={p.t} className="plate p-6">
+          <div key={p.t} className="plate flex flex-col p-6">
             <h3 className="font-display text-2xl text-ink">{p.t}</h3>
             <p className="mt-2.5 text-[15px] leading-relaxed text-mute">{p.d}</p>
-            <div className="mt-5">{p.viz}</div>
+            {p.art}
+            <div className="mt-auto pt-5">{p.viz}</div>
           </div>
         ))}
       </div>
