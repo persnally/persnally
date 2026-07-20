@@ -727,7 +727,7 @@ function Trust() {
   const pillars = [
     {
       t: "Local-first",
-      art: <Vignette src="/art/lock.webp" cap="the lock — your data, behind your own door" h="h-36" />,
+      art: "/art/lock.webp",
       d: "Your context lives in ~/.persnally — not our cloud, not any vendor's silo.",
       viz: (
         <Terminal>
@@ -742,7 +742,7 @@ function Trust() {
     },
     {
       t: "Truly deletable",
-      art: <Vignette src="/art/bonfire.webp" cap="the bonfire — records truly destroyed" h="h-36" />,
+      art: "/art/bonfire.webp",
       d: "Forget a topic and everything derived from it is erased, then rebuilt.",
       viz: (
         <Terminal>
@@ -759,7 +759,7 @@ function Trust() {
     },
     {
       t: "Provenance-complete",
-      art: <Vignette src="/art/microscope.webp" cap="the microscope — every claim, under the instrument" h="h-36" />,
+      art: "/art/microscope.webp",
       d: "“Why does it think this?” is a real lookup, never a guess.",
       viz: (
         <Terminal>
@@ -775,7 +775,7 @@ function Trust() {
     },
     {
       t: "Source-available",
-      art: <Vignette src="/art/ecorche.webp" cap="the écorché — opened for inspection, nothing hidden" h="h-36" />,
+      art: "/art/ecorche.webp",
       d: "Read the engine, audit the claims, run it yourself. The schema and MCP interface are an open spec.",
       viz: (
         <a href={GITHUB} {...EXT} className="group block">
@@ -802,10 +802,11 @@ function Trust() {
 
       <div className="mt-12 grid gap-5 md:grid-cols-2">
         {pillars.map((p) => (
-          <div key={p.t} className="plate flex flex-col p-6">
+          <div key={p.t} className="plate flex flex-col overflow-hidden p-6">
             <h3 className="font-display text-2xl text-ink">{p.t}</h3>
             <p className="mt-2.5 text-[15px] leading-relaxed text-mute">{p.d}</p>
-            {p.art}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={p.art} alt="" aria-hidden width={900} height={600} className="-mx-6 mt-5 w-[calc(100%+3rem)] max-w-none mix-blend-multiply" />
             <div className="mt-auto pt-5">{p.viz}</div>
           </div>
         ))}
