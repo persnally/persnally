@@ -2,10 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { GithubIcon } from "@/components/ui/logos";
 
-const EXT = { target: "_blank", rel: "noopener noreferrer" } as const;
-const GITHUB = "https://github.com/persnally/persnally";
 
 /* Sticky nav: borderless while at rest at the top of the page; the hairline
    appears once content actually scrolls beneath it. */
@@ -36,19 +33,10 @@ export function Nav() {
             How it works
           </a>
           <a href="#trust" className="transition-colors hover:text-ink">
-            Your data
+            Trust
           </a>
           <a href="#pricing" className="transition-colors hover:text-ink">
             Pricing
-          </a>
-          <a
-            href={GITHUB}
-            {...EXT}
-            aria-label="Persnally on GitHub"
-            title="GitHub"
-            className="transition-colors hover:text-ink"
-          >
-            <GithubIcon className="size-4" />
           </a>
         </nav>
         <a
