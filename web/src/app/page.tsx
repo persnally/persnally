@@ -99,17 +99,6 @@ function Em({ children }: { children: React.ReactNode }) {
   return <em className="font-display italic text-electric">{children}</em>;
 }
 
-function BlueButton({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      className="inline-block rounded-[2px] bg-electric px-5 py-2.5 font-mono text-[12px] uppercase tracking-[0.14em] text-paper transition-colors hover:bg-electric-deep"
-    >
-      {children}
-    </a>
-  );
-}
-
 /* ── Hero ────────────────────────────────────────────────────── */
 
 function Hero() {
@@ -138,31 +127,14 @@ function Hero() {
 
           <div className="rise mt-9 flex max-w-xl flex-col gap-4" style={{ animationDelay: "240ms" }}>
             <CopyCommand command="npm i -g persnally && persnally setup" className="w-full" />
-            <div className="flex flex-wrap items-center gap-5 font-mono text-[12px] text-mute">
-              <a href={GITHUB} {...EXT} className="group flex items-center gap-1.5 transition-colors hover:text-ink">
-                <GithubIcon className="size-3.5" />
-                Star on GitHub
-                <ArrowUpRight className="size-3" />
-              </a>
-              <a href={NPM} {...EXT} className="group flex items-center gap-1.5 transition-colors hover:text-ink">
-                <NpmIcon className="size-3.5" />
-                View on npm
-                <ArrowUpRight className="size-3" />
-              </a>
-            </div>
             <a
-              href="https://www.producthunt.com/products/persnally?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-persnally"
+              href={GITHUB}
               {...EXT}
-              aria-label="Persnally on Product Hunt"
-              className="mt-1 inline-block w-fit transition-opacity hover:opacity-85"
+              className="group flex w-fit items-center gap-1.5 font-mono text-[12px] text-mute transition-colors hover:text-ink"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1182562&theme=light&t=1782584790813"
-                alt="Persnally - So every AI finally knows you | Product Hunt"
-                width={250}
-                height={54}
-              />
+              <GithubIcon className="size-3.5" />
+              Star on GitHub
+              <ArrowUpRight className="size-3" />
             </a>
           </div>
         </div>
@@ -778,11 +750,6 @@ function Trust() {
             {c}
           </span>
         ))}
-        <a href={GITHUB} {...EXT} className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-ink transition-colors hover:text-electric">
-          <GithubIcon className="size-3.5" />
-          Read the source
-          <ArrowUpRight className="size-3" />
-        </a>
       </div>
     </Section>
   );
@@ -853,9 +820,6 @@ function Positioning() {
         </div>
       </div>
 
-      <div className="mt-10 flex justify-center">
-        <BlueButton href="#start">Make every AI yours</BlueButton>
-      </div>
     </Section>
   );
 }
@@ -945,17 +909,6 @@ function GetStarted() {
           macOS · Linux · Windows · Node 20+ · background autostart on macOS &amp; Linux · bring your
           own key, or run fully local with Ollama
         </p>
-        <div className="mt-6 flex justify-center">
-          <a
-            href={GITHUB}
-            {...EXT}
-            className="inline-flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-[0.12em] text-mute transition-colors hover:text-ink"
-          >
-            <GithubIcon className="size-4" />
-            Read the source
-            <ArrowUpRight className="size-3" />
-          </a>
-        </div>
       </div>
     </Section>
   );
@@ -973,17 +926,33 @@ function Footer() {
             So every AI finally knows <Em>you.</Em>
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-x-7 gap-y-3 font-mono text-[12px] uppercase tracking-[0.12em] text-mute">
-          <a href={GITHUB} {...EXT} className="flex items-center gap-1.5 transition-colors hover:text-ink">
-            <GithubIcon className="size-4" />
-            GitHub
-          </a>
-          <a href={NPM} {...EXT} className="flex items-center gap-1.5 transition-colors hover:text-ink">
-            <NpmIcon className="size-4" />
-            npm
-          </a>
-          <a href={`${GITHUB}/blob/main/LICENSE`} {...EXT} className="transition-colors hover:text-ink">
-            FSL-1.1-MIT
+        <div className="flex flex-col items-start gap-4 sm:items-end">
+          <div className="flex flex-wrap items-center gap-x-7 gap-y-3 font-mono text-[12px] uppercase tracking-[0.12em] text-mute">
+            <a href={GITHUB} {...EXT} className="flex items-center gap-1.5 transition-colors hover:text-ink">
+              <GithubIcon className="size-4" />
+              GitHub
+            </a>
+            <a href={NPM} {...EXT} className="flex items-center gap-1.5 transition-colors hover:text-ink">
+              <NpmIcon className="size-4" />
+              npm
+            </a>
+            <a href={`${GITHUB}/blob/main/LICENSE`} {...EXT} className="transition-colors hover:text-ink">
+              FSL-1.1-MIT
+            </a>
+          </div>
+          <a
+            href="https://www.producthunt.com/products/persnally?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-persnally"
+            {...EXT}
+            aria-label="Persnally on Product Hunt"
+            className="transition-opacity hover:opacity-85"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1182562&theme=light&t=1782584790813"
+              alt="Persnally - So every AI finally knows you | Product Hunt"
+              width={220}
+              height={48}
+            />
           </a>
         </div>
       </Section>
