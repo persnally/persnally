@@ -35,18 +35,20 @@ export function Nav() {
           <a href="#how" className="transition-colors hover:text-ink">
             How it works
           </a>
-          <a href="#ask" className="transition-colors hover:text-ink">
-            Ask it
-          </a>
           <a href="#trust" className="transition-colors hover:text-ink">
             Your data
           </a>
           <a href="#pricing" className="transition-colors hover:text-ink">
             Pricing
           </a>
-          <a href={GITHUB} {...EXT} className="flex items-center gap-1.5 transition-colors hover:text-ink">
-            <GithubIcon className="size-3.5" />
-            GitHub
+          <a
+            href={GITHUB}
+            {...EXT}
+            aria-label="Persnally on GitHub"
+            title="GitHub"
+            className="transition-colors hover:text-ink"
+          >
+            <GithubIcon className="size-4" />
           </a>
         </nav>
         <a

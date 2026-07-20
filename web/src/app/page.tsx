@@ -927,14 +927,24 @@ function Footer() {
           </p>
         </div>
         <div className="flex flex-col items-start gap-4 sm:items-end">
-          <div className="flex flex-wrap items-center gap-x-7 gap-y-3 font-mono text-[12px] uppercase tracking-[0.12em] text-mute">
-            <a href={GITHUB} {...EXT} className="flex items-center gap-1.5 transition-colors hover:text-ink">
-              <GithubIcon className="size-4" />
-              GitHub
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 font-mono text-[12px] uppercase tracking-[0.12em] text-mute">
+            <a
+              href={GITHUB}
+              {...EXT}
+              aria-label="Persnally on GitHub"
+              title="GitHub"
+              className="transition-colors hover:text-ink"
+            >
+              <GithubIcon className="size-[18px]" />
             </a>
-            <a href={NPM} {...EXT} className="flex items-center gap-1.5 transition-colors hover:text-ink">
-              <NpmIcon className="size-4" />
-              npm
+            <a
+              href={NPM}
+              {...EXT}
+              aria-label="persnally on npm"
+              title="npm"
+              className="transition-colors hover:text-ink"
+            >
+              <NpmIcon className="size-[18px]" />
             </a>
             <a href={`${GITHUB}/blob/main/LICENSE`} {...EXT} className="transition-colors hover:text-ink">
               FSL-1.1-MIT
