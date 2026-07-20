@@ -226,11 +226,31 @@ function Wedge() {
 /* ── № 02 · How it works ─────────────────────────────────────── */
 
 /* an engraved vignette with its meaning spelled out underneath */
-function Vignette({ src, cap, h = "h-44" }: { src: string; cap: string; h?: string }) {
+function Vignette({
+  src,
+  cap,
+  h = "h-44",
+  natural = false,
+}: {
+  src: string;
+  cap: string;
+  h?: string;
+  /* true for near-square/circular plates (medallions) — shown at their own
+     aspect, centered and modestly sized, instead of stretched to card width
+     (which is right for wide scenes but crops or letterboxes a roundel). */
+  natural?: boolean;
+}) {
   return (
-    <figure className="mt-5">
+    <figure className={`mt-5 ${natural ? "flex flex-col items-center" : ""}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt="" aria-hidden width={640} height={540} className={`w-full ${h} object-contain mix-blend-multiply`} />
+      <img
+        src={src}
+        alt=""
+        aria-hidden
+        width={640}
+        height={540}
+        className={natural ? "w-full max-w-[260px] mix-blend-multiply" : `w-full ${h} object-contain mix-blend-multiply`}
+      />
       <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
         {cap}
       </figcaption>
@@ -245,7 +265,7 @@ function HowItWorks() {
       label: "Import",
       t: "Import your history",
       d: "One command finds your Claude & ChatGPT exports, your Claude Code sessions, and your git repos, and reads them.",
-      art: <Vignette src="/art/press.webp" cap="the press — your history, taken in" />,
+      art: <Vignette src="/art/press.webp" cap="the press — your history, taken in" h="h-[265px]" />,
       visual: <ImportViz />,
     },
     {
@@ -253,7 +273,7 @@ function HowItWorks() {
       label: "Learn · local",
       t: "It learns, on your machine",
       d: "A local daemon turns that history into an evidence-linked model of you — never our cloud.",
-      art: <Vignette src="/art/compositors.webp" cap="the compositors — studied, locally" />,
+      art: <Vignette src="/art/compositors.webp" cap="the compositors — studied, locally" h="h-[265px]" />,
       visual: <LearnViz />,
     },
     {
@@ -261,7 +281,7 @@ function HowItWorks() {
       label: "Serve · MCP",
       t: "Every AI reads it",
       d: "Over MCP — the protocol your tools already speak — Claude, Cursor, and your agents read it the moment a session starts.",
-      art: <Vignette src="/art/mercury.webp" cap="the messenger — served to every tool" />,
+      art: <Vignette src="/art/mercury.webp" cap="the messenger — served to every tool" h="h-[265px]" />,
       visual: <ServeViz />,
     },
   ];
@@ -406,7 +426,7 @@ function AskProof() {
             Your agent asks Persnally instead of interrupting you. Below its confidence bar, it
             sends the agent back to you — never a made-up answer.
           </p>
-          <Vignette src="/art/justice.webp" cap="the evidence, weighed — below the bar, it defers to you" h="h-64" />
+          <Vignette src="/art/justice.webp" cap="the evidence, weighed — below the bar, it defers to you" natural />
           <div className="mt-auto">
             <Terminal>
               <p className="font-mono text-[12px] opacity-75">
@@ -492,7 +512,7 @@ function Engine() {
         <div className="plate p-6">
           <Eyebrow>Cross-vendor · MCP</Eyebrow>
           <h3 className="font-display mt-4 text-2xl text-ink">One context, every tool reads it.</h3>
-          <Vignette src="/art/fountain.webp" cap="the well — one source, every tool draws" h="h-40" />
+          <Vignette src="/art/fountain.webp" cap="the well — one source, every tool draws" h="h-[205px]" />
           <div className="mt-5 space-y-0 border-t border-ink/20">
             {[
               { icon: <Glyph icon={claudeIcon} className="size-4" />, name: "Claude", method: "persnally_context" },
@@ -548,7 +568,7 @@ function Engine() {
           <Eyebrow>Per-client scopes</Eyebrow>
           <h3 className="font-display mt-4 text-2xl text-ink">Decide exactly what each AI can see.</h3>
           <div className="mt-5 grid items-center gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-            <Vignette src="/art/cards.webp" cap="the card table — each player sees only its own hand" h="h-48" />
+            <Vignette src="/art/cards.webp" cap="the card table — each player sees only its own hand" h="h-[242px]" />
             <div className="grid gap-x-8 gap-y-0 sm:grid-cols-1">
             {[
               { name: "Claude", icon: <Glyph icon={claudeIcon} className="size-4" />, state: "allowed" },
