@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { CopyCommand } from "./_components/CopyCommand";
+import { Nav } from "./_components/Nav";
 import { EngravedSelf } from "./_components/EngravedSelf";
 import { SetupTabs } from "./_components/SetupTabs";
 import { RepetitionFeed } from "./_components/RepetitionFeed";
@@ -35,14 +35,6 @@ export default function Home() {
 }
 
 /* ── Shared bits ─────────────────────────────────────────────── */
-
-function Wordmark({ className = "" }: { className?: string }) {
-  return (
-    <span className={`font-display tracking-tight text-ink ${className}`}>
-      persnally<span className="text-electric">.</span>
-    </span>
-  );
-}
 
 /* numbered catalog eyebrow — the museum-plate section marker */
 function Eyebrow({ n, children }: { n?: string; children: React.ReactNode }) {
@@ -86,7 +78,7 @@ function SectionHead({
   center?: boolean;
 }) {
   return (
-    <div className={`border-t border-ink pt-7 ${center ? "text-center" : ""}`}>
+    <div className={center ? "text-center" : ""}>
       <Eyebrow n={n}>{eyebrow}</Eyebrow>
       <h2
         className={`font-display mt-6 text-balance text-4xl leading-[1.02] sm:text-6xl ${center ? "mx-auto max-w-3xl" : "max-w-3xl"}`}
@@ -115,39 +107,6 @@ function BlueButton({ href, children }: { href: string; children: React.ReactNod
     >
       {children}
     </a>
-  );
-}
-
-/* ── Nav ─────────────────────────────────────────────────────── */
-
-function Nav() {
-  return (
-    <header className="sticky top-0 z-50 border-b border-ink/20 bg-paper/90 backdrop-blur-sm">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
-        <Link href="/" aria-label="Persnally home" className="transition-opacity hover:opacity-70">
-          <Wordmark className="text-[22px]" />
-        </Link>
-        <nav className="hidden items-center gap-7 font-mono text-[12px] uppercase tracking-[0.12em] text-mute md:flex">
-          <a href="#how" className="transition-colors hover:text-ink">
-            How it works
-          </a>
-          <a href="#ask" className="transition-colors hover:text-ink">
-            Ask it
-          </a>
-          <a href="#trust" className="transition-colors hover:text-ink">
-            Your data
-          </a>
-          <a href="#pricing" className="transition-colors hover:text-ink">
-            Pricing
-          </a>
-          <a href={GITHUB} {...EXT} className="flex items-center gap-1.5 transition-colors hover:text-ink">
-            <GithubIcon className="size-3.5" />
-            GitHub
-          </a>
-        </nav>
-        <BlueButton href="#start">Get started</BlueButton>
-      </div>
-    </header>
   );
 }
 
@@ -1006,7 +965,7 @@ function GetStarted() {
 
 function Footer() {
   return (
-    <footer className="relative overflow-hidden border-t border-ink">
+    <footer className="relative overflow-hidden border-t border-ink/20">
       <Section className="flex flex-col items-start justify-between gap-8 pt-14 sm:flex-row sm:items-center">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">© 2026 Persnally</p>
