@@ -104,7 +104,7 @@ function Em({ children }: { children: React.ReactNode }) {
 function Hero() {
   return (
     <Section className="pb-20 pt-14 sm:pt-20">
-      <div className="grid items-center gap-12 lg:grid-cols-[1.02fr_0.98fr] lg:gap-14">
+      <div className="grid items-center gap-12 lg:grid-cols-[0.88fr_1.12fr] lg:gap-14">
         <div>
           <div className="rise" style={{ animationDelay: "0ms" }}>
             <Eyebrow>Open source · local-first · MCP</Eyebrow>
