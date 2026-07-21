@@ -884,7 +884,13 @@ function Pricing() {
             <p className="font-display mt-3 text-4xl text-ink">
               $0 <span className="text-lg text-faint">forever</span>
             </p>
-            <Vignette src="/art/loom.webp" cap="the loom — the whole engine, at home" h="h-32" />
+            <figure className="mt-5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/art/loom.webp" alt="" aria-hidden width={900} height={360} className="w-full mix-blend-multiply" />
+              <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
+                the loom — the whole engine, at home
+              </figcaption>
+            </figure>
             <ul className="mt-6 space-y-3.5">
               {free.map((x) => (
                 <li key={x} className="flex items-start gap-3 text-[15px] text-mute">

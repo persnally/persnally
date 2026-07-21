@@ -36,9 +36,9 @@ export function ProCard() {
           src="/art/key.webp"
           alt=""
           aria-hidden
-          width={560}
-          height={275}
-          className="mx-auto h-24 w-full object-contain mix-blend-multiply"
+          width={900}
+          height={276}
+          className="w-full mix-blend-multiply"
         />
         <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
           the key — yours alone · the cloud sees ciphertext
