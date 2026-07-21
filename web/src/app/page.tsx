@@ -762,7 +762,7 @@ function Trust() {
             <h3 className="font-display text-2xl text-ink">{p.t}</h3>
             <p className="mt-2.5 text-[15px] leading-relaxed text-mute">{p.d}</p>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.art} alt="" aria-hidden width={900} height={474} className="-mx-6 mt-5 w-[calc(100%+3rem)] max-w-none mix-blend-multiply" />
+            <img src={p.art} alt="" aria-hidden width={900} height={474} className="mt-5 w-full mix-blend-multiply" />
             <div className="mt-auto pt-5">{p.viz}</div>
           </div>
         ))}
