@@ -35,7 +35,7 @@ export function EngravedSelf() {
           alt="Engraving of a head in profile whose brain is drawn as dozens of tiny scenes from a life"
           width={1000}
           height={1118}
-          className="mx-auto block w-full mix-blend-multiply [filter:contrast(1.18)] sm:w-[70%]"
+          className="mx-auto block w-full mix-blend-multiply sm:w-[70%]"
         />
         <div className="hidden sm:block">
           {NOTES.map((n) => {
