@@ -540,6 +540,11 @@ function Engine() {
         <div className="plate p-6">
           <Eyebrow>Provenance</Eyebrow>
           <h3 className="font-display mt-4 text-2xl text-ink">Every claim cites its evidence.</h3>
+          <Vignette
+            src="/art/specimen.webp"
+            cap="the specimen — every part numbered, keyed to its source"
+            natural
+          />
           <div className="mt-5 border border-ink/25 p-4">
             <p className="text-[15px] text-ink">Guards user trust as non-negotiable.</p>
             <p className="mt-2 font-mono text-[11px] text-electric">
