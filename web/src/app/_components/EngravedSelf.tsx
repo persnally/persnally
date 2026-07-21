@@ -28,7 +28,7 @@ const contX = (imgX: number) => IMG_LEFT + (imgX * IMG_W) / 100;
 export function EngravedSelf() {
   return (
     <figure>
-      <div className="relative">
+      <div className="relative bg-paper">
         {/* eslint-disable-next-line @next/next/no-img-element -- static plate, multiply-blended */}
         <img
           src="/art/symbolic-head.webp"
