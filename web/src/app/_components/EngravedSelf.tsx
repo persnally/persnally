@@ -6,11 +6,11 @@
    Nothing covers the artwork, and the engraving runs full width. */
 
 const POINTS: { x: number; y: number; title: string; detail: string; delay: number }[] = [
-  { x: 60, y: 12, title: "interests", detail: "decay-weighted · 0.95", delay: 400 },
-  { x: 20, y: 46, title: "decisions", detail: "“hand-roll it” · 0.78", delay: 700 },
-  { x: 15, y: 76, title: "voice", detail: "terse · no emoji", delay: 1000 },
-  { x: 90, y: 40, title: "conventions", detail: "pnpm, not npm", delay: 1300 },
-  { x: 80, y: 66, title: "provenance", detail: "#412 · deletable", delay: 1600 },
+  { x: 60, y: 12, title: "interests", detail: "decay-weighted 0.95", delay: 400 },
+  { x: 20, y: 46, title: "decisions", detail: "“hand-roll it” 0.78", delay: 700 },
+  { x: 15, y: 76, title: "voice", detail: "terse no-emoji", delay: 1000 },
+  { x: 90, y: 40, title: "conventions", detail: "pnpm not-npm", delay: 1300 },
+  { x: 80, y: 66, title: "provenance", detail: "#412 deletable", delay: 1600 },
 ];
 
 export function EngravedSelf() {
@@ -37,14 +37,15 @@ export function EngravedSelf() {
         ))}
       </div>
       <figcaption className="mt-4 border-t border-ink/30 pt-3">
-        <div className="flex flex-wrap gap-x-5 gap-y-1.5 font-mono text-[11.5px] leading-snug">
+        <div className="flex flex-wrap gap-x-3 gap-y-1.5 font-mono text-[11.5px] leading-snug">
           {POINTS.map((p, i) => (
             <span key={p.title} className="whitespace-nowrap">
               <span className="mr-1.5 inline-flex size-[15px] items-center justify-center rounded-full bg-electric text-[9.5px] font-bold text-paper">
                 {i + 1}
               </span>
               <span className="text-ink">{p.title}</span>
-              <span className="text-mute"> · {p.detail}</span>
+              <span className="text-mute"> {p.detail}</span>
+              {i < POINTS.length - 1 && <span className="text-faint">,</span>}
             </span>
           ))}
         </div>

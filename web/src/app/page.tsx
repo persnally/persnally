@@ -501,18 +501,18 @@ function Engine() {
       />
 
       <div className="mt-12 grid gap-5 lg:grid-cols-2">
-        <div className="plate p-6">
+        <div className="plate flex flex-col p-6">
           <Eyebrow>Cross-vendor · MCP</Eyebrow>
           <h3 className="font-display mt-4 text-2xl text-ink">One context, every tool reads it.</h3>
           <Vignette src="/art/fountain.webp" cap="the well — one source, every tool draws" h="h-[205px]" />
-          <div className="mt-5 space-y-0 border-t border-ink/20">
+          <div className="mt-5 flex flex-1 flex-col justify-evenly space-y-0 border-t border-ink/20">
             {[
               { icon: <Glyph icon={claudeIcon} className="size-4" />, name: "Claude", method: "persnally_context" },
               { icon: <Glyph icon={TOOLS.find((t) => t.name === "Cursor")!.icon} className="size-4" />, name: "Cursor", method: "persnally_context" },
               { icon: <Glyph icon={claudeIcon} className="size-4" />, name: "Claude Code", method: "persnally_ask" },
               { icon: <Cpu className="size-4 text-electric" />, name: "your agent", method: "persnally_search" },
             ].map((r) => (
-              <div key={r.name + r.method} className="flex items-center justify-between border-b border-ink/15 py-2.5">
+              <div key={r.name + r.method} className="flex flex-1 items-center justify-between border-b border-ink/15 py-2.5">
                 <span className="flex items-center gap-2.5 text-[15px] text-ink">
                   {r.icon}
                   {r.name}
