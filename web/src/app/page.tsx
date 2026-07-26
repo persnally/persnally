@@ -926,6 +926,20 @@ function GetStarted() {
         center
       />
 
+      <figure className="mx-auto mt-12 w-fit text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/art/mirror.webp"
+          alt="Engraving of a woman studying her own reflection in a hand-mirror, an eagle at her side"
+          width={900}
+          height={1001}
+          className="mx-auto w-[420px] max-w-full mix-blend-multiply"
+        />
+        <figcaption className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
+          Fig. 4 — the mirror. It shows you what it learned.
+        </figcaption>
+      </figure>
+
       <div className="mx-auto mt-10 max-w-2xl">
         <SetupTabs />
         <p className="mt-5 text-center font-mono text-[11px] leading-relaxed text-faint">
