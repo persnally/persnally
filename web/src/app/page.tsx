@@ -372,11 +372,10 @@ function ServeViz() {
 
 /* ── № 03 · Ask ──────────────────────────────────────────────── */
 
-/* the correction, written in your own hand — a 1657 author's quill with the
-   rubber stamp that makes it law pressed over the plate */
+/* the correction, written in your own hand — a 1657 author's quill */
 function CorrectionLedger() {
   return (
-    <figure className="relative mt-5">
+    <figure className="mt-5">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/art/author.webp"
@@ -386,13 +385,6 @@ function CorrectionLedger() {
         height={435}
         className="w-full mix-blend-multiply"
       />
-      <span
-        aria-hidden
-        className="absolute bottom-12 right-4 rotate-[-8deg] border-2 border-electric bg-paper/60 px-3 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.18em] text-electric"
-        style={{ boxShadow: "inset 0 0 0 2px var(--color-paper), inset 0 0 0 3.5px var(--color-electric)" }}
-      >
-        Authoritative
-      </span>
       <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
         written in your own hand — outranks everything inferred
       </figcaption>
