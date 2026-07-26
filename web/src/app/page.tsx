@@ -103,29 +103,29 @@ function Em({ children }: { children: React.ReactNode }) {
 
 function Hero() {
   return (
-    <Section className="pb-20 pt-14 sm:pt-20">
-      <div className="grid items-center gap-12 lg:grid-cols-[0.72fr_1.28fr] lg:gap-14">
+    <Section className="flex flex-col justify-center pb-16 pt-10 sm:pt-14 lg:min-h-[calc(100dvh-4rem)]">
+      <div className="grid items-center gap-12 lg:grid-cols-[1.12fr_0.88fr] lg:gap-16">
         <div>
           <div className="rise" style={{ animationDelay: "0ms" }}>
             <Eyebrow>Open source · local-first · MCP</Eyebrow>
           </div>
 
           <h1
-            className="font-display rise mt-6 text-balance text-[3.4rem] leading-[0.98] sm:text-7xl lg:text-[5.4rem]"
+            className="font-display rise mt-6 text-balance text-[3.6rem] leading-[0.95] sm:text-[5.2rem] lg:text-[6.2rem]"
             style={{ animationDelay: "80ms" }}
           >
             Finally, every AI knows <Em>you.</Em>
           </h1>
 
           <p
-            className="rise mt-7 max-w-xl text-pretty text-lg leading-relaxed text-mute"
+            className="rise mt-8 max-w-xl text-pretty text-lg leading-relaxed text-mute"
             style={{ animationDelay: "160ms" }}
           >
             Persnally learns who you are from your AI history — your chats, your code, your
             decisions — and serves it to every AI you use. On your machine. Yours.
           </p>
 
-          <div className="rise mt-9 flex max-w-xl flex-col gap-4" style={{ animationDelay: "240ms" }}>
+          <div className="rise mt-10 flex max-w-xl flex-col gap-4" style={{ animationDelay: "240ms" }}>
             <CopyCommand command="npm i -g persnally && persnally setup" className="w-full" />
             <a
               href={GITHUB}
@@ -249,7 +249,7 @@ function Vignette({
         aria-hidden
         width={640}
         height={540}
-        className={natural ? "w-full max-w-[260px] mix-blend-multiply" : `w-full ${h} object-contain mix-blend-multiply`}
+        className={natural ? "w-full max-w-[320px] mix-blend-multiply" : `w-full ${h} object-contain mix-blend-multiply`}
       />
       <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
         {cap}
@@ -800,7 +800,7 @@ function Positioning() {
           className="mx-auto w-[210px] mix-blend-multiply"
         />
         <figcaption className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
-          Fig. 6 — the model of you, measured. Held by its subject.
+          Fig. 3 — the model of you, measured. Held by its subject.
         </figcaption>
       </figure>
       <p className="font-display mx-auto mt-8 max-w-3xl text-balance text-center text-4xl leading-[1.05] sm:text-6xl">
@@ -1000,7 +1000,7 @@ function Footer() {
           >
             Wellcome Collection
           </a>
-          , CC BY 4.0.
+          , public domain.
         </p>
       </Section>
 

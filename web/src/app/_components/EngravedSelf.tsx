@@ -1,29 +1,17 @@
 /* The hero plate: "The Symbolic Head" — a c.1860 phrenology engraving of a
    head whose brain is a life in miniature (Frederick Bridges, Wellcome
-   Collection, CC BY 4.0). Persnally's annotations live OUTSIDE the artwork as
-   horizontal callouts, so the engraving is never covered; the figure's own
-   column is widened (see Hero grid) so it still reads large and bold. */
+   Collection, public domain). The plate's own visual language is numbered
+   regions keyed to a legend — so our annotations use the same grammar:
+   numbered anchor points on the figure, a legend under the plate rule.
+   Nothing covers the artwork, and the engraving runs full width. */
 
-/* anchors in % of the image box (1000×1118) */
-const NOTES: {
-  side: "left" | "right";
-  x: number;
-  y: number;
-  title: string;
-  detail: string;
-  delay: number;
-}[] = [
-  { side: "right", x: 60, y: 12, title: "interests", detail: "decay-weighted · 0.95", delay: 500 },
-  { side: "right", x: 90, y: 40, title: "conventions", detail: "pnpm, not npm", delay: 800 },
-  { side: "right", x: 80, y: 66, title: "provenance", detail: "#412 · deletable", delay: 1100 },
-  { side: "left", x: 20, y: 46, title: "decisions", detail: '"hand-roll it" · 0.78', delay: 950 },
-  { side: "left", x: 15, y: 76, title: "voice", detail: "terse · no emoji", delay: 1250 },
+const POINTS: { x: number; y: number; title: string; detail: string; delay: number }[] = [
+  { x: 60, y: 12, title: "interests", detail: "decay-weighted · 0.95", delay: 400 },
+  { x: 20, y: 46, title: "decisions", detail: "“hand-roll it” · 0.78", delay: 700 },
+  { x: 15, y: 76, title: "voice", detail: "terse · no emoji", delay: 1000 },
+  { x: 90, y: 40, title: "conventions", detail: "pnpm, not npm", delay: 1300 },
+  { x: 80, y: 66, title: "provenance", detail: "#412 · deletable", delay: 1600 },
 ];
-
-/* image takes the middle; labels the outer gutters */
-const IMG_LEFT = 15;
-const IMG_W = 70;
-const contX = (imgX: number) => IMG_LEFT + (imgX * IMG_W) / 100;
 
 export function EngravedSelf() {
   return (
@@ -35,44 +23,37 @@ export function EngravedSelf() {
           alt="Engraving of a head in profile whose brain is drawn as dozens of tiny scenes from a life"
           width={1000}
           height={1118}
-          className="mx-auto block w-full mix-blend-multiply sm:w-[70%]"
+          className="block w-full mix-blend-multiply"
         />
-        <div className="hidden sm:block">
-          {NOTES.map((n) => {
-            const ax = contX(n.x);
-            const lineLeft = n.side === "left" ? IMG_LEFT : ax;
-            const lineWidth = n.side === "left" ? ax - IMG_LEFT : 100 - IMG_LEFT - ax;
-            return (
-              <div key={n.title} className="fade-label" style={{ animationDelay: `${n.delay}ms` }}>
-                <span
-                  aria-hidden
-                  className="absolute h-px bg-electric/70"
-                  style={{ top: `${n.y}%`, left: `${lineLeft}%`, width: `${lineWidth}%` }}
-                />
-                <span
-                  aria-hidden
-                  className="absolute size-[10px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-electric bg-paper"
-                  style={{ top: `${n.y}%`, left: `${ax}%` }}
-                />
-                <span
-                  className={`absolute w-[15%] -translate-y-1/2 font-mono leading-snug ${
-                    n.side === "left" ? "left-0 pr-1 text-right" : "right-0 pl-1 text-left"
-                  }`}
-                  style={{ top: `${n.y}%` }}
-                >
-                  <span className="block text-[13px] font-medium tracking-[0.02em] text-electric">{n.title}</span>
-                  <span className="block text-[11px] text-mute">{n.detail}</span>
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        {POINTS.map((p, i) => (
+          <span
+            key={p.title}
+            aria-hidden
+            className="fade-label absolute flex size-[19px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-electric font-mono text-[11px] font-bold leading-none text-paper ring-2 ring-paper"
+            style={{ top: `${p.y}%`, left: `${p.x}%`, animationDelay: `${p.delay}ms` }}
+          >
+            {i + 1}
+          </span>
+        ))}
       </div>
-      <figcaption className="mt-4 flex items-baseline justify-between gap-4 border-t border-ink/30 pt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
-        <span className="whitespace-nowrap">Fig. 1 — a model of you</span>
-        <span className="text-right normal-case tracking-normal">
-          drawn from your own history · kept on your machine
-        </span>
+      <figcaption className="mt-4 border-t border-ink/30 pt-3">
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5 font-mono text-[11.5px] leading-snug">
+          {POINTS.map((p, i) => (
+            <span key={p.title} className="whitespace-nowrap">
+              <span className="mr-1.5 inline-flex size-[15px] items-center justify-center rounded-full bg-electric text-[9.5px] font-bold text-paper">
+                {i + 1}
+              </span>
+              <span className="text-ink">{p.title}</span>
+              <span className="text-mute"> · {p.detail}</span>
+            </span>
+          ))}
+        </div>
+        <div className="mt-3 flex items-baseline justify-between gap-4 font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
+          <span className="whitespace-nowrap">Fig. 1 — a model of you</span>
+          <span className="whitespace-nowrap text-right normal-case tracking-normal">
+            your history · your machine
+          </span>
+        </div>
       </figcaption>
     </figure>
   );
