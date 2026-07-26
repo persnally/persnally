@@ -104,38 +104,42 @@ function Em({ children }: { children: React.ReactNode }) {
 function Hero() {
   return (
     <Section className="flex flex-col justify-center pb-16 pt-10 sm:pt-14 lg:min-h-[calc(100dvh-4rem)]">
-      <div className="grid items-center gap-12 lg:grid-cols-[1.12fr_0.88fr] lg:gap-16">
-        <div>
+      <div className="grid items-center gap-12 lg:grid-cols-[1.12fr_0.88fr] lg:items-stretch lg:gap-16">
+        {/* eyebrow pinned top, headline+copy+CTA pinned bottom — the column
+            spans the figure's full height, no slack under the CTA */}
+        <div className="flex flex-col lg:justify-between">
           <div className="rise" style={{ animationDelay: "0ms" }}>
             <Eyebrow>Open source · local-first · MCP</Eyebrow>
           </div>
 
-          <h1
-            className="font-display rise mt-6 text-balance text-[3.6rem] leading-[0.95] sm:text-[5.2rem] lg:text-[6.2rem]"
-            style={{ animationDelay: "80ms" }}
-          >
-            Finally, every AI knows <Em>you.</Em>
-          </h1>
-
-          <p
-            className="rise mt-8 max-w-xl text-pretty text-lg leading-relaxed text-mute"
-            style={{ animationDelay: "160ms" }}
-          >
-            Persnally learns who you are from your AI history — your chats, your code, your
-            decisions — and serves it to every AI you use. On your machine. Yours.
-          </p>
-
-          <div className="rise mt-10 flex max-w-xl flex-col gap-4" style={{ animationDelay: "240ms" }}>
-            <CopyCommand command="npm i -g persnally && persnally setup" className="w-full" />
-            <a
-              href={GITHUB}
-              {...EXT}
-              className="group flex w-fit items-center gap-1.5 font-mono text-[12px] text-mute transition-colors hover:text-ink"
+          <div className="mt-6 lg:mt-0">
+            <h1
+              className="font-display rise text-balance text-[3.6rem] leading-[0.95] sm:text-[5.2rem] lg:text-[6.2rem]"
+              style={{ animationDelay: "80ms" }}
             >
-              <GithubIcon className="size-3.5" />
-              Star on GitHub
-              <ArrowUpRight className="size-3" />
-            </a>
+              Finally, every AI knows <Em>you.</Em>
+            </h1>
+
+            <p
+              className="rise mt-8 max-w-xl text-pretty text-lg leading-relaxed text-mute"
+              style={{ animationDelay: "160ms" }}
+            >
+              Persnally learns who you are from your AI history — your chats, your code, your
+              decisions — and serves it to every AI you use. On your machine. Yours.
+            </p>
+
+            <div className="rise mt-10 flex max-w-xl flex-col gap-4" style={{ animationDelay: "240ms" }}>
+              <CopyCommand command="npm i -g persnally && persnally setup" className="w-full" />
+              <a
+                href={GITHUB}
+                {...EXT}
+                className="group flex w-fit items-center gap-1.5 font-mono text-[12px] text-mute transition-colors hover:text-ink"
+              >
+                <GithubIcon className="size-3.5" />
+                Star on GitHub
+                <ArrowUpRight className="size-3" />
+              </a>
+            </div>
           </div>
         </div>
 
