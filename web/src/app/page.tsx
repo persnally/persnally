@@ -921,7 +921,7 @@ function Pricing() {
 
 function GetStarted() {
   return (
-    <Section id="start" className="py-24">
+    <Section className="py-24">
       <SectionHead
         n="09"
         eyebrow="Five minutes to your mirror"
@@ -944,7 +944,9 @@ function GetStarted() {
         </figcaption>
       </figure>
 
-      <div className="mx-auto mt-10 max-w-2xl">
+      {/* the CTA lands on the command itself, not the top of the section
+          (which now opens with the mirror plate); scroll-mt clears the nav */}
+      <div id="start" className="mx-auto mt-10 max-w-2xl scroll-mt-24">
         <SetupTabs />
         <p className="mt-5 text-center font-mono text-[11px] leading-relaxed text-faint">
           macOS · Linux · Windows · Node 20+ · background autostart on macOS &amp; Linux · bring your
