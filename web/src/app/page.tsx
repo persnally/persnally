@@ -203,21 +203,21 @@ function Wedge() {
             because their business is keeping you inside their walls.
           </p>
           <figure className="mt-10">
-            <div className="grid grid-cols-3 items-start gap-4 bg-paper">
+            <div className="grid grid-cols-3 items-center gap-4">
               {[
-                { src: "/art/head-front.webp", tool: "what Claude knows" },
-                { src: "/art/head-top.webp", tool: "what ChatGPT knows" },
-                { src: "/art/head-profile.webp", tool: "what Cursor knows" },
+                { src: "/art/map-west.webp", tool: "what Claude knows" },
+                { src: "/art/map-east.webp", tool: "what ChatGPT knows" },
+                { src: "/art/map-poles.webp", tool: "what Cursor knows" },
               ].map((h) => (
                 <div key={h.src} className="text-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={h.src} alt="" aria-hidden width={480} height={480} className="mx-auto w-full max-w-[150px] mix-blend-multiply" />
+                  <img src={h.src} alt="" aria-hidden width={480} height={480} className="mx-auto w-full max-w-[168px] mix-blend-multiply" />
                   <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.1em] text-mute">{h.tool}</p>
                 </div>
               ))}
             </div>
             <figcaption className="mt-4 border-t border-ink/30 pt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
-              Fig. 2 — three tools, three partial strangers. The same you.
+              Fig. 2 — three tools, three partial maps. The same you.
             </figcaption>
           </figure>
         </div>
@@ -797,14 +797,14 @@ function Positioning() {
       <figure className="mx-auto -mt-2 w-fit text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/art/geometric-head.webp"
-          alt="Engraving of a head divided into measured, lettered sections"
-          width={240}
-          height={240}
-          className="mx-auto w-[210px] mix-blend-multiply"
+          src="/art/armillary.webp"
+          alt="Engraving of an armillary sphere — a measured model of a world"
+          width={460}
+          height={500}
+          className="mx-auto w-[220px] mix-blend-multiply"
         />
         <figcaption className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
-          Fig. 3 — the model of you, measured. Held by its subject.
+          Fig. 3 — the model of you, measured.
         </figcaption>
       </figure>
       <p className="font-display mx-auto mt-8 max-w-3xl text-balance text-center text-4xl leading-[1.05] sm:text-6xl">
@@ -1012,7 +1012,7 @@ function Footer() {
 
       <Section className="pt-8">
         <p className="font-mono text-[10px] leading-relaxed text-faint">
-          Engravings: “Chart of Mental Geometry” (Frederick Bridges, c. 1860) and period plates —{" "}
+          Engravings: 16th–19th-century plates —{" "}
           <a
             href="https://wellcomecollection.org/works"
             {...EXT}
