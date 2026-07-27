@@ -1,20 +1,20 @@
 "use client";
 
-/* The hero plate: a c.1550 woodcut of an astronomer charting a globe with a
-   pair of dividers (Wellcome Collection, public domain). The globe is the
-   model of you; Persnally plots the coordinates. Numbered markers sit on the
-   globe's face like plotted points, revealing an ink tooltip on hover
-   (desktop) or tap (touch), so the artwork stays uncovered at rest. */
+/* The hero plate: a 19th-c anatomical engraving of a head in profile with the
+   brain exposed (Wellcome Collection, public domain — real anatomy, not
+   phrenology). The brain is the model of you; numbered markers sit on the
+   cortex, revealing an ink tooltip on hover (desktop) or tap (touch), so the
+   artwork stays uncovered at rest. */
 
 import { useState } from "react";
 
-/* points sit on the terrestrial globe's visible face (%, of the image box) */
+/* points sit on the cerebrum (%, of the image box) */
 const POINTS: { x: number; y: number; title: string; detail: string; delay: number }[] = [
-  { x: 33, y: 53, title: "interests", detail: "decay-weighted 0.95", delay: 400 },
-  { x: 29, y: 67, title: "decisions", detail: "“hand-roll it” 0.78", delay: 700 },
-  { x: 45, y: 75, title: "voice", detail: "terse no-emoji", delay: 1000 },
-  { x: 53, y: 58, title: "conventions", detail: "pnpm not-npm", delay: 1300 },
-  { x: 42, y: 63, title: "provenance", detail: "#412 deletable", delay: 1600 },
+  { x: 28, y: 19, title: "interests", detail: "decay-weighted 0.95", delay: 400 },
+  { x: 19, y: 35, title: "decisions", detail: "“hand-roll it” 0.78", delay: 700 },
+  { x: 45, y: 30, title: "voice", detail: "terse no-emoji", delay: 1000 },
+  { x: 68, y: 21, title: "conventions", detail: "pnpm not-npm", delay: 1300 },
+  { x: 62, y: 43, title: "provenance", detail: "#412 deletable", delay: 1600 },
 ];
 
 export function EngravedSelf() {
@@ -25,10 +25,10 @@ export function EngravedSelf() {
       <div className="relative bg-paper">
         {/* eslint-disable-next-line @next/next/no-img-element -- static plate, multiply-blended */}
         <img
-          src="/art/astronomer.webp"
-          alt="Woodcut of an astronomer charting a globe with a pair of dividers"
-          width={1100}
-          height={1130}
+          src="/art/brain-head.webp"
+          alt="Anatomical engraving of a head in profile with the brain exposed"
+          width={1200}
+          height={1060}
           className="block w-full mix-blend-multiply"
         />
         {POINTS.map((p, i) => {
