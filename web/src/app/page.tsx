@@ -103,7 +103,7 @@ function Em({ children }: { children: React.ReactNode }) {
 
 function Hero() {
   return (
-    <Section className="flex flex-col justify-center pb-16 pt-10 sm:pt-14 lg:min-h-[calc(100dvh-4rem)]">
+    <Section className="flex flex-col justify-center pb-6 pt-8 sm:pt-10 lg:min-h-[calc(100dvh-13rem)]">
       <div className="grid items-center gap-12 lg:grid-cols-[1.12fr_0.88fr] lg:items-stretch lg:gap-16">
         {/* eyebrow pinned top, headline+copy+CTA pinned bottom — the column
             spans the figure's full height, no slack under the CTA */}
@@ -156,7 +156,7 @@ function Hero() {
 function Marquee() {
   const row = [...TOOLS, ...TOOLS];
   return (
-    <Section className="py-10">
+    <Section className="pb-10 pt-2">
       <div className="border-y border-ink/25 py-4">
         <div className="marquee">
           {[0, 1].map((dup) => (
