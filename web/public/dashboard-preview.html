@@ -1,0 +1,1158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Persnally — your context engine</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAQKADAAQAAAABAAAAQAAAAABGUUKwAAAMP0lEQVRoBa1aW4ydVRXe58yZmbbQFkpTiobS8KBCmxBihGr1oUpCMIIhIaZqTRSjiU8+aIIB4cWYGJI+iPEBJSExxgRtNFVpTCBE64MBk3pBIgSqpXKxldKW6dB25sz5Xd+3Lnvv/58zF/Sf031Z61vf+tb+9385B3p33Nv0eqlpUuql1MifHWGROYziIsCmapHWj8Arg/E4nTEEWAZiEkLpiVFAqYFmze2qCg0W2EsDiVGoEimzmrLFEMxHhLHDQCznbbxlRxd4G6jFrVUNyhkuTjNDUDnDILJWUjRMUo8jKsRZIEPa+GUZan7MagsMLUvUQOyAeTug5cI0jTODo52ma6kTtxgWkd7CI0dUxwHT5zNgalqgMWEhPRKHZdE04e3iu5Y2Q7EWlINKbJDSIKi7YW1LEdYlgiVzMcWK8RG3BINhOpwDpNK7EKoak5iOnMZwBCPo/yl9caG17jIjz0CxbUTUSoRmjI+sZ6fjrqVMbN6i+MBnFxZHF9VUweVu7cdvIfodnNd4rKWoHFkc5/0KLAUDohiZw92Se+K5hXJVjGpFOof1rTTkc0gOjzRwuXtVDB4k8VZ8thQa7AzA537v/9c1WzqxZSmkhIYswFVli4+8l7uQDOt3BPjc732nmKUTe5j3OTxzv1MG4/RwPMjyfvWE3qOSGLciTQqtGeMj7wtyCbCYmrPF0MU4l/WFJMH6FmqBiqqMcLVpCoZFE8PY4jRcUV7LUkiP8M6TeGWJnVlUdNa4a2klXlb6YvjIGNLVwi0EGTjyXrJ5Xgx4+S+IlsYbbEkp74SBvKWGMVtotYmXLB756sRhcU9eu7BISAgNfNfS2UIrCxubho5ummzxkfeoTcddi2WhI7ytbbLiJ7FL7hK5J0tZSWJggsvOUG1xr/fZaxZ2q38SU51SBHWs4mqlh5RMpcVwHsYotYvPZwC+VljXEpSepjAwusXgbut9tzgxWBzig8ICmLvHMXgB9Du4E7YColLKShKXeORtCXBL7ovCTCctnS3kRXjfKaZJI36EGuzE9fs6w3Q4SgsLmMqPHRN9tHGUidUIC63m0lltaZfqSZXBb6MdIhic1XpWLMZ1a9Ila7JX6jk9kxZGaW6Ypgbp2q1p66Y06Kczs+n4yfSfsyhjYmJ5ochSS+8KcAh7AcvPKgEKX9dSrsGF+bR3T7r7VoHbce58unt/euVU2n19+tJtacf2ND1prpNn0uFn04+fSkdfy8blhY5ZO0+oVUJmr5Hfhaxsen2fEVJZDCaABlIuXUsvG9kjF4fpk7vSA/vSpP3KYd4tl6W7PpJuuTF957H066frGgiJxYqMbYtLUjjaQHDkWygItJ4qjCeWAGkkXPZMecg52XlN+sbetvrAXHZp+tbnk8CeOFLU4CTWFxm7FhNl0iOykS3UF6PaxYwPO4W0LDYVXep2gWun0tfuwlWxxDE5ke7dm67alIYLSIGPpiObTjm0xQqLiWpwRIRRCLZpii1EUhVhCgsL2F2394rFNb2N6mWBDz2TTr2VrtiQ7vhg2nODAbST7fTZj6YHf5r6U2YPQpkvlhHp5U9/QWVMCFI4WvtGFlyw0asQhlXSA6muaB9+PH3vl4iVW6rcRp/8U7rnU2nfx8KPwW0fSI/8Js283bm3tjNSRWPSzWmCtDOAcPZlqJpswCIDJa7sJVJdla6U/vqP9PChNDWBLS67ZXoKZTx0ML30WgXcenm6flua51MC6TR1zkibpkRWjIBSi47VWOwoFtAmyiEkQKjyQA5ZK10pHfxDujCHdVW8eKWAs7PpV0+3gOl9V/MyUJ5FpVvylnQEoBRtLA8wq34SazGlLnmE/e1YGkyAVfOoVyx/Poq05cP43ZsrDNYjxwhWD10k44O/wBCRo/xdiAV6tPbIXVl0wdxovpRmL6Q3z3H53aW96JbH8MX5tMavWgnZuC7qIYo3FytD3JZSCdCifl8ZZtQog4rLLmJbCEJkrARALWYJrzrlzigfB7J3hvkhXo3KQ04LWPUPrwJBpjE6RStzedAaOvcFnhg+OTW2wHKIIGbiAMPFjym5cAd4uuEaKEBi0Wu6DJsb2gWofJYZURrJ1llcl/YKUpjADW8XMYRmOMlaFsGrhYNS07rptGUjbp3KqX4Zy7Vx5eX50ashp8+lEZ7kBR3C/MPqPHOBoToTCKGOx23U4boI4jGhTAig8jBJxtCrTb+X3v+efHOM8OEw3fTeAsfhyyeUDlnl3/ywuTjfDBc4pSXnUWWsTdwui4OYpsZe5GEODDNlS6YEBrDOceeH0qb1rIGpxC/Ktm5qbr+5gkrscy83EzzrC3Iemmbn9t7uHT15xZAymCdE2JQJrckALhKs8ioBQfXeFQMqdN0YcBoWnwGjx/Yr0zc/ne7/EZ6y/X4jm2fjJc39n+m96wpHsD92onn++GgwAcCGdenbXxjsuaEv3xbenGm++4vhT54aytcJT6s5RWRYOIChfLnQnxZLuRrCfIhwsdbXXkehv31XuvYqeRdqTpzB1v/Ezf3rri79GB/4/ejsbCN3VbmUv3rn4JYb7fxvWt97YN/k88cXjry0wBqwtgz29JDNP1hdFHsvmcgC7gsRvUtHVOCYRO70J06nbVvSjmvkU3yDpDeaF19tHvvdwtQkzvv6tenDO/1rKBFyHnbv7D/zwlDeRHhoDraFdHOZAHS4iLU0NWJWWGCU+FBfcHOIRvbD/p83cntZ4pCvl/c9On92dtTnvV1qGNXPB/DIw8SWhwooi6fCp1lKtvhtFDor6VBTSxeAWuAqDlmzvx9v7nlEtkdhLYZHX2++8tDckRdHusXlips53zx5ZFhA8Cr127/MD/BiwA/Ok425eirFvSoW6xrfB8TFUCVFrB82JA1taqi2yprJ5okjzeceHH3x1v6u63qyp2VLnJ9LctM89MeFA4cX3nhrJK+oyMt/U4Pm+wfn5Dr++E2DtdO9V98Y7T9w8bljssEyRkbMpIk1qenqsTgF2Jd69YPeR9azK23kq9RrVdOTzQuvNF//4WjzhrR5I57NM283/z7dzJ5v5HksH6cGmWwkKe++Ry/84PG+fJV7/dTo1MxoWq5HOF2C9ZqcE3qBIE7R41/mHKX6SEwu461q4Plu5KcUuaZku8ttUVCiUl6q5QunZ9T8tqLy+OtPpH+dlOeBPBkS1Id0U2jSLV5nhXSF2xkQEHHWGThsfsrcXamnMbI3VEYCK9UXzKbBjUrkocabkfpizRSDVjJ7MjfSDBcfCCicExhsgF4OWyoxV++MilNIbgXFeI9SjymqpFsaF1tGMSkiYbRFcx3eO15RPXkSI8C9OlYpJFDpSOY4McfE4AgXm5qZ29Ew4ihasxRGjSDOkKZdo4h0jKe2XoDVFvI6FO6t8Wgnrc0tY04MuyeQUeBpRmOBjtE+2DiopKslIhXZjrIt5KkBGpeAPjgHeHjkQ244PbmxmUCPtjo1yPax+7RXEisr7ozkdWBB4roiNTGyhZAXL3PI4XFlAhjhskSNfKV69p+jnx2WLyZWgzyJ5Q0Hj1izmDLSqfTAlsww4gKl04MZi0a9GlhGwcVEBIjsHV9eGCNdKbJ06gX3cNjwpxFNhlZu83ISCJAGCeSvoDUjXDjQ+orY1FwqmBhCTSsMGtthxsND+TLIoeaKrMQJTH4rl1diUpYJwsDUSiuxOgsSoEKmIen0sQAypDBSujkJUUpuIZ1HqxXFVIDg8X86MA2LJ0CoRVmghrt0jQpMJmGOPK2jCiriZC4HzgAHbJeSrjCBF3iNhaE2ZgtcEoGrDGkUxoFj/Bx5X1LxXOE6CaNHgZaXkDwHqmsUYBzlquuFWBmN0RN48hylJMhB5RlAGk0vrYmDLHPUzK5Xy48yDA4rthDDjQPxEeUJLLyMd1NIiShVIP78EAxxzlyqtLFiHJBFFHosV5FaglpbSCxaibUOzkat17cE8Z7VEsCmJo/SvmCGvhzlSS2ZdgpwlzEakYkUIP7XY+XNdBw5lxDw0IwaH9BSRBklEY4MLFhKZQogktzFPbctnZEFnlRWP/4bGWnFb2e8Kz0TKAtbNMVUxtlCVzE1RRUzYz312NrgKLNUzEIrZdtFnEWWsihCUwkAimnhmNMlE7is6AsprgucOJZltkXIeATh9WGAc1dVGYJV7AoTtEQo4+JZCfWmkq4ZIUjctVabOqMX3KT/Akhx01MRJLxPAAAAAElFTkSuQmCC" />
+<style>
+  :root {
+    --bg: #0B0C0E;            /* dark, default */
+    --panel: #141517;         /* card surface */
+    --panel-2: #1B1C1F;
+    --line: rgba(255,255,255,0.08);
+    --line-2: rgba(255,255,255,0.16);
+    --text: #F1F2F4;          /* near-white */
+    --dim: #9A9DA5;           /* gray */
+    --faint: #62656D;
+    --active: #35D07F;        /* the ONE color — active status dot only */
+    --r: 12px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.6 var(--font); -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 28px 110px; }
+
+  /* ── header ── */
+  header { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 34px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .wordmark { font-weight: 600; font-size: 17px; letter-spacing: -0.2px; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); }
+  .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--active); box-shadow: 0 0 8px rgba(53,208,127,0.7); }
+  .status .dot.off { background: var(--faint); box-shadow: none; }
+  .head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  .btn {
+    font: 600 13px var(--font); cursor: pointer; border-radius: 8px; padding: 7px 13px;
+    transition: all .16s var(--ease); border: 1px solid transparent;
+    background: #FFFFFF; color: #0B0C0E; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { background: #E6E7EA; transform: translateY(-1px); }
+  .btn:disabled { opacity: 0.5; cursor: wait; transform: none; }
+  .btn.ghost { background: transparent; color: var(--text); border-color: var(--line-2); }
+  .btn.ghost:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.4); }
+  .btn .arr { opacity: 0.5; font-size: 11px; }
+
+  /* ── reveal ── */
+  .reveal { opacity: 0; transform: translateY(12px); animation: rise .55s var(--ease) forwards; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+
+  /* ── delta strip ── */
+  .delta {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 14px 18px; margin-bottom: 32px; display: flex; flex-direction: column; align-items: flex-start; gap: 9px;
+  }
+  .delta .lead { font-size: 11px; letter-spacing: 1.3px; text-transform: uppercase; color: var(--dim); }
+  .delta .items { font-size: 14px; line-height: 1.7; color: var(--dim); }
+  .delta .di { color: var(--dim); }
+  .delta .di b { color: var(--text); font-weight: 600; }
+  .delta .di .arr { color: var(--text); font-weight: 700; }
+  .delta .sep { color: var(--faint); }
+
+  /* ── hero ── */
+  .hero { margin-bottom: 8px; }
+  .scale-beat { font-size: 13px; color: var(--dim); margin-bottom: 16px; min-height: 18px; }
+  .scale-beat b { color: var(--text); }
+  .archetype {
+    font-weight: 600; letter-spacing: -0.6px; line-height: 1.15;
+    font-size: clamp(26px, 3.6vw, 40px); color: #FFFFFF; width: 100%;  /* full width */
+  }
+  .gen-meta { font-size: 12px; color: var(--faint); margin-top: 14px; }
+
+  /* ── sections ── */
+  section { margin-top: 48px; }
+  .sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .sec-head h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1.6px; color: var(--dim); font-weight: 600; }
+  .sec-head .aside { font-size: 11px; color: var(--faint); }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 18px 20px; }
+  .grid { display: grid; gap: 12px; }
+  .grid.two { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 720px) { .grid.two { grid-template-columns: 1fr; } }
+  .claim-card { transition: border-color .18s var(--ease); }
+  .claim-card:hover { border-color: var(--line-2); }
+  .claim-title { font-weight: 600; font-size: 15px; margin-bottom: 7px; }
+  .claim-body { color: #C7CACF; font-size: 14.5px; line-height: 1.6; }
+  .claim-body.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .row-actions { display: flex; gap: 16px; align-items: center; margin-top: 11px; }
+  .link-btn { background: none; border: none; color: var(--text); cursor: pointer; font: 600 12px var(--font); padding: 0; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+  .link-btn:hover { text-decoration-color: var(--text); }
+  .link-btn.sub { color: var(--dim); font-weight: 500; }
+  .voice-pack { font-size: 15.5px; color: var(--text); line-height: 1.6; padding-bottom: 15px; border-bottom: 1px solid var(--line); margin-bottom: 15px; }
+  .voice-groups { display: flex; flex-direction: column; gap: 16px; }
+  .vglabel { font-size: 11px; text-transform: uppercase; letter-spacing: 1.3px; color: var(--dim); margin-bottom: 9px; }
+  .vchips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .vchip { font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 5px 9px 5px 13px; display: inline-flex; align-items: center; gap: 7px; }
+  .vchip i { color: var(--faint); font-style: normal; font-size: 11px; }
+  .vdel { background: none; border: none; color: var(--faint); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; transition: color .16s; }
+  .vdel:hover { color: var(--text); }
+  .evidence { margin-top: 11px; border-top: 1px solid var(--line); padding-top: 11px; display: none; }
+  .evidence.open { display: block; }
+  .ev-item { font-size: 12.5px; color: var(--dim); padding: 5px 0; line-height: 1.5; }
+  .ev-item code { color: var(--text); background: var(--panel-2); padding: 1px 6px; border-radius: 5px; }
+  .ev-item i { color: var(--faint); font-style: normal; }
+
+  /* ── constellation ── */
+  .constellation-wrap { position: relative; }
+  .constellation { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+  #graph { display: block; width: 100%; height: 520px; cursor: grab; touch-action: none; }
+  #graph:active { cursor: grabbing; }
+  .ghint { position: absolute; top: 12px; right: 14px; font-size: 11px; color: var(--faint); pointer-events: none; }
+  .legend { position: absolute; bottom: 12px; left: 14px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--dim); pointer-events: none; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px currentColor; }
+  .node-pop {
+    position: absolute; pointer-events: none; opacity: 0; transform: translateY(4px);
+    transition: opacity .12s, transform .12s; background: var(--panel-2);
+    border: 1px solid var(--line-2); border-radius: 10px; padding: 9px 12px; max-width: 240px; z-index: 5;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+  }
+  .node-pop.show { opacity: 1; transform: none; }
+  .node-pop .npt { font-weight: 600; font-size: 13.5px; }
+  .node-pop .npm { font-size: 11.5px; color: var(--dim); margin-top: 3px; }
+  .node-pop .npe { font-size: 11.5px; color: var(--faint); margin-top: 5px; }
+  .view-toggle { display: inline-flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
+  .view-toggle button { font: 500 11px var(--font); background: transparent; color: var(--dim); border: none; padding: 5px 12px; cursor: pointer; }
+  .view-toggle button.on { background: #FFFFFF; color: #0B0C0E; }
+
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; font-size: 14px; }
+  tr:last-child td { border-bottom: none; }
+  .bar-track { width: 130px; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+  .bar { height: 100%; background: #FFFFFF; opacity: 0.85; border-radius: 3px; }
+  .cat { color: var(--dim); font-size: 12.5px; }
+  .del { background: none; border: 1px solid var(--line); color: var(--faint); border-radius: 6px; cursor: pointer; font-size: 11px; padding: 3px 9px; transition: all .16s; }
+  .del:hover { color: var(--text); border-color: var(--line-2); }
+
+  /* ── receipts ── */
+  .value-row { display: flex; align-items: flex-end; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+  .value-num { font-size: 40px; font-weight: 600; color: #FFFFFF; letter-spacing: -1px; line-height: 1; }
+  .value-cap { color: var(--dim); font-size: 13.5px; max-width: 48ch; }
+  .value-cap b { color: var(--text); }
+  .read { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--line); }
+  .read:last-child { border-bottom: none; }
+  .read.fresh { animation: flash 1.6s var(--ease); }
+  @keyframes flash { 0% { background: rgba(255,255,255,0.07); } 100% { background: transparent; } }
+  .read .who { width: 30px; height: 30px; border-radius: 8px; flex: none; display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
+  .read .what { flex: 1; min-width: 0; }
+  .read .what .l1 { font-size: 13.5px; }
+  .read .what .l1 b { color: var(--text); } .read .what .l1 .p { color: var(--dim); }
+  .read .what .l2 { font-size: 11px; color: var(--faint); margin-top: 2px; }
+  .read .when { font-size: 11.5px; color: var(--dim); white-space: nowrap; }
+  .acc { font-size: 11px; }
+  .acc.full { color: var(--dim); }
+  .acc.limited { color: #FFB454; }
+  .acc.revoked { color: var(--faint); }
+  .engage { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--dim); margin: 0 0 16px; }
+  .engage b { color: var(--text); font-weight: 600; }
+  .engage .spark { display: inline-flex; align-items: flex-end; gap: 2px; height: 22px; }
+  .engage .spark i { width: 6px; min-height: 2px; border-radius: 1px; display: inline-block; }
+  .engage .rk { color: var(--faint); }
+
+  /* ── reflection ── */
+  .refl { border-left: 2px solid var(--line-2); padding: 4px 0 4px 16px; margin-bottom: 16px; }
+  .refl .rc { font-size: 14.5px; color: var(--text); line-height: 1.55; }
+  .refl .rm { font-size: 11.5px; color: var(--faint); margin-top: 5px; }
+
+  /* ── ask loop ── */
+  .ask-stats { font-size: 12.5px; color: var(--dim); margin-bottom: 14px; display: flex; gap: 18px; flex-wrap: wrap; }
+  .ask-stats b { color: var(--text); }
+  .ask { border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; margin-bottom: 12px; background: var(--panel); }
+  .ask .q { font-size: 13.5px; color: var(--text); }
+  .ask .q .asker { color: var(--faint); font-weight: 400; }
+  .ask .a { font-size: 13.5px; color: var(--dim); margin-top: 7px; line-height: 1.55; }
+  .ask .a.deferred { color: var(--faint); font-style: italic; }
+  .ask .meta { display: flex; align-items: center; gap: 10px; margin-top: 9px; font-size: 11px; color: var(--faint); flex-wrap: wrap; }
+  .conf { border: 1px solid var(--line-2); border-radius: 999px; padding: 1px 8px; }
+  .judge { margin-left: auto; display: flex; gap: 6px; }
+  .judge button { background: none; border: 1px solid var(--line); color: var(--faint); border-radius: 6px; cursor: pointer; font-size: 11px; padding: 3px 9px; transition: all .16s; }
+  .judge button:hover { color: var(--text); border-color: var(--line-2); }
+  .verdict-chip { border-radius: 999px; padding: 1px 8px; border: 1px solid var(--line-2); margin-left: auto; }
+
+  /* ── misc ── */
+  .empty { color: var(--dim); padding: 28px; text-align: center; font-size: 14px; }
+  .empty .big { font-size: 18px; color: var(--text); display: block; margin-bottom: 8px; font-weight: 600; }
+  .empty code { color: var(--text); background: var(--panel-2); padding: 2px 7px; border-radius: 5px; }
+  footer { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); line-height: 1.9; }
+  footer code { color: var(--dim); background: var(--panel-2); padding: 1px 6px; border-radius: 4px; }
+  .preview-ribbon {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 20; text-align: center; font-size: 12px;
+    color: var(--dim); background: var(--panel); border-top: 1px solid var(--line); padding: 7px; display: none;
+  }
+  .preview-ribbon.show { display: block; }
+  .preview-ribbon code { color: var(--text); }
+  a { color: var(--text); }
+  :focus-visible { outline: 2px solid #FFFFFF; outline-offset: 3px; border-radius: 4px; }
+  @media (max-width: 640px) {
+    .wrap { padding: 18px 16px 96px; }
+    #graph { height: 380px; }
+    .archetype { font-size: clamp(22px, 7vw, 30px); }
+    header { margin-bottom: 24px; }
+    .value-num { font-size: 32px; }
+    #topicList { overflow-x: auto; }   /* wide table scrolls inside its card — body never does */
+    .bar-track { width: 64px; }
+    td { padding: 8px 6px; font-size: 13px; }
+    .del { padding: 3px 7px; }
+    .delta .items { display: flex; flex-direction: column; gap: 6px; line-height: 1.45; }
+    .delta .sep { display: none; }   /* stacked on phones — separators only read inline */
+  }
+  @media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } .read.fresh { animation: none; } }
+
+  /* ── hero intro (plain-language "what am I looking at") ── */
+  .hero-sub { font-size: 14.5px; color: var(--dim); margin-top: 14px; max-width: 64ch; line-height: 1.65; }
+  .hero-sub b { color: var(--text); font-weight: 600; }
+
+  /* ── shareable portrait card ── */
+  .modal { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center;
+    padding: 24px; background: rgba(5,6,8,0.80); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .modal.open { display: flex; }
+  .modal-inner { background: var(--panel); border: 1px solid var(--line-2); border-radius: 16px; width: 100%;
+    max-width: 860px; max-height: 92vh; overflow: auto; padding: 22px 24px; display: grid; gap: 20px; grid-template-columns: 1fr; }
+  @media (min-width: 760px) { .modal-inner { grid-template-columns: minmax(0,330px) 1fr; align-items: start; } }
+  .modal-head { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .modal-head h3 { font-size: 16px; font-weight: 600; }
+  .modal-head .x { background: none; border: none; color: var(--dim); font-size: 24px; cursor: pointer; line-height: 1; }
+  .modal-head .x:hover { color: var(--text); }
+  .card-preview { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #000; align-self: start; }
+  .card-preview canvas { display: block; width: 100%; height: auto; }
+  .card-ctrls { display: flex; flex-direction: column; gap: 18px; }
+  .card-ctrls .sub { font-size: 13px; color: var(--dim); line-height: 1.6; }
+  .toggles { display: flex; flex-direction: column; gap: 11px; }
+  .tog { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text); cursor: pointer; user-select: none; }
+  .tog input { width: 16px; height: 16px; accent-color: #FFFFFF; cursor: pointer; }
+  .card-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .privacy-note { font-size: 11.5px; color: var(--faint); line-height: 1.65; }
+  .privacy-note b { color: var(--dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="reveal">
+    <div class="brand">
+      <span class="wordmark">persnally</span>
+      <span class="status" id="status"><span class="dot"></span><span class="lbl">active</span></span>
+    </div>
+    <div class="head-actions">
+      <a class="btn ghost" href="https://github.com/sidpan2011/persnally" target="_blank" rel="noopener">GitHub <span class="arr">↗</span></a>
+      <a class="btn ghost" href="https://persnally.com" target="_blank" rel="noopener">persnally.com <span class="arr">↗</span></a>
+      <button class="btn ghost" id="reflect">Reflect</button>
+      <button class="btn ghost" id="synthesize">Re-synthesize</button>
+      <button class="btn" id="shareBtn">Share portrait <span class="arr" style="opacity:.75">✦</span></button>
+    </div>
+  </header>
+
+  <div id="delta"></div>
+
+  <style>
+    .onboard{margin:0 0 22px}
+    .onboard .ob-card{border:1px solid #2c67ff55;box-shadow:0 0 0 1px #2c67ff14}
+    .onboard .ob-or{margin:16px 0 8px;color:#8b90a0;font-size:13px}
+    .onboard .ob-row{display:flex;gap:8px;max-width:540px}
+    .onboard .ob-bar{height:8px;border-radius:6px;background:#ffffff14;overflow:hidden;margin-top:10px}
+    .onboard .ob-fill{height:100%;width:0;background:#2c67ff;transition:width .35s ease}
+    .onboard input{flex:1;background:#0e1016;border:1px solid #1b1e26;border-radius:8px;color:#f5f6f8;padding:9px 12px;font:inherit;min-width:0}
+  </style>
+  <div id="onboard" class="onboard" style="display:none"></div>
+
+  <div class="hero reveal" style="animation-delay:.05s">
+    <div class="scale-beat" id="scaleBeat"></div>
+    <div class="archetype" id="archetype">Reading your context…</div>
+    <div class="hero-sub">Built from <b>your own AI history</b> — your tools read this so they stop treating you like a stranger, and <b>every byte stays on your machine</b>.</div>
+    <div class="gen-meta" id="genMeta"></div>
+  </div>
+
+  <section class="reveal" style="animation-delay:.1s">
+    <div class="sec-head"><h2>The portrait</h2><span class="aside">every claim cites its evidence</span></div>
+    <div class="grid two" id="sections"><div class="card empty">Loading…</div></div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.13s;display:none" id="voiceSection">
+    <div class="sec-head"><h2>How you write</h2><span class="aside">served to your tools so they answer like you</span></div>
+    <div class="card" id="voiceCard"></div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.15s">
+    <div class="sec-head">
+      <h2>Your interest map</h2>
+      <div class="view-toggle"><button id="vGraph" class="on">map</button><button id="vList">list</button></div>
+    </div>
+    <div class="constellation-wrap">
+      <div class="constellation" id="graphHost"><canvas id="graph"></canvas><div class="legend" id="legend"></div><div class="ghint">interests by strength · drag · zoom</div></div>
+      <div class="card" id="topicList" style="display:none;padding:6px 14px"><table id="topics"></table></div>
+      <div class="node-pop" id="nodePop"></div>
+    </div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.2s">
+    <div class="sec-head"><h2>What your AIs read about you</h2><span class="aside">read locally · never sent anywhere</span></div>
+    <div class="value-row">
+      <div class="value-num num" id="valueNum">0</div>
+      <div class="value-cap" id="valueCap"></div>
+    </div>
+    <div class="engage" id="engage"></div>
+    <div class="card" id="reads" style="padding:6px 16px"></div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.22s" id="accessSection">
+    <div class="sec-head"><h2>What each AI can read</h2><span class="aside">your permission surface · revoke anytime</span></div>
+    <div class="card" id="access" style="padding:6px 16px"></div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.25s" id="reflSection">
+    <div class="sec-head"><h2>What changed about you</h2><span class="aside">noticed by the nightly reflection</span></div>
+    <div id="reflections"></div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.3s" id="askSection">
+    <div class="sec-head"><h2>What your AIs asked</h2><span class="aside">answered from your model — you judge every answer</span></div>
+    <div class="ask-stats" id="askStats"></div>
+    <div id="asks"></div>
+  </section>
+
+  <footer>
+    stored at <code>~/.persnally/persnally.db</code> · forgetting a topic hard-deletes its events and everything derived ·
+    <code>persnallyd forget --all</code> erases everything <span id="ver"></span>
+  </footer>
+</div>
+<div class="preview-ribbon" id="ribbon">preview data — start <code>persnallyd</code> and reload to see your own</div>
+
+<div class="modal" id="shareModal" aria-hidden="true">
+  <div class="modal-inner" role="dialog" aria-label="Share your portrait">
+    <div class="modal-head">
+      <h3>Share your portrait</h3>
+      <button class="x" id="shareClose" aria-label="Close">×</button>
+    </div>
+    <div class="card-preview"><canvas id="cardCanvas"></canvas></div>
+    <div class="card-ctrls">
+      <div class="sub">A snapshot of who your AI knows you to be. Pick what's on it — drawn here on your machine, never uploaded.</div>
+      <div class="toggles">
+        <label class="tog"><input type="checkbox" id="tHead" checked> Headline — your archetype</label>
+        <label class="tog"><input type="checkbox" id="tInt" checked> Top interests</label>
+        <label class="tog"><input type="checkbox" id="tVoice" checked> How you write</label>
+        <label class="tog"><input type="checkbox" id="tStats" checked> Stats</label>
+      </div>
+      <div class="card-actions">
+        <button class="btn" id="cardDownload">Download PNG</button>
+        <button class="btn ghost" id="cardCopy">Copy image</button>
+      </div>
+      <div class="privacy-note"><b>Nothing is uploaded</b> — the image is rendered locally and saved by you. The footer credits persnally.com so others can find it.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const FONT = '-apple-system, system-ui, "Segoe UI", Roboto, sans-serif';
+
+async function get(path) {
+  const r = await fetch(path, { headers: { "accept": "application/json" } });
+  if (!r.ok) return null;
+  return r.json();
+}
+const fmtN = (n) => n.toLocaleString("en-US");
+function timeAgo(iso) {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s/60) + "m ago";
+  if (s < 86400) return Math.floor(s/3600) + "h ago";
+  const d = Math.floor(s/86400); return d === 1 ? "yesterday" : d + "d ago";
+}
+function countUp(el, to) {
+  if (reduced || to === 0) { el.textContent = fmtN(to); return; }
+  const dur = 850, t0 = performance.now();
+  const step = (t) => { const k = Math.min(1,(t-t0)/dur), e = 1-Math.pow(1-k,3); el.textContent = fmtN(Math.round(to*e)); if (k<1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+function clientOf(ev) {
+  const c = ev.provenance && ev.provenance.client;
+  if (c) return c;
+  if (ev.source && ev.source.startsWith("mcp:")) return ev.source.slice(4);
+  return ev.source || "local";
+}
+const prettyClient = (c) => ({ "claude-code":"Claude Code","claude-desktop":"Claude Desktop","cursor":"Cursor","cli":"CLI" }[c] || c);
+const clientInitials = (c) => prettyClient(c).split(/[\s-]/).map(w=>w[0]).join("").slice(0,2).toUpperCase();
+const IMPORT_TOOL = { "import:claude":"Claude export", "import:chatgpt":"ChatGPT export", "import:claude-code":"Claude Code" };
+// Human-readable provenance for the "why?" panel — where a fact actually came from.
+function provLabel(e) {
+  const p = e.provenance || {};
+  if (p.kind === "import") {
+    const base = IMPORT_TOOL[e.source] || p.file || "import";
+    return p.conversation_uuid ? `${base} · conversation ${String(p.conversation_uuid).slice(0,8)}` : base;
+  }
+  if (p.kind === "mcp") return `${prettyClient(p.client)}${p.session ? " · session " + String(p.session).slice(0,8) : ""} · live`;
+  if (p.kind === "git") return `git: ${p.repo}${p.ref ? " @ " + p.ref : ""}`;
+  if (p.kind === "derived") return `inferred from ${(p.from||[]).length} signal${(p.from||[]).length===1?"":"s"}`;
+  if (p.kind === "local") return `you · ${p.surface || "local"}`;
+  return p.kind || "local";
+}
+
+const SNAP_KEY = "persnally.snapshot.v1";
+let DEMO = false;
+
+/* ── delta ── */
+function renderDelta(topics, reads, assertions) {
+  const prev = JSON.parse(localStorage.getItem(SNAP_KEY) || "null");
+  const el = $("delta");
+  if (!prev) { el.innerHTML = ""; return; }
+  const prevW = prev.weights || {}, now = prev.t, items = [];
+  const newTopics = topics.filter(t => !(t.topic_key in prevW));
+  if (newTopics.length) items.push(`<span class="di"><b>+${newTopics.length}</b> new ${newTopics.length>1?"topics":"topic"}: ${esc(newTopics.slice(0,3).map(t=>t.topic).join(", "))}</span>`);
+  let climbed = null, cd = 0;
+  topics.forEach(t => { const was = prevW[t.topic_key]; if (was > 0.02) { const d=(t.weight-was)/was; if (d>cd){cd=d;climbed=t;} } });
+  if (climbed && cd > 0.08) items.push(`<span class="di">focus on <b>${esc(climbed.topic)}</b> <span class="arr">↑</span> <b>${Math.round(cd*100)}%</b></span>`);
+  const nr = reads.filter(r => r.ts > now).length;
+  if (nr) items.push(`<span class="di"><b>${nr}</b> context ${nr>1?"reads":"read"} since</span>`);
+  const na = assertions.filter(a => a.ts > now).length;
+  if (na) items.push(`<span class="di"><b>${na}</b> new ${na>1?"patterns":"pattern"} noticed</span>`);
+  if (!items.length) { el.className = "delta reveal"; el.innerHTML = `<span class="lead">all caught up</span><div class="items"><span class="di">steady since ${timeAgo(now)} — the engine keeps it current while you work.</span></div>`; return; }
+  el.className = "delta reveal"; el.innerHTML = `<span class="lead">since you last looked</span><div class="items">${items.join(' <span class="sep">·</span> ')}</div>`;
+}
+function saveSnapshot(topics) { const w = {}; topics.forEach(t => w[t.topic_key]=t.weight); localStorage.setItem(SNAP_KEY, JSON.stringify({ t:new Date().toISOString(), weights:w })); }
+
+/* ── hero ── */
+function renderScaleBeat(stats) {
+  const bt = stats.byType || {};
+  const span = stats.first ? Math.max(1, Math.round((new Date(stats.last)-new Date(stats.first))/86400000)) : 0;
+  const parts = [`<b>${fmtN(stats.total)}</b> signals read`];
+  if (bt["signal.topic"]) parts.push(`<b>${fmtN(bt["signal.topic"])}</b> moments of interest`);
+  if (span) parts.push(`across <b>${fmtN(span)}</b> days`);
+  $("scaleBeat").innerHTML = "synthesized from " + parts.join(" · ");
+}
+function renderPortrait(profile) {
+  if (!profile) {
+    $("archetype").textContent = "Your portrait is waiting.";
+    $("sections").innerHTML = `<div class="card empty"><span class="big">Nothing imported yet</span>Run <code>persnally setup</code> to import your AI history, then hit Re-synthesize.</div>`;
+    $("genMeta").textContent = ""; return;
+  }
+  $("archetype").textContent = profile.headline || "";
+  $("genMeta").textContent = `synthesized ${(profile.generated_at||"").slice(0,10)} · ${profile.model||""} · structured events only`;
+  $("sections").innerHTML = profile.sections.map((s, i) => {
+    const n = (s.evidence_event_ids||[]).length;
+    const why = n ? `<button class="link-btn sub" data-ev="${i}" data-ids="${esc((s.evidence_event_ids||[]).join(","))}">why? · ${n}</button>` : "";
+    return `<div class="card claim-card">
+      <div class="claim-title">${esc(s.title)}</div>
+      <div class="claim-body clamp" id="body-${i}">${esc(s.body)}</div>
+      <div class="row-actions"><button class="link-btn" data-more="${i}" style="display:none">Show more</button>${why}</div>
+      <div class="evidence" id="ev-${i}"></div></div>`;
+  }).join("");
+  // show "Show more" only where the text is actually clamped
+  profile.sections.forEach((_, i) => {
+    const body = $(`body-${i}`), btn = document.querySelector(`[data-more="${i}"]`);
+    if (body.scrollHeight > body.clientHeight + 4) btn.style.display = "";
+  });
+  document.querySelectorAll("[data-more]").forEach(b => b.addEventListener("click", () => {
+    const body = $(`body-${b.dataset.more}`), open = body.classList.toggle("clamp");
+    b.textContent = open ? "Show more" : "Show less";
+  }));
+  document.querySelectorAll("[data-ev]").forEach(b => b.addEventListener("click", () => toggleEvidence(b)));
+}
+async function toggleEvidence(btn) {
+  const box = $(`ev-${btn.dataset.ev}`), open = box.classList.toggle("open");
+  if (!open || box.dataset.loaded) return;
+  const events = DEMO ? demoEvents(btn.dataset.ids.split(",")) : (await get(`/events?ids=${btn.dataset.ids}`) ?? []);
+  box.innerHTML = events.map(e => {
+    const p = e.payload || {};
+    const summary = e.type === "signal.topic" ? `${p.topic} (${p.intent})` : (p.claim ?? p.topic ?? JSON.stringify(p).slice(0,90));
+    return `<div class="ev-item"><code>${esc(e.type)}</code> ${esc(summary)} — <i>${esc(provLabel(e))}, ${esc((e.ts||"").slice(0,10))}</i></div>`;
+  }).join("") || `<div class="ev-item">evidence not found (deleted?)</div>`;
+  box.dataset.loaded = "1";
+}
+
+/* ── voice & conventions (the prescriptive layer) ── */
+function renderVoice(voice) {
+  const sec = $("voiceSection");
+  if (!voice || !voice.items || !voice.items.length) { sec.style.display = "none"; return; }
+  sec.style.display = "";
+  const order = ["voice", "emphasis", "convention", "format", "workflow"];
+  const label = { voice: "Voice", emphasis: "Emphasis & recurring phrasing", convention: "Conventions", format: "Format", workflow: "Workflow" };
+  const groups = {};
+  voice.items.forEach((it) => { (groups[it.dimension] = groups[it.dimension] || []).push(it); });
+  let html = voice.pack ? `<div class="voice-pack">${esc(voice.pack)}</div>` : "";
+  html += `<div class="voice-groups">`;
+  for (const d of order) {
+    if (!groups[d]) continue;
+    html += `<div><div class="vglabel">${esc(label[d])}</div><div class="vchips">` +
+      groups[d].map((it) => `<span class="vchip" title="${esc(it.evidence || "")}">${esc(it.pattern)}${it.dimension === "emphasis" && it.evidence ? ` <i>${esc(it.evidence)}</i>` : ""}` +
+        `<button class="vdel" data-dim="${esc(it.dimension)}" data-pattern="${esc(it.pattern)}" title="Forget this — it won't be re-learned">×</button></span>`).join("") +
+      `</div></div>`;
+  }
+  $("voiceCard").innerHTML = html + `</div>`;
+  document.querySelectorAll(".vdel").forEach((b) => b.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    if (!confirm(`Forget "${b.dataset.pattern}"? It won't be re-learned.`)) return;
+    if (!DEMO) await fetch(`/voice/${encodeURIComponent(b.dataset.dim)}/${encodeURIComponent(b.dataset.pattern)}`, { method: "DELETE" });
+    const v = DEMO ? null : await get("/voice");
+    renderVoice(v);
+  }));
+}
+
+/* ── receipts ── */
+function renderReads(reads, total) {
+  countUp($("valueNum"), total);
+  $("valueCap").innerHTML = `times your tools knew you <b>without you re-explaining</b> — every read served from this machine.`;
+  const host = $("reads");
+  if (!reads.length) { host.innerHTML = `<div class="empty">No reads yet. Connect a client with <code>persnally connect</code> — then every AI session shows up here.</div>`; return; }
+  host.innerHTML = reads.slice(0,8).map(r => {
+    const c = clientOf(r), p = r.payload || {};
+    const purpose = p.client_purpose ? `<span class="p"> · ${esc(p.client_purpose)}</span>` : "";
+    return `<div class="read"><div class="who">${esc(clientInitials(c))}</div>
+      <div class="what"><div class="l1"><b>${esc(prettyClient(c))}</b> read ${esc(String(p.items ?? "your"))} item${p.items===1?"":"s"}${purpose}</div>
+      <div class="l2">${esc(p.scope || "context")}</div></div><div class="when">${esc(timeAgo(r.ts))}</div></div>`;
+  }).join("");
+}
+
+/* ── access control: what each connected AI may read, with one-click revoke ── */
+function renderAccess(reads, scopes) {
+  scopes = scopes || {};
+  // Connected clients = anything that has read + anything with a configured scope.
+  const clients = new Set(Object.keys(scopes));
+  for (const r of reads) { const c = clientOf(r); if (c && c !== "cli" && c !== "dashboard") clients.add(c); }
+  const host = $("access");
+  if (!clients.size) {
+    host.innerHTML = `<div class="empty">No AI connected yet. Run <code>persnally connect</code> — then each one shows here with exactly what it can read, and a revoke button.</div>`;
+    return;
+  }
+  host.innerHTML = [...clients].sort().map(c => {
+    const s = scopes[c]; // undefined = full access; [] = revoked; [cats] = limited
+    let state, cls;
+    if (s === undefined) { state = "reads everything"; cls = "full"; }
+    else if (!s.length) { state = "revoked — reads nothing"; cls = "revoked"; }
+    else { state = "limited: " + s.join(", "); cls = "limited"; }
+    const revoked = Array.isArray(s) && !s.length;
+    const btn = revoked
+      ? `<button class="del" data-client="${esc(c)}" data-act="restore">restore</button>`
+      : `<button class="del" data-client="${esc(c)}" data-act="revoke">revoke</button>`;
+    return `<div class="read"><div class="who">${esc(clientInitials(c))}</div>
+      <div class="what"><div class="l1"><b>${esc(prettyClient(c))}</b></div>
+      <div class="l2"><span class="acc ${cls}">${esc(state)}</span></div></div>${btn}</div>`;
+  }).join("");
+  host.querySelectorAll(".del[data-client]").forEach(b => b.addEventListener("click", async () => {
+    if (DEMO) return alert("Preview mode — start persnallyd to change access.");
+    const client = b.dataset.client;
+    if (b.dataset.act === "revoke") {
+      if (!confirm(`Revoke ${prettyClient(client)}? It will read nothing until you restore it.`)) return;
+      await fetch("/scopes", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ client, categories: [] }) });
+    } else {
+      await fetch(`/scopes/${encodeURIComponent(client)}`, { method:"DELETE" });
+    }
+    const s = await get("/scopes"); renderAccess(reads, s || {});
+  }));
+}
+
+/* ── engagement (retention pulse) ── */
+function renderEngage(a) {
+  const el = $("engage");
+  if (!a || !a.firstEventAt || !a.daily) { el.innerHTML = ""; return; }
+  const max = Math.max(...a.daily.map((d) => d.reads), 1);
+  const bars = a.daily.map((d, i) => {
+    const today = i === a.daily.length - 1;
+    const h = d.reads ? Math.max(3, Math.round((d.reads / max) * 22)) : 2;
+    const c = d.reads ? (today ? "var(--text)" : "var(--dim)") : "var(--line-2)";
+    return `<i style="height:${h}px;background:${c}" title="${esc(d.date)}: ${d.reads}"></i>`;
+  }).join("");
+  const ret = a.retainedWeek2 === null ? `day ${a.daysSinceFirstRead}/14` : (a.retainedWeek2 ? "active ✓" : "inactive ✗");
+  el.innerHTML = `<span><b>${a.reads7d}</b> this week</span><span>active <b>${a.activeDays14d}</b> of last 14 days</span>` +
+    `<span class="spark" title="context reads, last 14 days">${bars}</span><span class="rk">week-2: ${esc(ret)}</span>`;
+}
+
+/* ── reflections ── */
+function renderReflections(assertions) {
+  const behav = assertions.filter(a => a.payload && (a.payload.kind==="behavior" || a.payload.kind==="preference"));
+  if (!behav.length) { $("reflSection").style.display = "none"; return; }
+  $("reflSection").style.display = "";
+  $("reflections").innerHTML = behav.slice(0,4).map(a => {
+    const p = a.payload || {}, conf = typeof p.confidence==="number" ? ` · ${Math.round(p.confidence*100)}% confidence` : "";
+    return `<div class="refl"><div class="rc">${esc(p.claim)}</div><div class="rm">${esc(p.kind)} · noticed ${esc(timeAgo(a.ts))}${esc(conf)}</div></div>`;
+  }).join("");
+}
+
+/* ── ask loop: agents ask about you; you judge the answers ── */
+function renderAsks(data) {
+  const items = (data && data.items) || [];
+  const s = (data && data.stats) || null;
+  if (s && s.asked) {
+    const prec = s.precision !== null ? `<span>precision <b>${Math.round(s.precision*100)}%</b> (of ${s.approved+s.edited+s.vetoed} judged)</span>` : "";
+    $("askStats").innerHTML = `<span><b>${fmtN(s.asked)}</b> asked</span><span><b>${fmtN(s.answered)}</b> answered</span><span><b>${fmtN(s.deferred)}</b> deferred to you</span>${prec}`;
+  } else $("askStats").innerHTML = "";
+  if (!items.length) {
+    $("asks").innerHTML = `<div class="card empty">No questions yet. Connected agents can call <code>persnally_ask</code> to ask <i>your model</i> — "would they want tests?", "what tone?" — instead of interrupting you. They show up here for your judgment.</div>`;
+    return;
+  }
+  $("asks").innerHTML = items.map(it => {
+    const conf = `<span class="conf">${it.deferred ? "deferred" : `confidence ${Math.round(it.confidence*100)}%`}</span>`;
+    const answer = it.deferred
+      ? `<div class="a deferred">Deferred — not enough evidence to answer, so the agent was told to ask you.</div>`
+      : `<div class="a">${esc(it.answer)}</div>`;
+    const judge = it.deferred ? "" : (it.verdict
+      ? `<span class="verdict-chip">${esc(it.verdict)}</span>`
+      : `<span class="judge"><button data-id="${esc(it.answer_id)}" data-v="approved" title="The answer was right">✓ right</button><button data-id="${esc(it.answer_id)}" data-v="vetoed" title="The answer was wrong">✗ wrong</button></span>`);
+    const asker = it.asker ? `<span class="asker">from ${esc(prettyClient(it.asker))} · </span>` : "";
+    return `<div class="ask"><div class="q">${asker}${esc(it.question)}</div>${answer}
+      <div class="meta">${conf}<span>${esc(timeAgo(it.ts))}</span>${judge}</div></div>`;
+  }).join("");
+  document.querySelectorAll(".judge button").forEach(b => b.addEventListener("click", async () => {
+    if (DEMO) return alert("Preview mode — start persnallyd to judge answers for real.");
+    await fetch("/feedback", { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ answer_id: b.dataset.id, verdict: b.dataset.v }) });
+    renderAsks(await get("/questions?limit=8"));
+  }));
+}
+
+/* ── topic list ── */
+function renderTopicList(topics) {
+  const max = Math.max(...topics.map(t=>t.weight), 0.01);
+  $("topics").innerHTML = topics.map(t => `<tr>
+    <td style="width:130px"><div class="bar-track"><div class="bar" style="width:${Math.max((t.weight/max)*100,3)}%"></div></div></td>
+    <td>${esc(t.topic)}</td>
+    <td class="cat">${esc(t.category)} · ${esc(t.dominant_intent)} · ${t.signals}×</td>
+    <td><button class="del" data-topic="${esc(t.topic)}">forget</button></td></tr>`).join("");
+  document.querySelectorAll(".del").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm(`Hard-delete "${b.dataset.topic}" and everything derived from it?`)) return;
+    if (!DEMO) await fetch(`/topics/${encodeURIComponent(b.dataset.topic)}`, { method:"DELETE" });
+    loadAll();
+  }));
+}
+
+/* ── interest map — colored constellation: glow, category clustering, drag + zoom ── */
+const CAT_COLORS = {
+  technology:"#5EC8FF", business:"#FFB454", finance:"#5FE3A1", career:"#B388FF",
+  creative:"#FF7AB6", science:"#7DD3FC", education:"#FFD45E", health:"#6EE7B7",
+  lifestyle:"#FF9E80", news:"#9FB3C8", other:"#A0A4AD",
+};
+const catColor = (c) => CAT_COLORS[c] || CAT_COLORS.other;
+let mapCleanup = null, mapGen = 0;
+function renderMap(topics) {
+  if (mapCleanup) { mapCleanup(); mapCleanup = null; }
+  const gen = ++mapGen;
+  const canvas = $("graph"), host = $("graphHost");
+  if (!canvas.getContext || topics.length < 2) { switchView("list"); $("vGraph").style.display="none"; renderTopicList(topics); return; }
+  const data = topics.slice(0, 30);
+  const ctx = canvas.getContext("2d");
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  let w, h;
+  const resize = () => { w = host.clientWidth; h = window.innerWidth < 640 ? 380 : 520; canvas.width = w*dpr; canvas.height = h*dpr; canvas.style.height = h+"px"; };
+  resize();
+
+  const INTERESTS = data.slice(0, 12);
+  const maxW = Math.max(...INTERESTS.map(t=>t.weight), 0.01);
+  const cx = w/2, cy = h/2, ring = Math.min(w,h)*0.27;
+  const lerp = (a,b,t)=>a+(b-a)*t;
+  const warmRGB = (t)=>[Math.round(lerp(255,200,t)),Math.round(lerp(198,140,t)),Math.round(lerp(120,70,t))]; // curated amber: bright gold (strongest) → bronze (lighter), one warm family
+  const rgba = (c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  const lighten = (c,a)=>[Math.min(255,c[0]+a),Math.min(255,c[1]+a),Math.min(255,c[2]+a)];
+  // radial portrait: YOU at the center, interests radiating by strength, their entities as leaf nodes
+  const center = { kind:"you", x:cx, y:cy, vx:0, vy:0, r:23, rgb:[255,209,130], fixed:true };
+  const interests = INTERESTS.map((t,i) => {
+    const ang = (i/INTERESTS.length)*Math.PI*2 - Math.PI/2;
+    return { kind:"topic", t, ang, x:cx+Math.cos(ang)*ring, y:cy+Math.sin(ang)*ring, vx:0, vy:0,
+      r:9+Math.sqrt(t.weight/maxW)*15, rgb:warmRGB(INTERESTS.length>1 ? i/(INTERESTS.length-1) : 0) };
+  });
+  const leaves = [];
+  interests.forEach((nd, ii) => {
+    (nd.t.entities||[]).slice(0,2).forEach((e,k,arr) => {
+      const a = nd.ang + (k-(arr.length-1)/2)*0.55;
+      leaves.push({ kind:"entity", label:e, x:cx+Math.cos(a)*ring*1.65, y:cy+Math.sin(a)*ring*1.65, vx:0, vy:0, r:4, rgb:[176,196,224], parent:1+ii });
+    });
+  });
+  const nodes = [center, ...interests, ...leaves];
+  const I0 = 1, L0 = 1 + interests.length;
+  const edges = [];
+  interests.forEach((_,ii) => edges.push([0, I0+ii, "trunk"]));
+  // synapses: interests that share an entity wire together → a neural web, not just a tree
+  for (let i=0;i<interests.length;i++) for (let j=i+1;j<interests.length;j++) {
+    const ei=interests[i].t.entities||[], ej=interests[j].t.entities||[];
+    if (ei.length && ej.length && ei.some(e=>ej.includes(e))) edges.push([I0+i, I0+j, "synapse"]);
+  }
+  leaves.forEach((lf,li) => edges.push([lf.parent, L0+li, "branch"]));
+  const neighbors = nodes.map(()=>new Set());
+  edges.forEach(([a,b])=>{ neighbors[a].add(b); neighbors[b].add(a); });
+
+  const cam = { k:1, x:0, y:0 };
+  let hover=-1, dragNode=-1, panning=false, lastX=0, lastY=0, alive=true, frames=0;
+  const S2Wx=(sx)=>(sx-cam.x)/cam.k, S2Wy=(sy)=>(sy-cam.y)/cam.k, W2Sx=(wx)=>wx*cam.k+cam.x, W2Sy=(wy)=>wy*cam.k+cam.y;
+
+  function tick() {
+    let energy = 0;
+    for (let i=1;i<nodes.length;i++) {
+      const A=nodes[i]; if (i===dragNode || A.fixed) continue;
+      for (let j=0;j<nodes.length;j++) { if (i===j) continue; const B=nodes[j];
+        let dx=A.x-B.x, dy=A.y-B.y, d2=dx*dx+dy*dy||1, d=Math.sqrt(d2);
+        const rep=Math.min(5000/d2, 6); dx/=d; dy/=d; A.vx+=dx*rep; A.vy+=dy*rep;
+        const minD=A.r+B.r+14; if (d<minD) { const p=(minD-d)/2; A.x+=dx*p; A.y+=dy*p; }
+      }
+    }
+    interests.forEach((nd) => { if (nd===nodes[dragNode]) return; const tx=cx+Math.cos(nd.ang)*ring, ty=cy+Math.sin(nd.ang)*ring; nd.vx+=(tx-nd.x)*0.022; nd.vy+=(ty-nd.y)*0.022; });
+    leaves.forEach((lf) => { if (lf===nodes[dragNode]) return; const p=nodes[lf.parent]; const a=Math.atan2(p.y-cy,p.x-cx)||0; const tx=p.x+Math.cos(a)*44, ty=p.y+Math.sin(a)*44; lf.vx+=(tx-lf.x)*0.05; lf.vy+=(ty-lf.y)*0.05; });
+    for (let i=1;i<nodes.length;i++) { const n=nodes[i]; if (i===dragNode || n.fixed) continue; n.vx*=0.84; n.vy*=0.84; n.x+=n.vx; n.y+=n.vy; energy+=n.vx*n.vx+n.vy*n.vy; }
+    return energy;
+  }
+  function draw(now) {
+    now = now || performance.now(); const T = now * 0.001;
+    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+    // backdrop: faint warm core light, cool fall-off — depth, not flat black
+    const bg=ctx.createRadialGradient(w/2,h*0.46,0,w/2,h*0.46,Math.max(w,h)*0.72);
+    bg.addColorStop(0,"rgba(255,176,96,0.05)"); bg.addColorStop(0.55,"rgba(16,18,22,0)"); bg.addColorStop(1,"rgba(6,7,9,0.55)");
+    ctx.fillStyle=bg; ctx.fillRect(0,0,w,h);
+    // gentle perpetual drift — alive without bouncing; used everywhere so nothing desyncs
+    const amp = reduced?0:2.4;
+    const P = nodes.map((n,i)=>({ x:n.x+((n.fixed||i===dragNode)?0:Math.sin(T*0.5+i*1.1)*amp), y:n.y+((n.fixed||i===dragNode)?0:Math.cos(T*0.42+i*1.7)*amp) }));
+    ctx.save(); ctx.translate(cam.x,cam.y); ctx.scale(cam.k,cam.k);
+    // connections — thin, elegant; warm trunks, synapses, faint dendrites
+    edges.forEach(([a,b,kind]) => { const A=P[a],B=P[b]; const active=hover===-1||hover===a||hover===b||neighbors[hover].has(a)||neighbors[hover].has(b);
+      let dx=B.x-A.x,dy=B.y-A.y,d=Math.hypot(dx,dy)||1; const off=d*0.09, mx=(A.x+B.x)/2+(-dy/d)*off, my=(A.y+B.y)/2+(dx/d)*off;
+      if (kind==="trunk") { const al=hover===-1?0.4:(active?0.8:0.06); const g=ctx.createLinearGradient(A.x,A.y,B.x,B.y); g.addColorStop(0,rgba([255,150,80],al)); g.addColorStop(1,rgba(nodes[b].rgb,al*0.7)); ctx.strokeStyle=g; ctx.lineWidth=(active&&hover!==-1?2:1.1)/cam.k; }
+      else if (kind==="synapse") { const al=hover===-1?0.12:(active?0.42:0.03); const g=ctx.createLinearGradient(A.x,A.y,B.x,B.y); g.addColorStop(0,rgba(nodes[a].rgb,al)); g.addColorStop(1,rgba(nodes[b].rgb,al)); ctx.strokeStyle=g; ctx.lineWidth=0.9/cam.k; }
+      else { const al=hover===-1?0.16:(active?0.45:0.03); ctx.strokeStyle=rgba(nodes[a].rgb,al); ctx.lineWidth=0.8/cam.k; }
+      ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.quadraticCurveTo(mx,my,B.x,B.y); ctx.stroke(); });
+    // restrained, steady glow
+    ctx.globalCompositeOperation="lighter";
+    nodes.forEach((n,i) => { const active=hover===-1||hover===i||neighbors[hover].has(i); const k=active?1:0.1; const R=n.r*2.2;
+      const halo=ctx.createRadialGradient(P[i].x,P[i].y,0,P[i].x,P[i].y,R); halo.addColorStop(0,rgba(n.rgb,0.4*k)); halo.addColorStop(0.5,rgba(n.rgb,0.1*k)); halo.addColorStop(1,rgba(n.rgb,0));
+      ctx.fillStyle=halo; ctx.beginPath(); ctx.arc(P[i].x,P[i].y,R,0,Math.PI*2); ctx.fill(); });
+    ctx.globalCompositeOperation="source-over";
+    // refined cores — soft inner light + thin rim, no glossy bead
+    nodes.forEach((n,i) => { const active=hover===-1||hover===i||neighbors[hover].has(i); ctx.globalAlpha=active?1:0.22;
+      const x=P[i].x, y=P[i].y, r=n.r;
+      const cg=ctx.createRadialGradient(x-r*0.3,y-r*0.35,r*0.1,x,y,r); cg.addColorStop(0,rgba(lighten(n.rgb,45),1)); cg.addColorStop(1,rgba(n.rgb,1));
+      ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+      ctx.lineWidth=1/cam.k; ctx.strokeStyle=rgba(lighten(n.rgb,70),i===hover?0.9:0.4); ctx.stroke(); });
+    ctx.globalAlpha=1; ctx.restore();
+    // labels — clean, tracking the drifted node; entities only on hover
+    ctx.textAlign="center"; const placed=[];
+    nodes.map((_,i)=>i).sort((a,b)=>nodes[b].r-nodes[a].r).forEach(i => { const n=nodes[i];
+      const active = hover===-1 || hover===i || neighbors[hover].has(i);
+      if (n.kind==="entity" && hover===-1) return;
+      if (!active && hover!==-1) return;
+      const label = n.kind==="you" ? "you" : (n.kind==="topic" ? n.t.topic : n.label);
+      ctx.font = (n.kind==="you" ? "600 12.5px " : "500 11.5px ") + FONT;
+      const sx=W2Sx(P[i].x), sy=W2Sy(P[i].y), sr=n.r*cam.k, tw=ctx.measureText(label).width;
+      const force = i===hover || n.kind==="you" || (hover!==-1 && neighbors[hover].has(i));
+      const rect={x:sx-tw/2-3,y:sy+sr+3,w:tw+6,h:15};
+      const hit=placed.some(p=>!(rect.x+rect.w<p.x||rect.x>p.x+p.w||rect.y+rect.h<p.y||rect.y>p.y+p.h));
+      if (hit && !force) return; placed.push(rect);
+      ctx.globalAlpha = hover===-1?(n.kind==="you"?1:0.82):(active?1:0.2); ctx.fillStyle = (i===hover||n.kind==="you")?"#FFFFFF":"#C7CBD2"; ctx.fillText(label, sx, sy+sr+15);
+    });
+    ctx.globalAlpha=1;
+  }
+  let physicsSettled=false;
+  function loop(now) { if (gen!==mapGen) return;
+    if (!physicsSettled) { const e=tick(); frames++; if ((e<0.02 && frames>40) || frames>360) physicsSettled=true; }
+    draw(now);
+    if (!reduced || !physicsSettled) requestAnimationFrame(loop); else alive=false;  // keep firing once settled (paused automatically when the tab is hidden)
+  }
+  if (reduced) { for (let s=0;s<200;s++) tick(); physicsSettled=true; draw(performance.now()); alive=false; } else { alive=true; requestAnimationFrame(loop); }
+  function wake() { if (!alive && gen===mapGen) { alive=true; physicsSettled=false; frames=320; requestAnimationFrame(loop); } }
+
+  $("legend").innerHTML = `<span><i style="color:#FF9637"></i><span style="color:var(--dim)">you</span></span><span><i style="color:#FFB454"></i><span style="color:var(--dim)">strongest</span></span><span><i style="color:#6EAAFF"></i><span style="color:var(--dim)">lighter</span></span><span><i style="color:#BCD4FF"></i><span style="color:var(--dim)">the specifics</span></span>`;
+
+  const pop=$("nodePop");
+  const nodeAt=(mx,my)=>{ const wx=S2Wx(mx),wy=S2Wy(my); for (let i=nodes.length-1;i>=0;i--) if (Math.hypot(wx-nodes[i].x,wy-nodes[i].y)<=nodes[i].r+8/cam.k) return i; return -1; };
+  const rel=(e)=>{ const r=canvas.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; };
+  function showPop(n) { const nd=nodes[n];
+    if (nd.kind==="topic") { const p=nd.t;
+      pop.innerHTML=`<div class="npt">${esc(p.topic)}</div><div class="npm">${esc(p.category)} · ${esc(p.dominant_intent)} · weight ${p.weight.toFixed(2)} · ${p.signals}×</div>${(p.entities||[]).length?`<div class="npe">${esc(p.entities.slice(0,4).join(", "))}</div>`:""}`;
+    } else if (nd.kind==="entity") { pop.innerHTML=`<div class="npt">${esc(nd.label)}</div><div class="npm">a specific within ${esc((nodes[nd.parent].t||{}).topic||"this interest")}</div>`;
+    } else { pop.innerHTML=`<div class="npt">you</div><div class="npm">${interests.length} interests · ${leaves.length} specifics, sized by strength</div>`; }
+    pop.style.left=Math.min(W2Sx(nd.x)+14,w-250)+"px"; pop.style.top=(W2Sy(nd.y)+14)+"px"; pop.classList.add("show"); }
+
+  // Pointer events unify mouse + touch + pen; a second pointer drives pinch-zoom, a tap inspects.
+  const pts=new Map();
+  let downX=0, downY=0, moved=false, pinchD=0, pinchX=0, pinchY=0;
+  canvas.onpointerdown=(e)=>{
+    const [mx,my]=rel(e); pts.set(e.pointerId,{x:mx,y:my});
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* capture unsupported — degrade to no-capture */ }
+    if (pts.size>=2) { dragNode=-1; panning=false; pop.classList.remove("show"); hover=-1;
+      const [a,b]=[...pts.values()]; pinchD=Math.hypot(a.x-b.x,a.y-b.y)||1; pinchX=(a.x+b.x)/2; pinchY=(a.y+b.y)/2; return; }
+    downX=mx; downY=my; moved=false; lastX=mx; lastY=my;
+    const n=nodeAt(mx,my); if (n>=0) dragNode=n; else panning=true;
+  };
+  canvas.onpointermove=(e)=>{
+    const [mx,my]=rel(e); if (pts.has(e.pointerId)) pts.set(e.pointerId,{x:mx,y:my});
+    if (pts.size>=2) { const [a,b]=[...pts.values()];
+      const d=Math.hypot(a.x-b.x,a.y-b.y)||1, cx=(a.x+b.x)/2, cy=(a.y+b.y)/2, wx=S2Wx(cx), wy=S2Wy(cy);
+      cam.k=Math.max(0.45,Math.min(3,cam.k*(d/pinchD)));
+      cam.x=cx-wx*cam.k+(cx-pinchX); cam.y=cy-wy*cam.k+(cy-pinchY);
+      pinchD=d; pinchX=cx; pinchY=cy; if(!alive)draw(); return; }
+    if ((dragNode>=0||panning) && (Math.abs(mx-downX)>4||Math.abs(my-downY)>4)) moved=true;
+    if (dragNode>=0) { nodes[dragNode].x=S2Wx(mx); nodes[dragNode].y=S2Wy(my); nodes[dragNode].vx=0; nodes[dragNode].vy=0; pop.classList.remove("show"); wake(); if(!alive)draw(); return; }
+    if (panning) { cam.x+=mx-lastX; cam.y+=my-lastY; lastX=mx; lastY=my; if(!alive)draw(); return; }
+    if (e.pointerType==="touch") return;  // no hover on touch — a tap inspects instead
+    if (mx<0||my<0||mx>w||my>h) { if (hover!==-1){hover=-1;pop.classList.remove("show");if(!alive)draw();} return; }
+    const n=nodeAt(mx,my);
+    if (n!==hover) { hover=n; if(!alive)draw(); if (n>=0) showPop(n); else pop.classList.remove("show"); }
+  };
+  const endPointer=(e)=>{
+    const tapped = (!moved && pts.size<=1 && e.pointerType==="touch") ? nodeAt(...rel(e)) : -1;
+    pts.delete(e.pointerId);
+    if (dragNode>=0) { dragNode=-1; wake(); }
+    panning=false;
+    if (tapped>=0) { if (hover===tapped && pop.classList.contains("show")) { hover=-1; pop.classList.remove("show"); } else { hover=tapped; showPop(tapped); } if(!alive)draw(); }
+    else if (!moved && e.pointerType==="touch") { hover=-1; pop.classList.remove("show"); if(!alive)draw(); }
+    if (pts.size===1) { const [p]=[...pts.values()]; lastX=p.x; lastY=p.y; panning=true; moved=true; }  // pinch → one finger: resume pan
+  };
+  canvas.onpointerup=endPointer; canvas.onpointercancel=endPointer;
+  canvas.onwheel=(e)=>{ e.preventDefault(); const [mx,my]=rel(e); const wx=S2Wx(mx),wy=S2Wy(my); const f=e.deltaY<0?1.12:1/1.12; cam.k=Math.max(0.45,Math.min(3,cam.k*f)); cam.x=mx-wx*cam.k; cam.y=my-wy*cam.k; if(!alive)draw(); };
+  canvas.ondblclick=()=>{ cam.k=1; cam.x=0; cam.y=0; if(!alive)draw(); };
+  let rt; const onWinResize=()=>{ clearTimeout(rt); rt=setTimeout(()=>{ resize(); if(!alive)draw(); },150); };
+  window.addEventListener("resize", onWinResize, { passive:true });
+  mapCleanup=()=>{ window.removeEventListener("resize",onWinResize); };
+
+  if (window.innerWidth < 640) switchView("list");  // phones land on the list; the map is one tap away
+}
+function switchView(v) {
+  const g = v==="graph" || v==="map";
+  $("graphHost").style.display = g?"":"none"; $("topicList").style.display = g?"none":"";
+  $("vGraph").classList.toggle("on", g); $("vList").classList.toggle("on", !g);
+}
+$("vGraph").onclick = () => switchView("map");
+$("vList").onclick = () => switchView("list");
+
+/* ── engine onboarding (local-first: Ollama one-click, key optional) ── */
+function renderOnboard(engine, profile) {
+  const el = $("onboard");
+  // Show only when there's no engine at all and no portrait yet — once either
+  // exists the normal dashboard (and the Re-synthesize button) take over.
+  const ready = engine && (engine.hasKey || (engine.ollama && engine.ollama.hasModel));
+  if (DEMO || !engine || ready || profile) { el.style.display = "none"; el.innerHTML = ""; return; }
+  el.style.display = "";
+  const oll = engine.ollama || { reachable:false };
+  const local = oll.reachable
+    ? `<button class="btn" id="obPull">Set up local AI — download model (~2GB)</button>
+       <div class="sub" style="margin-top:6px">Runs entirely on your machine. Free. Nothing leaves your computer.</div>
+       <div id="obProg" style="display:none"><div class="ob-bar"><div class="ob-fill" id="obFill"></div></div><div class="sub" id="obStat" style="margin-top:6px"></div></div>`
+    : `<a class="btn" href="https://ollama.com/download" target="_blank" rel="noopener">Install Ollama — local &amp; free <span class="arr">↗</span></a>
+       <div class="sub" style="margin-top:6px">One install and your data stays on this machine. <button class="link-btn" id="obRecheck">Recheck</button> once it's running.</div>`;
+  el.innerHTML = `<div class="card ob-card">
+    <div class="claim-title">Set up your AI engine to see your portrait</div>
+    <div class="sub" style="margin:4px 0 14px">Persnally needs a model to read your history and write your self-portrait. Choose local (private, free) — or bring your own key.</div>
+    <div style="display:flex;flex-direction:column;gap:2px;max-width:540px">${local}</div>
+    <div class="ob-or">— or use your own Anthropic key —</div>
+    <div class="ob-row"><input id="obKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"><button class="btn ghost" id="obSaveKey">Save &amp; use</button></div>
+    <div class="sub" id="obKeyMsg" style="margin-top:6px"></div>
+    <div class="sub" style="margin-top:14px">No model yet? You can still import code offline — <code>persnallyd import git &lt;path&gt;</code> (no AI needed).</div>
+  </div>`;
+  if (oll.reachable) $("obPull").onclick = () => startPull(engine.recommended);
+  else $("obRecheck").onclick = () => loadAll();
+  $("obSaveKey").onclick = saveKey;
+  $("obKey").addEventListener("keydown", (e) => { if (e.key === "Enter") saveKey(); });
+}
+
+async function startPull(model) {
+  $("obProg").style.display = ""; $("obPull").disabled = true;
+  $("obStat").textContent = "Starting…";
+  const r = await fetch("/engine/pull", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ model }) });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); $("obStat").textContent = e.error || ("Couldn't start (" + r.status + ")"); $("obPull").disabled=false; return; }
+  (async function poll() {
+    const p = await get("/engine/pull");
+    if (!p) return void setTimeout(poll, 1500);
+    $("obFill").style.width = (p.percent||0) + "%";
+    if (p.state === "pulling") { $("obStat").textContent = (p.status||"downloading") + " · " + (p.percent||0) + "%"; return void setTimeout(poll, 1500); }
+    if (p.state === "error") { $("obStat").textContent = "Failed: " + (p.error||"unknown"); $("obPull").disabled=false; return; }
+    if (p.state === "done") { $("obStat").textContent = "Model ready — writing your portrait…"; await fetch("/synthesize", { method:"POST" }); return void loadAll(); }
+    setTimeout(poll, 1500);
+  })();
+}
+
+async function saveKey() {
+  const key = $("obKey").value.trim();
+  if (!key.startsWith("sk-ant-")) { $("obKeyMsg").textContent = "Enter a key starting with sk-ant-"; return; }
+  $("obSaveKey").disabled = true; $("obKeyMsg").textContent = "Saving…";
+  const r = await fetch("/engine/key", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ key }) });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); $("obKeyMsg").textContent = e.error || ("Failed (" + r.status + ")"); $("obSaveKey").disabled=false; return; }
+  $("obKeyMsg").textContent = "Saved — writing your portrait…";
+  await fetch("/synthesize", { method:"POST" }); loadAll();
+}
+
+/* ── load ── */
+async function loadAll() {
+  let stats, profile, topics, reads, assertions, voice, activity, asks;
+  try {
+    [stats, profile, topics, reads, assertions, voice, activity, asks] = await Promise.all([
+      get("/stats"), get("/profile"), get("/topics?limit=40"),
+      get("/events?type=context.read&limit=60"), get("/events?type=signal.assertion&limit=20"), get("/voice"), get("/activity"),
+      get("/questions?limit=8"),
+    ]);
+    if (!stats) throw new Error("no daemon");
+  } catch (e) {
+    DEMO = true; $("ribbon").classList.add("show");
+    ({ stats, profile, topics, reads, assertions, voice, activity, asks } = DEMO_DATA());
+  }
+  const scopes = DEMO ? { cursor: ["technology"] } : (await get("/scopes") || {});
+  topics = topics||[]; reads = reads||[]; assertions = assertions||[];
+  const engine = DEMO ? null : await get("/engine");
+  const st = $("status");
+  st.querySelector(".dot").classList.toggle("off", DEMO);
+  st.querySelector(".lbl").textContent = DEMO ? "preview" : "active";
+  if (!DEMO) get("/health").then(h => { if (h && h.version) $("ver").textContent = `· v${h.version}`; });
+  const total = (stats.byType && stats.byType["context.read"]) || reads.length;
+  renderDelta(topics, reads, assertions);
+  renderScaleBeat(stats);
+  renderPortrait(profile);
+  renderOnboard(engine, profile);
+  renderVoice(voice);
+  renderTopicList(topics);
+  renderMap(topics);
+  renderReads(reads, total);
+  renderAccess(reads, scopes);
+  renderEngage(activity);
+  renderReflections(assertions);
+  renderAsks(asks);
+  setCardData(profile, topics, voice, stats);
+  saveSnapshot(topics);
+}
+
+$("synthesize").onclick = async () => {
+  const b = $("synthesize"); if (DEMO) return alert("Preview mode — start persnallyd to synthesize for real.");
+  b.disabled = true; b.textContent = "Synthesizing…";
+  const r = await fetch("/synthesize", { method:"POST" });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); alert(e.error || "Synthesis failed — check the daemon log."); }
+  b.disabled = false; b.textContent = "Re-synthesize"; loadAll();
+};
+$("reflect").onclick = async () => {
+  const b = $("reflect"); if (DEMO) return alert("Preview mode — start persnallyd to reflect for real.");
+  b.disabled = true; b.textContent = "Reflecting…";
+  await fetch("/consolidate", { method:"POST" }); b.disabled = false; b.textContent = "Reflect"; loadAll();
+};
+setInterval(async () => {
+  if (DEMO) return;
+  const [reads, stats, voice, activity, asks] = await Promise.all([get("/events?type=context.read&limit=60"), get("/stats"), get("/voice"), get("/activity"), get("/questions?limit=8")]);
+  if (reads && stats) renderReads(reads, (stats.byType && stats.byType["context.read"]) || reads.length);
+  if (voice) renderVoice(voice); // live: voice signals captured mid-session show up without a reload
+  if (activity) renderEngage(activity);
+  if (asks) renderAsks(asks);   // live: agent questions land here as they happen
+}, 25000);
+
+/* ── shareable portrait card (drawn locally on a canvas; nothing uploaded) ── */
+let CARD = null;
+const CARD_W = 1080, CARD_H = 1350;
+function rrect(ctx, x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function wrapLines(ctx, text, maxW) {
+  const out = []; let line = "";
+  for (const word of String(text).split(/\s+/)) {
+    const test = line ? line + " " + word : word;
+    if (ctx.measureText(test).width > maxW && line) { out.push(line); line = word; } else line = test;
+  }
+  if (line) out.push(line); return out;
+}
+function condenseVoice(voice) {
+  if (!voice || !voice.items) return [];
+  // "HOW I WRITE" is writing style — tone + format only. Recurring phrases (emphasis)
+  // are vocabulary, not style, and are noise-prone (pasted errors, tool output).
+  const picks = voice.items.filter((it) => ["voice","format"].includes(it.dimension))
+    .sort((a,b) => (b.confidence||0) - (a.confidence||0))
+    .map((it) => it.pattern.split("—")[0].split(";")[0].split("(")[0].trim());
+  return [...new Set(picks)].slice(0, 4);
+}
+function setCardData(profile, topics, voice, stats) {
+  const s = stats || {};
+  CARD = {
+    headline: (profile && profile.headline) || "A portrait in progress.",
+    interests: (topics||[]).slice(0,6).map((t) => ({ label: t.topic, color: catColor(t.category) })),
+    voice: condenseVoice(voice),
+    signals: s.total || 0,
+    days: s.first ? Math.max(1, Math.round((new Date(s.last||Date.now()) - new Date(s.first)) / 86400000)) : 0,
+  };
+}
+function buildCard(canvas, opts) {
+  const c = CARD || { headline:"", interests:[], voice:[], signals:0, days:0 };
+  const dpr = 2, W = CARD_W, H = CARD_H, PAD = 84;
+  canvas.width = W*dpr; canvas.height = H*dpr; canvas.style.aspectRatio = (W/H).toFixed(4);
+  const ctx = canvas.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+  ctx.fillStyle = "#0B0C0E"; ctx.fillRect(0,0,W,H);
+  // ambient glows tinted by the user's own interest colors — on-brand, "looks good on camera"
+  const cols = c.interests.map((i) => i.color);
+  [[W*0.20,H*0.15,cols[0]||"#5EC8FF"],[W*0.86,H*0.30,cols[1]||"#FFB454"],[W*0.5,H*0.95,cols[2]||"#B388FF"]]
+    .forEach(([x,y,col]) => { const g=ctx.createRadialGradient(x,y,0,x,y,W*0.55); g.addColorStop(0,col+"26"); g.addColorStop(1,col+"00"); ctx.fillStyle=g; ctx.fillRect(0,0,W,H); });
+  ctx.strokeStyle = "rgba(255,255,255,0.10)"; ctx.lineWidth = 2; rrect(ctx,28,28,W-56,H-56,20); ctx.stroke();
+
+  let y = PAD + 6;
+  ctx.fillStyle = "#F1F2F4"; ctx.font = "600 30px "+FONT; ctx.fillText("persnally", PAD, y);
+  ctx.fillStyle = "#35D07F"; ctx.beginPath(); ctx.arc(PAD + ctx.measureText("persnally").width + 15, y-9, 5, 0, Math.PI*2); ctx.fill();
+  ctx.textAlign = "right"; ctx.fillStyle = "#9A9DA5"; ctx.font = "500 22px "+FONT; ctx.fillText("a portrait of me", W-PAD, y); ctx.textAlign = "left";
+  y += 50;
+
+  if (opts.head && c.headline) {
+    let fs = 54, lines;
+    do { ctx.font = "700 "+fs+"px "+FONT; lines = wrapLines(ctx, c.headline, W-PAD*2); fs -= 3; } while (lines.length > 4 && fs > 30);
+    fs += 3; ctx.font = "700 "+fs+"px "+FONT; ctx.fillStyle = "#FFFFFF";
+    const lh = fs*1.18;
+    for (const ln of lines.slice(0,4)) { y += lh; ctx.fillText(ln, PAD, y); }
+    y += 24;
+  }
+
+  if (opts.int && c.interests.length) {
+    y += 30; ctx.fillStyle = "#9A9DA5"; ctx.font = "600 19px "+FONT; ctx.fillText("WHAT I'M INTO", PAD, y); y += 36;
+    let x = PAD; const ch = 52, gap = 13; ctx.font = "600 24px "+FONT;
+    for (const it of c.interests) {
+      const cw = ctx.measureText(it.label).width + 50;
+      if (x + cw > W-PAD) { x = PAD; y += ch + gap; }
+      ctx.fillStyle = it.color+"22"; ctx.strokeStyle = it.color+"99"; ctx.lineWidth = 1.5; rrect(ctx,x,y,cw,ch,ch/2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = it.color; ctx.beginPath(); ctx.arc(x+22, y+ch/2, 5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "#F1F2F4"; ctx.fillText(it.label, x+38, y+ch/2+8);
+      x += cw + gap;
+    }
+    y += ch + 26;
+  }
+
+  if (opts.voice && c.voice.length) {
+    y += 24; ctx.fillStyle = "#9A9DA5"; ctx.font = "600 19px "+FONT; ctx.fillText("HOW I WRITE", PAD, y); y += 38;
+    ctx.fillStyle = "#C7CACF"; ctx.font = "400 26px "+FONT;
+    for (const ln of wrapLines(ctx, c.voice.join("   ·   "), W-PAD*2).slice(0,2)) { ctx.fillText(ln, PAD, y); y += 38; }
+  }
+
+  // constellation — the brand's signature visual, drawn from the same interest colors;
+  // fills the lower band so the card reads full in every toggle state.
+  if (c.interests.length >= 2) {
+    const bandTop = y + 30, bandBottom = H - PAD - 104;
+    if (bandBottom - bandTop > 130) {
+      const cxb = W/2, cyb = (bandTop + bandBottom) / 2;
+      const spread = Math.min(W - PAD*2, bandBottom - bandTop) * 0.46;
+      const ns = c.interests.map((it, i) => {
+        const a = i * 2.39996323, rad = spread * Math.sqrt((i + 0.5) / c.interests.length);
+        return { x: cxb + Math.cos(a)*rad, y: cyb + Math.sin(a)*rad*0.62, r: 30 - i*3.2, color: it.color };
+      });
+      for (let i = 0; i < ns.length; i++) for (let j = i+1; j < ns.length; j++) {
+        const A = ns[i], B = ns[j], d = Math.hypot(A.x-B.x, A.y-B.y);
+        if (d > spread*1.05) continue;
+        const g = ctx.createLinearGradient(A.x,A.y,B.x,B.y); g.addColorStop(0,A.color+"40"); g.addColorStop(1,B.color+"40");
+        const off = d*0.14, mx = (A.x+B.x)/2 + (-(B.y-A.y)/d)*off, my = (A.y+B.y)/2 + ((B.x-A.x)/d)*off;
+        ctx.strokeStyle = g; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.quadraticCurveTo(mx,my,B.x,B.y); ctx.stroke();
+      }
+      for (const n of ns) {
+        const halo = ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,n.r*2.8);
+        halo.addColorStop(0,n.color+"cc"); halo.addColorStop(0.45,n.color+"33"); halo.addColorStop(1,n.color+"00");
+        ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(n.x,n.y,n.r*2.8,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle = n.color; ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.beginPath(); ctx.arc(n.x-n.r*0.3, n.y-n.r*0.3, n.r*0.28, 0, Math.PI*2); ctx.fill();
+      }
+    }
+  }
+
+  if (opts.stats) {
+    const parts = [];
+    if (c.signals) parts.push(fmtN(c.signals)+" signals");
+    if (c.days) parts.push(fmtN(c.days)+" days");
+    parts.push("100% on my machine");
+    ctx.fillStyle = "#62656D"; ctx.font = "500 22px "+FONT; ctx.fillText(parts.join("   ·   "), PAD, H-PAD-58);
+  }
+  ctx.fillStyle = "#9A9DA5"; ctx.font = "500 22px "+FONT; ctx.fillText("made with persnally — your own context engine", PAD, H-PAD);
+  ctx.textAlign = "right"; ctx.fillStyle = "#62656D"; ctx.fillText("persnally.com", W-PAD, H-PAD); ctx.textAlign = "left";
+}
+const _modal = $("shareModal");
+function renderCard() { buildCard($("cardCanvas"), { head:$("tHead").checked, int:$("tInt").checked, voice:$("tVoice").checked, stats:$("tStats").checked }); }
+function openShare() { renderCard(); _modal.classList.add("open"); _modal.setAttribute("aria-hidden","false"); }
+function closeShare() { _modal.classList.remove("open"); _modal.setAttribute("aria-hidden","true"); }
+$("shareBtn").onclick = openShare;
+$("shareClose").onclick = closeShare;
+_modal.addEventListener("click", (e) => { if (e.target === _modal) closeShare(); });
+["tHead","tInt","tVoice","tStats"].forEach((id) => $(id).addEventListener("change", renderCard));
+addEventListener("keydown", (e) => { if (e.key === "Escape" && _modal.classList.contains("open")) closeShare(); });
+$("cardDownload").onclick = () => $("cardCanvas").toBlob((b) => {
+  if (!b) return; const u = URL.createObjectURL(b), a = document.createElement("a");
+  a.href = u; a.download = "persnally-portrait.png"; a.click(); setTimeout(() => URL.revokeObjectURL(u), 1000);
+}, "image/png");
+$("cardCopy").onclick = async () => {
+  const btn = $("cardCopy");
+  try {
+    const b = await new Promise((r) => $("cardCanvas").toBlob(r, "image/png"));
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": b })]);
+    btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy image", 1600);
+  } catch { btn.textContent = "Copy unsupported — Download"; setTimeout(() => btn.textContent = "Copy image", 2400); }
+};
+
+loadAll();
+
+/* ── demo data ── */
+function demoEvents(ids) {
+  return ids.map((id,i) => ({ id, type: i%2?"signal.topic":"signal.assertion", ts:new Date(Date.now()-i*86400000*3).toISOString(),
+    payload: i%2 ? { topic:["SQLite WAL","async Rust","MCP servers"][i%3], intent:"building" } : { claim:"prefers deleting code to adding it", kind:"behavior" },
+    provenance:{ kind:"import", file:"claude-code/persnallyd" } }));
+}
+function DEMO_DATA() {
+  const now = Date.now(), iso = (d)=>new Date(now-d).toISOString();
+  return {
+    stats: { total:4127, byType:{ "signal.topic":312, "signal.assertion":14, "context.read":1247 }, bySource:{ "git:persnallyd":58 }, first:iso(86400000*214), last:iso(3600000*2) },
+    profile: { headline:"A refactor-first systems thinker who ships hardest under a deadline.", model:"opus-4-8", generated_at:iso(3600000*5).slice(0,10),
+      sections:[
+        { title:"How you work", body:"You build in tight, evidence-driven loops — prototype, measure, delete. You reach for SQLite and local-first architectures before reaching for a cloud, and you distrust abstractions you can't audit. Your commits are small and frequent, and you keep a working build at every step rather than big-bang merges.", evidence_event_ids:["e1","e2","e3","e4"] },
+        { title:"How you decide", body:"You kill ideas fast and out loud. You actively seek the case against your own plans, and you change course when the evidence turns — rare for someone who generates this many ideas. You ask for the falsification first.", evidence_event_ids:["e5","e6","e7"] },
+        { title:"What you're avoiding", body:"You circle back to the same hard call — defend the mature bet or pivot to the bigger one — and keep your options open across both rather than committing. The hesitation is itself a signal.", evidence_event_ids:["e8","e9"] },
+        { title:"Your voice", body:"Terse, concrete, allergic to filler. You'd rather show the benchmark than describe it, and you write the way you commit: small, focused, honest about what's unfinished.", evidence_event_ids:["e10","e11","e12"] },
+      ] },
+    topics: [
+      { topic_key:"mcp", topic:"MCP servers", category:"technology", weight:0.91, signals:34, sentiment_balance:0.4, dominant_intent:"building", entities:["MCP","TypeScript","Claude"], last_seen:iso(3600000*2), first_seen:iso(86400000*40), event_ids:[] },
+      { topic_key:"local", topic:"local-first architecture", category:"technology", weight:0.84, signals:28, sentiment_balance:0.5, dominant_intent:"building", entities:["SQLite","TypeScript","privacy"], last_seen:iso(3600000*6), first_seen:iso(86400000*60), event_ids:[] },
+      { topic_key:"sqlite", topic:"SQLite", category:"technology", weight:0.72, signals:19, sentiment_balance:0.3, dominant_intent:"building", entities:["SQLite","WAL"], last_seen:iso(86400000), first_seen:iso(86400000*55), event_ids:[] },
+      { topic_key:"voiceai", topic:"voice AI", category:"technology", weight:0.61, signals:22, sentiment_balance:0.1, dominant_intent:"deciding", entities:["TTS","audio"], last_seen:iso(86400000*3), first_seen:iso(86400000*120), event_ids:[] },
+      { topic_key:"robotics", topic:"robotics hardware", category:"technology", weight:0.58, signals:17, sentiment_balance:0.6, dominant_intent:"researching", entities:["sensors","hardware"], last_seen:iso(86400000*2), first_seen:iso(86400000*30), event_ids:[] },
+      { topic_key:"fundraising", topic:"fundraising strategy", category:"business", weight:0.49, signals:12, sentiment_balance:0.0, dominant_intent:"deciding", entities:["Delaware","pre-seed"], last_seen:iso(86400000*5), first_seen:iso(86400000*70), event_ids:[] },
+      { topic_key:"pmf", topic:"product-market fit", category:"business", weight:0.55, signals:15, sentiment_balance:-0.1, dominant_intent:"deciding", entities:["retention","pre-seed"], last_seen:iso(86400000*4), first_seen:iso(86400000*90), event_ids:[] },
+      { topic_key:"positioning", topic:"competitive positioning", category:"business", weight:0.47, signals:11, sentiment_balance:0.0, dominant_intent:"researching", entities:["retention","MCP"], last_seen:iso(86400000*3), first_seen:iso(86400000*45), event_ids:[] },
+      { topic_key:"taxes", topic:"presumptive taxation", category:"finance", weight:0.34, signals:7, sentiment_balance:-0.2, dominant_intent:"researching", entities:["44ADA","USD"], last_seen:iso(86400000*12), first_seen:iso(86400000*100), event_ids:[] },
+      { topic_key:"rust", topic:"async Rust", category:"technology", weight:0.38, signals:9, sentiment_balance:-0.3, dominant_intent:"learning", entities:["Rust","async"], last_seen:iso(86400000*8), first_seen:iso(86400000*75), event_ids:[] },
+      { topic_key:"writing", topic:"build-in-public writing", category:"creative", weight:0.42, signals:13, sentiment_balance:0.4, dominant_intent:"building", entities:["X","essays"], last_seen:iso(86400000*2), first_seen:iso(86400000*50), event_ids:[] },
+    ],
+    reads: [
+      { ts:iso(3600000*2), source:"mcp:cursor", payload:{ scope:"project_context", client_purpose:"tailor a refactor", items:6 }, provenance:{ kind:"mcp", client:"cursor" } },
+      { ts:iso(3600000*5), source:"mcp:claude-desktop", payload:{ scope:"full", client_purpose:"draft in your voice", items:9 }, provenance:{ kind:"mcp", client:"claude-desktop" } },
+      { ts:iso(3600000*9), source:"mcp:claude-code", payload:{ scope:"brief", client_purpose:"session start", items:7 }, provenance:{ kind:"mcp", client:"claude-code" } },
+      { ts:iso(86400000), source:"mcp:cursor", payload:{ scope:"project_context", client_purpose:"pick the right stack", items:5 }, provenance:{ kind:"mcp", client:"cursor" } },
+    ],
+    assertions: [
+      { ts:iso(86400000), payload:{ claim:"Your attention shifted from voice AI toward robotics and the context engine over the last month.", kind:"behavior", confidence:0.78 }, provenance:{ kind:"derived" } },
+      { ts:iso(86400000*2), payload:{ claim:"You consistently choose local-first, auditable tools over cloud convenience.", kind:"preference", confidence:0.86 }, provenance:{ kind:"derived" } },
+      { ts:iso(86400000*6), payload:{ claim:"You generate new ideas fastest right when your main bet stalls.", kind:"behavior", confidence:0.71 }, provenance:{ kind:"derived" } },
+    ],
+    asks: {
+      stats: { asked: 23, answered: 19, deferred: 4, approved: 16, edited: 0, vetoed: 2, precision: 16/18 },
+      items: [
+        { question_id:"q1", answer_id:"a1", ts:iso(3600000*3), asker:"claude-code", question:"Would they want tests with this refactor?",
+          answer:"Yes — they treat unverified code as unfinished and repeatedly insist on test passes before merging. Write the tests.", confidence:0.92, deferred:false, verdict:"approved" },
+        { question_id:"q2", answer_id:"a2", ts:iso(3600000*8), asker:"cursor", question:"New dependency or hand-roll this date parser?",
+          answer:"Hand-roll it — they consistently prefer the smallest design over new dependencies and audit everything they ship.", confidence:0.84, deferred:false, verdict:null },
+        { question_id:"q3", answer_id:"a3", ts:iso(86400000), asker:"claude-desktop", question:"What tone for this investor update?",
+          answer:"", confidence:0.45, deferred:true, verdict:null },
+      ],
+    },
+    activity: { firstEventAt: iso(86400000*214), firstReadAt: iso(86400000*210), lastReadAt: iso(3600000*2), daysSinceFirst: 214, daysSinceFirstRead: 210, totalReads: 1247, reads7d: 33, reads30d: 142, activeDays7d: 5, activeDays14d: 12, retainedWeek2: true, daily: [2,0,3,5,1,4,6,2,0,3,7,5,8,4].map((r,i)=>({ date:new Date(now-(13-i)*86400000).toISOString().slice(0,10), reads:r })) },
+    voice: {
+      pack: "Write like this user: terse — short, declarative sentences; leads with imperatives, minimal preamble; states things flatly; no emoji; casual register (lowercases “i”); recurring phrasing: “be 100% sure”, “industry best practices”, “validate whether it's valid or not”.",
+      items: [
+        { dimension:"voice", pattern:"terse — short, declarative sentences", polarity:"does", confidence:0.85, evidence:"median 10 words/sentence", basis:"stylometry" },
+        { dimension:"voice", pattern:"leads with imperatives, minimal preamble", polarity:"does", confidence:0.75, evidence:"18% of sentences open with a command verb", basis:"stylometry" },
+        { dimension:"voice", pattern:"states things flatly; rarely hedges", polarity:"does", confidence:0.8, evidence:"hedging in 1% of sentences", basis:"stylometry" },
+        { dimension:"format", pattern:"no emoji", polarity:"avoids", confidence:0.7, evidence:"0 emoji across 1,700 prompts", basis:"stylometry" },
+        { dimension:"format", pattern:"casual register — lowercases “i”", polarity:"does", confidence:0.7, evidence:"“i” 254× vs “I” 125×", basis:"stylometry" },
+        { dimension:"emphasis", pattern:"be 100% sure", polarity:"insists", confidence:0.9, evidence:"113×", basis:"stylometry" },
+        { dimension:"emphasis", pattern:"industry best practices", polarity:"insists", confidence:0.82, evidence:"85×", basis:"stylometry" },
+        { dimension:"emphasis", pattern:"validate whether it's valid or not", polarity:"insists", confidence:0.8, evidence:"88×", basis:"stylometry" },
+      ],
+    },
+  };
+}
+</script>
+</body>
+</html>
