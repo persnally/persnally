@@ -104,7 +104,7 @@ function Em({ children }: { children: React.ReactNode }) {
 function Hero() {
   return (
     <Section className="flex flex-col justify-center pb-6 pt-8 sm:pt-10 lg:min-h-[calc(100dvh-13rem)]">
-      <div className="grid items-center gap-12 lg:grid-cols-[1.12fr_0.88fr] lg:items-stretch lg:gap-16">
+      <div className="grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-stretch lg:gap-16">
         {/* eyebrow pinned top, headline+copy+CTA pinned bottom — the column
             spans the figure's full height, no slack under the CTA */}
         <div className="flex flex-col lg:justify-between">
