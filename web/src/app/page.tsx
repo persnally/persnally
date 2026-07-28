@@ -399,18 +399,46 @@ function CorrectionLedger() {
 
 /* ── № 03 · See it ────────────────────────────────────────────── */
 
+/* a macOS traffic-light control — real semantics: red/yellow/green with the
+   subtle inner-shadow rim macOS renders, and the close/min/zoom glyphs that
+   fade in on window hover (exactly how Safari/Chrome behave on a Mac) */
+function TrafficLights() {
+  const dots: { fill: string; ring: string; glyph: string }[] = [
+    { fill: "#ff5f57", ring: "#e0443e", glyph: "M2.1 2.1L7.9 7.9M7.9 2.1L2.1 7.9" }, // close ×
+    { fill: "#febc2e", ring: "#d89e24", glyph: "M2 5H8" }, // minimize −
+    { fill: "#28c840", ring: "#1aab29", glyph: "M2 2L8 8M8 2L2 8" }, // zoom (diagonal arrows stand-in)
+  ];
+  return (
+    <div className="group/lights flex items-center gap-[8px]">
+      {dots.map((d, i) => (
+        <span
+          key={i}
+          className="relative flex size-[13px] items-center justify-center rounded-full"
+          style={{ backgroundColor: d.fill, boxShadow: `inset 0 0 0 0.5px ${d.ring}` }}
+        >
+          <svg viewBox="0 0 10 10" className="size-[7px] opacity-0 transition-opacity group-hover/lights:opacity-100">
+            <path d={d.glyph} stroke="#4d0000" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+          </svg>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /* the real dashboard, live and scrollable — not a screenshot. Same static
    file the daemon serves; with no daemon reachable from a browser it falls
    into its own built-in preview mode (sample data, writes disabled), so
-   this is byte-identical product code, safely sandboxed. */
+   this is byte-identical product code, safely sandboxed. Chrome styled to
+   read as an actual macOS Safari window, not a generic "app frame". */
 function DashboardEmbed() {
   return (
-    <figure className="overflow-hidden rounded-lg border border-ink/15 bg-[#0b0b0c] shadow-[0_24px_70px_-24px_rgba(23,21,18,0.4)]">
-      <div className="flex items-center gap-2 border-b border-white/10 bg-[#111113] px-4 py-3">
-        <span className="size-2.5 rounded-full bg-white/15" />
-        <span className="size-2.5 rounded-full bg-white/15" />
-        <span className="size-2.5 rounded-full bg-white/15" />
-        <span className="ml-3 font-mono text-[11px] text-white/40">localhost:4983 — preview mode</span>
+    <figure className="overflow-hidden rounded-[10px] border border-black/40 bg-[#0b0b0c] shadow-[0_1px_1px_rgba(0,0,0,0.3),0_30px_80px_-24px_rgba(23,21,18,0.45)]">
+      {/* macOS title bar: traffic lights + centered window title, single row */}
+      <div className="relative flex h-[38px] items-center border-b border-black/40 bg-gradient-to-b from-[#2b2b2d] to-[#242426] px-3">
+        <TrafficLights />
+        <span className="pointer-events-none absolute inset-x-0 text-center font-sans text-[12.5px] font-medium text-white/70">
+          persnally — your context engine
+        </span>
       </div>
       <iframe
         src="/dashboard-preview.html"
