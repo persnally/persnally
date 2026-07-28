@@ -1,20 +1,21 @@
 "use client";
 
-/* The hero plate: a 19th-c anatomical engraving of a head in profile with the
-   brain exposed (Wellcome Collection, public domain — real anatomy, not
-   phrenology). The brain is the model of you; numbered markers sit on the
-   cortex, revealing an ink tooltip on hover (desktop) or tap (touch), so the
-   artwork stays uncovered at rest. */
+/* The hero plate: a proportional study of a head in profile, wrapped in its
+   measuring grid and construction arcs (Wellcome Collection, public domain —
+   the artist's-proportion tradition, not phrenology). The head is the model
+   of you, drawn to scale; numbered markers sit on the figure, revealing an
+   ink tooltip on hover (desktop) or tap (touch), so the artwork stays
+   uncovered at rest. */
 
 import { useState } from "react";
 
-/* points sit on the cerebrum (%, of the image box) */
+/* points sit on the head/grid (%, of the image box) */
 const POINTS: { x: number; y: number; title: string; detail: string; delay: number }[] = [
-  { x: 28, y: 19, title: "interests", detail: "decay-weighted 0.95", delay: 400 },
-  { x: 19, y: 35, title: "decisions", detail: "“hand-roll it” 0.78", delay: 700 },
-  { x: 45, y: 30, title: "voice", detail: "terse no-emoji", delay: 1000 },
-  { x: 68, y: 21, title: "conventions", detail: "pnpm not-npm", delay: 1300 },
-  { x: 62, y: 43, title: "provenance", detail: "#412 deletable", delay: 1600 },
+  { x: 47, y: 22, title: "interests", detail: "decay-weighted 0.95", delay: 400 },
+  { x: 30, y: 40, title: "decisions", detail: "“hand-roll it” 0.78", delay: 700 },
+  { x: 66, y: 72, title: "voice", detail: "terse no-emoji", delay: 1000 },
+  { x: 63, y: 49, title: "conventions", detail: "pnpm not-npm", delay: 1300 },
+  { x: 55, y: 36, title: "provenance", detail: "#412 deletable", delay: 1600 },
 ];
 
 export function EngravedSelf() {
@@ -25,10 +26,10 @@ export function EngravedSelf() {
       <div className="relative bg-paper">
         {/* eslint-disable-next-line @next/next/no-img-element -- static plate, multiply-blended */}
         <img
-          src="/art/brain-head.webp"
-          alt="Anatomical engraving of a head in profile with the brain exposed"
-          width={1200}
-          height={1060}
+          src="/art/proportion-head.webp"
+          alt="Engraving of a head in profile overlaid with a proportional measuring grid"
+          width={1000}
+          height={1044}
           className="block w-full mix-blend-multiply"
         />
         {POINTS.map((p, i) => {
