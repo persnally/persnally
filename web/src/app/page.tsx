@@ -21,6 +21,7 @@ export default function Home() {
         <Marquee />
         <Wedge />
         <HowItWorks />
+        <SeeIt />
         <AskProof />
         <Engine />
         <Compare />
@@ -396,11 +397,54 @@ function CorrectionLedger() {
   );
 }
 
+/* ── № 03 · See it ────────────────────────────────────────────── */
+
+/* the real dashboard, live and scrollable — not a screenshot. Same static
+   file the daemon serves; with no daemon reachable from a browser it falls
+   into its own built-in preview mode (sample data, writes disabled), so
+   this is byte-identical product code, safely sandboxed. */
+function DashboardEmbed() {
+  return (
+    <figure className="overflow-hidden rounded-lg border border-ink/15 bg-[#0b0b0c] shadow-[0_24px_70px_-24px_rgba(23,21,18,0.4)]">
+      <div className="flex items-center gap-2 border-b border-white/10 bg-[#111113] px-4 py-3">
+        <span className="size-2.5 rounded-full bg-white/15" />
+        <span className="size-2.5 rounded-full bg-white/15" />
+        <span className="size-2.5 rounded-full bg-white/15" />
+        <span className="ml-3 font-mono text-[11px] text-white/40">localhost:4983 — preview mode</span>
+      </div>
+      <iframe
+        src="/dashboard-preview.html"
+        title="The Persnally dashboard, running live in preview mode with sample data — scroll to explore your portrait, interest map, read receipts, and the ask loop"
+        className="block h-[480px] w-full bg-[#0b0b0c] sm:h-[600px] lg:h-[720px]"
+        loading="lazy"
+        sandbox="allow-scripts allow-same-origin allow-popups"
+      />
+    </figure>
+  );
+}
+
+function SeeIt() {
+  return (
+    <Section className="py-24">
+      <SectionHead
+        n="03"
+        eyebrow="See it"
+        title="Not a metaphor. The actual dashboard."
+        lede="Every engraving on this page is standing in for something real. Below is the real thing, live — the same page served at localhost:4983 on your machine. Scroll it, click a node, judge an answer. It's running in preview mode: sample data, nothing writable, nothing sent anywhere."
+      />
+
+      <div className="mt-12">
+        <DashboardEmbed />
+      </div>
+    </Section>
+  );
+}
+
 function AskProof() {
   return (
     <Section id="ask" className="py-24">
       <SectionHead
-        n="03"
+        n="04"
         eyebrow="Answers, not just recall"
         title={
           <>
@@ -498,7 +542,7 @@ function Engine() {
   return (
     <Section className="py-24">
       <SectionHead
-        n="04"
+        n="05"
         eyebrow="Under the hood"
         title="More than memory. An engine."
         lede="Structured events, derived views, a walkable provenance graph — decay-aware, and entirely your own."
@@ -621,7 +665,7 @@ function Compare() {
   return (
     <Section id="compare" className="py-24">
       <SectionHead
-        n="05"
+        n="06"
         eyebrow="How it compares"
         title={
           <>
@@ -746,7 +790,7 @@ function Trust() {
   return (
     <Section id="trust" className="py-24">
       <SectionHead
-        n="06"
+        n="07"
         eyebrow="Your data, your rules"
         title="A context engine you can actually trust."
         lede="Trust isn't a privacy policy here — it's the architecture. Not promises; properties you can check."
@@ -793,7 +837,7 @@ function Positioning() {
   ];
   return (
     <Section className="py-24">
-      <SectionHead n="07" eyebrow="The difference" title={<></>} center />
+      <SectionHead n="08" eyebrow="The difference" title={<></>} center />
       <figure className="mx-auto -mt-2 w-fit text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -845,7 +889,7 @@ function Positioning() {
   );
 }
 
-/* ── № 08 · Pricing ──────────────────────────────────────────── */
+/* ── № 09 · Pricing ──────────────────────────────────────────── */
 
 function Pricing() {
   const free = [
@@ -860,7 +904,7 @@ function Pricing() {
       <div className="mx-auto w-full max-w-6xl px-6">
         <div className="text-center">
           <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-paper/70">
-            <span className="text-paper">№ 08</span> — Pricing
+            <span className="text-paper">№ 09</span> — Pricing
           </span>
           <h2 className="font-display mx-auto mt-6 max-w-3xl text-balance text-4xl leading-[1.02] sm:text-6xl">
             The engine is free. <em className="italic">Forever.</em>
@@ -917,13 +961,13 @@ function Pricing() {
   );
 }
 
-/* ── № 09 · Get started ──────────────────────────────────────── */
+/* ── № 10 · Get started ──────────────────────────────────────── */
 
 function GetStarted() {
   return (
     <Section className="py-24">
       <SectionHead
-        n="09"
+        n="10"
         eyebrow="Five minutes to your mirror"
         title="Install, and see yourself."
         lede="One command finds your exports, reads your repos, synthesizes a profile, connects your AI clients, and opens the dashboard."
