@@ -205,9 +205,9 @@ function Wedge() {
           <figure className="mt-10">
             <div className="grid grid-cols-3 items-center gap-4">
               {[
-                { src: "/art/map-west.webp", tool: "what Claude knows" },
-                { src: "/art/map-east.webp", tool: "what ChatGPT knows" },
-                { src: "/art/map-poles.webp", tool: "what Cursor knows" },
+                { src: "/art/map-slice-1.webp", tool: "Claude sees" },
+                { src: "/art/map-slice-2.webp", tool: "ChatGPT sees" },
+                { src: "/art/map-slice-3.webp", tool: "Cursor sees" },
               ].map((h) => (
                 <div key={h.src} className="text-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -217,7 +217,7 @@ function Wedge() {
               ))}
             </div>
             <figcaption className="mt-4 border-t border-ink/30 pt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
-              Fig. 2 — three tools, three partial maps. The same you.
+              Fig. 2 — one you. Each tool sees only its slice.
             </figcaption>
           </figure>
         </div>
