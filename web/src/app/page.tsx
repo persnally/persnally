@@ -57,7 +57,7 @@ function Section({
   className?: string;
 }) {
   return (
-    <section id={id} className={`mx-auto w-full max-w-7xl px-6 ${className}`}>
+    <section id={id} className={`mx-auto w-full max-w-6xl px-6 ${className}`}>
       {children}
     </section>
   );
@@ -857,7 +857,7 @@ function Pricing() {
   // The page's one full-bleed color moment: pricing on the electric field.
   return (
     <section id="pricing" className="bg-electric py-24 text-paper">
-      <div className="mx-auto w-full max-w-7xl px-6">
+      <div className="mx-auto w-full max-w-6xl px-6">
         <div className="text-center">
           <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-paper/70">
             <span className="text-paper">№ 08</span> — Pricing
