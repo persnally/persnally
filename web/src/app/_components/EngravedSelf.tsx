@@ -9,13 +9,14 @@
 
 import { useState } from "react";
 
-/* points sit on the head/grid (%, of the image box) */
+/* points are coordinates plotted on the model — not head-region claims. Each
+   reveals a plain label + a concrete thing Persnally actually learned. */
 const POINTS: { x: number; y: number; title: string; detail: string; delay: number }[] = [
-  { x: 47, y: 22, title: "interests", detail: "decay-weighted 0.95", delay: 400 },
-  { x: 30, y: 40, title: "decisions", detail: "“hand-roll it” 0.78", delay: 700 },
-  { x: 66, y: 72, title: "voice", detail: "terse no-emoji", delay: 1000 },
-  { x: 63, y: 49, title: "conventions", detail: "pnpm not-npm", delay: 1300 },
-  { x: 55, y: 36, title: "provenance", detail: "#412 deletable", delay: 1600 },
+  { x: 47, y: 22, title: "what you're into", detail: "local-first systems · weight 0.95", delay: 400 },
+  { x: 30, y: 40, title: "how you decide", detail: "“hand-roll it, not a new dep”", delay: 700 },
+  { x: 66, y: 72, title: "how you write", detail: "terse · lowercase · no emoji", delay: 1000 },
+  { x: 63, y: 49, title: "your conventions", detail: "pnpm, never npm", delay: 1300 },
+  { x: 55, y: 36, title: "why it knows", detail: "learned from event #412 · deletable", delay: 1600 },
 ];
 
 export function EngravedSelf() {
@@ -57,11 +58,12 @@ export function EngravedSelf() {
               </button>
               <span
                 role="status"
-                className={`absolute ${posY} ${alignX} z-10 whitespace-nowrap bg-ink px-3 py-2 font-mono text-[11.5px] leading-tight text-paper transition-opacity duration-150 ${
+                className={`absolute ${posY} ${alignX} z-10 w-max max-w-[240px] bg-ink px-3 py-2 font-mono text-[11.5px] leading-snug text-paper transition-opacity duration-150 ${
                   open ? "opacity-100" : "pointer-events-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                 }`}
               >
-                <span className="text-electric-glow">{p.title}</span> {p.detail}
+                <span className="block text-[10px] uppercase tracking-[0.12em] text-electric-glow">{p.title}</span>
+                <span className="mt-0.5 block text-paper">{p.detail}</span>
               </span>
             </span>
           );
