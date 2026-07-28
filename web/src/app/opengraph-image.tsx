@@ -1,11 +1,15 @@
+import { readFile } from "node:fs/promises";
 import { ImageResponse } from "next/og";
 
 export const alt = "Persnally — your own context engine";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-// Branded social-share card: electric-on-black, matching the site.
-export default function OpengraphImage() {
+// Branded social-share card: ink on paper with the electric accent — the
+// engraved-plate identity. Satori bundles no fonts, so the display serif is
+// vendored (OFL) and loaded from disk at build time.
+export default async function OpengraphImage() {
+  const serif = await readFile(new URL("./_fonts/InstrumentSerif-Regular.ttf", import.meta.url));
   return new ImageResponse(
     (
       <div
@@ -16,36 +20,71 @@ export default function OpengraphImage() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#000000",
-          backgroundImage:
-            "radial-gradient(60% 60% at 50% 32%, rgba(44,103,255,0.30), transparent 70%)",
-          color: "#f5f6f8",
-          fontFamily: "sans-serif",
+          backgroundColor: "#f2efe6",
+          color: "#171512",
+          fontFamily: '"Instrument Serif", serif',
         }}
       >
         <div
           style={{
+            position: "absolute",
+            left: 26,
+            top: 26,
+            width: size.width - 52,
+            height: size.height - 52,
+            border: "2px solid #171512",
             display: "flex",
-            fontSize: 34,
-            letterSpacing: "0.22em",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 36,
+            top: 36,
+            width: size.width - 72,
+            height: size.height - 72,
+            border: "1px solid rgba(23,21,18,0.35)",
+            display: "flex",
+          }}
+        />
+        <div
+          style={{
+            display: "flex",
+            fontSize: 24,
+            letterSpacing: "0.28em",
             textTransform: "uppercase",
-            color: "#2c67ff",
+            color: "#57534a",
             marginBottom: 30,
           }}
         >
-          Your own context engine
+          No. 1 — Your own context engine
         </div>
-        <div style={{ display: "flex", fontSize: 116, fontWeight: 800, letterSpacing: "-0.04em" }}>
+        <div style={{ display: "flex", fontSize: 158, letterSpacing: "-0.02em" }}>
           <span>persnally</span>
-          <span style={{ color: "#2c67ff" }}>.</span>
+          <span style={{ color: "#2418ff" }}>.</span>
         </div>
-        <div style={{ display: "flex", fontSize: 46, color: "#8b90a0", marginTop: 28 }}>
+        <div style={{ display: "flex", fontSize: 48, color: "#57534a", marginTop: 26 }}>
           <span>So every AI finally knows&nbsp;</span>
-          <span style={{ color: "#f5f6f8" }}>you</span>
+          <span style={{ color: "#2418ff", fontStyle: "italic" }}>you</span>
           <span>.</span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            marginTop: 42,
+            fontSize: 21,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            color: "#8d8878",
+          }}
+        >
+          drawn from your own history · kept on your machine
         </div>
       </div>
     ),
-    { ...size },
+    {
+      ...size,
+      fonts: [{ name: "Instrument Serif", data: serif, style: "normal", weight: 400 }],
+    },
   );
 }

@@ -20,17 +20,17 @@ const MESSAGES = [
 
 function Message({ tool, to, text }: { tool: string; to: string; text: string }) {
   return (
-    <div className="w-full rounded-xl border border-line bg-panel/60 p-3.5">
+    <div className="plate w-full p-3.5">
       <div className="flex items-center justify-between gap-3">
-        <span className="flex items-center gap-2 text-xs text-mute">
+        <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.1em] text-mute">
           <Glyph icon={icon(tool)} className="size-3.5 text-ink" />
           To {to}
         </span>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line px-1.5 py-0.5 font-mono text-[10px] text-faint">
+        <span className="inline-flex shrink-0 items-center gap-1 border border-ink/25 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-faint">
           <RotateCw className="size-3" /> said before
         </span>
       </div>
-      <p className="mt-2 text-sm leading-snug text-ink">“{text}”</p>
+      <p className="mt-2 text-[15px] italic leading-snug text-ink">“{text}”</p>
     </div>
   );
 }
@@ -44,7 +44,7 @@ export function RepetitionFeed() {
             <Message key={m.id} tool={m.tool} to={m.to} text={m.text} />
           ))}
         </AnimatedList>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-night to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-paper to-transparent" />
       </div>
     </MotionConfig>
   );

@@ -1,18 +1,13 @@
-import Link from "next/link";
 import { CopyCommand } from "./_components/CopyCommand";
-import { HeroHub } from "./_components/HeroHub";
-import { AnimatedGridPattern } from "@/components/magicui/animated-grid-pattern";
+import { Nav } from "./_components/Nav";
+import { EngravedSelf } from "./_components/EngravedSelf";
 import { SetupTabs } from "./_components/SetupTabs";
-import { SpotlightCard } from "./_components/SpotlightCard";
-import { Features } from "@/components/ui/features-10";
-import { GithubIcon, NpmIcon, Glyph, TOOLS } from "@/components/ui/logos";
 import { RepetitionFeed } from "./_components/RepetitionFeed";
 import { ProCard } from "./_components/ProCard";
-import { ArrowUpRight, Check, ChevronRight, Cpu, Database, Download, FileJson, Minus, Plug, Star, X } from "lucide-react";
+import { GithubIcon, NpmIcon, Glyph, TOOLS } from "@/components/ui/logos";
+import { ArrowUpRight, Check, Cpu, Minus, X } from "lucide-react";
 
 const EXT = { target: "_blank", rel: "noopener noreferrer" } as const;
-const arrowCls =
-  "size-3.5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5";
 
 const GITHUB = "https://github.com/persnally/persnally";
 const NPM = "https://www.npmjs.com/package/persnally";
@@ -25,9 +20,10 @@ export default function Home() {
         <Hero />
         <Marquee />
         <Wedge />
-        <Features />
         <HowItWorks />
+        <SeeIt />
         <AskProof />
+        <Engine />
         <Compare />
         <Trust />
         <Positioning />
@@ -41,17 +37,14 @@ export default function Home() {
 
 /* ── Shared bits ─────────────────────────────────────────────── */
 
-function Wordmark({ className = "" }: { className?: string }) {
+/* numbered catalog eyebrow — the museum-plate section marker */
+function Eyebrow({ n, children }: { n?: string; children: React.ReactNode }) {
   return (
-    <span className={`font-semibold tracking-tight text-ink ${className}`}>
-      persnally<span className="text-electric">.</span>
+    <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-mute">
+      {n && <span className="text-electric">№ {n}</span>}
+      {n && " — "}
+      {children}
     </span>
-  );
-}
-
-function Eyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-electric">{children}</span>
   );
 }
 
@@ -71,188 +64,163 @@ function Section({
   );
 }
 
-/* ── Nav ─────────────────────────────────────────────────────── */
-
-function Nav() {
+/* section opener: strong ink rule + eyebrow + display heading */
+function SectionHead({
+  n,
+  eyebrow,
+  title,
+  lede,
+  center = false,
+}: {
+  n?: string;
+  eyebrow: string;
+  title: React.ReactNode;
+  lede?: React.ReactNode;
+  center?: boolean;
+}) {
   return (
-    <header className="sticky top-0 z-50 border-b border-line/60 bg-night/70 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
-        <Link href="/" aria-label="Persnally home" className="transition-opacity hover:opacity-80">
-          <Wordmark className="text-[17px]" />
-        </Link>
-        <nav className="hidden items-center gap-8 text-sm text-mute md:flex">
-          <a href="#how" className="transition-colors hover:text-ink">
-            How it works
-          </a>
-          <a href="#ask" className="transition-colors hover:text-ink">
-            Ask it
-          </a>
-          <a href="#trust" className="transition-colors hover:text-ink">
-            Your data
-          </a>
-          <a href="#pricing" className="transition-colors hover:text-ink">
-            Pricing
-          </a>
-          <a
-            href={GITHUB}
-            {...EXT}
-            className="group flex items-center gap-1.5 transition-colors hover:text-ink"
-          >
-            <GithubIcon className="size-4" />
-            GitHub
-            <ArrowUpRight className={arrowCls} />
-          </a>
-        </nav>
-        <a
-          href="#start"
-          className="rounded-lg bg-electric px-4 py-2 text-sm font-medium text-white shadow-[0_0_28px_-6px_var(--color-electric)] transition-colors hover:bg-electric-deep"
-        >
-          Get started
-        </a>
-      </div>
-    </header>
+    <div className={center ? "text-center" : ""}>
+      <Eyebrow n={n}>{eyebrow}</Eyebrow>
+      <h2
+        className={`font-display mt-6 text-balance text-4xl leading-[1.02] sm:text-6xl ${center ? "mx-auto max-w-3xl" : "max-w-3xl"}`}
+      >
+        {title}
+      </h2>
+      {lede && (
+        <p className={`mt-6 max-w-2xl text-lg leading-relaxed text-mute ${center ? "mx-auto" : ""}`}>
+          {lede}
+        </p>
+      )}
+    </div>
   );
+}
+
+/* the one emphasis move: italic serif in ink-blue */
+function Em({ children }: { children: React.ReactNode }) {
+  return <em className="font-display italic text-electric">{children}</em>;
 }
 
 /* ── Hero ────────────────────────────────────────────────────── */
 
 function Hero() {
   return (
-    <Section className="relative pt-24 pb-24 sm:pt-32">
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[820px] overflow-hidden">
-        <div className="aurora" />
-        <AnimatedGridPattern
-          numSquares={34}
-          maxOpacity={0.15}
-          duration={4}
-          className="[mask-image:radial-gradient(640px_circle_at_50%_170px,white,transparent)] text-electric/35 stroke-electric/10"
-        />
-      </div>
-
-      <div className="mx-auto max-w-4xl text-center">
-        <div className="rise" style={{ animationDelay: "0ms" }}>
-          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3 py-1 font-mono text-[11px] text-mute backdrop-blur">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-electric" />
-            Your own context engine
-          </span>
-        </div>
-
-        <h1
-          className="rise mt-7 text-balance text-[2.6rem] font-semibold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl"
-          style={{ animationDelay: "80ms" }}
-        >
-          Finally, every AI
-          <br className="hidden sm:block" /> knows <span className="text-gradient">you</span>.
-        </h1>
-
-        <p
-          className="rise mx-auto mt-6 max-w-2xl text-pretty text-base leading-relaxed text-mute"
-          style={{ animationDelay: "160ms" }}
-        >
-          Persnally learns who you are from your AI history — your chats, your code, your decisions —
-          so every tool you use stops treating you like a stranger. Your AIs read it, and can even
-          ask it what you&apos;d do. It lives on your machine, and it&apos;s yours.
-        </p>
-
-        <div
-          className="rise mx-auto mt-9 flex max-w-md flex-col items-center gap-4"
-          style={{ animationDelay: "240ms" }}
-        >
-          <CopyCommand command="npm i -g persnally && persnally setup" className="w-full shimmer" />
-          <div className="flex items-center gap-4 text-xs text-mute">
-            <a
-              href={GITHUB}
-              {...EXT}
-              className="group flex items-center gap-1.5 transition-colors hover:text-ink"
-            >
-              <GithubIcon className="size-3.5" />
-              Star on GitHub
-              <ArrowUpRight className="size-3 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-            </a>
-            <span className="text-line">·</span>
-            <a
-              href={NPM}
-              {...EXT}
-              className="group flex items-center gap-1.5 transition-colors hover:text-ink"
-            >
-              <NpmIcon className="size-3.5" />
-              View on npm
-              <ArrowUpRight className="size-3 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-            </a>
+    <Section className="flex flex-col justify-center pb-6 pt-16 sm:pt-20 lg:min-h-[calc(100dvh-13rem)]">
+      <div className="grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-stretch lg:gap-16">
+        {/* eyebrow pinned top, headline+copy+CTA pinned bottom — the column
+            spans the figure's full height, no slack under the CTA */}
+        <div className="flex flex-col lg:justify-between">
+          <div className="rise" style={{ animationDelay: "0ms" }}>
+            <Eyebrow>Open source · local-first · MCP</Eyebrow>
           </div>
-          <a
-            href="https://www.producthunt.com/products/persnally?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-persnally"
-            {...EXT}
-            aria-label="Persnally on Product Hunt"
-            className="mt-1 inline-block transition-opacity hover:opacity-90"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1182562&theme=light&t=1782584790813"
-              alt="Persnally - So every AI finally knows you | Product Hunt"
-              width={250}
-              height={54}
-            />
-          </a>
-        </div>
-      </div>
 
-      <div className="rise mt-16 sm:mt-20" style={{ animationDelay: "340ms" }}>
-        <HeroHub />
+          <div className="mt-6 lg:mt-0">
+            <h1
+              className="font-display rise text-balance text-[3.6rem] leading-[0.95] sm:text-[5.2rem] lg:text-[6.2rem]"
+              style={{ animationDelay: "80ms" }}
+            >
+              Finally, every AI knows <Em>you.</Em>
+            </h1>
+
+            <p
+              className="rise mt-8 max-w-xl text-pretty text-lg leading-relaxed text-mute"
+              style={{ animationDelay: "160ms" }}
+            >
+              Persnally learns who you are from your AI history — your chats, your code, your
+              decisions — and serves it to every AI you use. On your machine. Yours.
+            </p>
+
+            <div className="rise mt-10 flex max-w-xl flex-col gap-4" style={{ animationDelay: "240ms" }}>
+              <CopyCommand command="npm i -g persnally && persnally setup" className="w-full" />
+              <a
+                href={GITHUB}
+                {...EXT}
+                className="group flex w-fit items-center gap-1.5 font-mono text-[12px] text-mute transition-colors hover:text-ink"
+              >
+                <GithubIcon className="size-3.5" />
+                Star on GitHub
+                <ArrowUpRight className="size-3" />
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div className="rise" style={{ animationDelay: "300ms" }}>
+          <EngravedSelf />
+        </div>
       </div>
     </Section>
   );
 }
 
-/* ── Marquee: works with the tools you already use ───────────── */
+/* ── Marquee: newspaper ticker between hairlines ─────────────── */
 
 function Marquee() {
   const row = [...TOOLS, ...TOOLS];
   return (
-    <Section className="py-10">
-      <p className="mb-7 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
+    <Section className="pb-10 pt-2">
+      <div className="border-y border-ink/25 py-4">
+        <div className="marquee">
+          {[0, 1].map((dup) => (
+            <div className="marquee-track" key={dup} aria-hidden={dup === 1}>
+              {row.map((t, i) => (
+                <span
+                  key={`${dup}-${i}`}
+                  className="flex items-center gap-2.5 whitespace-nowrap font-mono text-[13px] uppercase tracking-[0.14em] text-mute"
+                >
+                  <Glyph icon={t.icon} className="size-4" />
+                  {t.name}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
         Works with the AI tools you already use
       </p>
-      <div className="marquee">
-        {[0, 1].map((dup) => (
-          <div className="marquee-track" key={dup} aria-hidden={dup === 1}>
-            {row.map((t, i) => (
-              <span
-                key={`${dup}-${i}`}
-                className="flex items-center gap-2.5 whitespace-nowrap text-lg font-medium text-mute"
-              >
-                <Glyph icon={t.icon} className="size-5" />
-                {t.name}
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
     </Section>
   );
 }
 
-/* ── Wedge ───────────────────────────────────────────────────── */
+/* ── № 01 · The problem ──────────────────────────────────────── */
 
 function Wedge() {
   return (
-    <Section className="py-28">
-      <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+    <Section className="py-24">
+      <SectionHead
+        n="01"
+        eyebrow="The problem"
+        title={
+          <>
+            You explain yourself. Again. <span className="text-mute">And again.</span>
+          </>
+        }
+      />
+      <div className="mt-12 grid items-start gap-12 lg:grid-cols-2 lg:gap-16">
         <div>
-          <Eyebrow>The problem</Eyebrow>
-          <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
-            You explain yourself.
-            <br className="hidden sm:block" /> Again. And again.
-          </h2>
-          <p className="mt-6 text-lg leading-relaxed text-mute">
+          <p className="text-lg leading-relaxed text-mute">
             ChatGPT doesn&apos;t know what you told Claude. Your coding agent relearns your stack
-            every session, or stops to ask. So you paste the same context — your tools, your
-            conventions, your taste — into tool after tool.
+            every session. Each tool meets you as a stranger — and the vendors can&apos;t fix it,
+            because their business is keeping you inside their walls.
           </p>
-          <p className="mt-4 text-[15px] leading-relaxed text-faint">
-            Each meets you as a stranger. And the model vendors can&apos;t fix it — their business
-            is keeping you inside their walls, not sharing you across them.
-          </p>
+          <figure className="mt-10">
+            <div className="grid grid-cols-3 items-center gap-4">
+              {[
+                { src: "/art/map-slice-1.webp", tool: "Claude sees" },
+                { src: "/art/map-slice-2.webp", tool: "ChatGPT sees" },
+                { src: "/art/map-slice-3.webp", tool: "Cursor sees" },
+              ].map((h) => (
+                <div key={h.src} className="text-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={h.src} alt="" aria-hidden width={480} height={480} className="mx-auto w-full max-w-[168px] mix-blend-multiply" />
+                  <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.1em] text-mute">{h.tool}</p>
+                </div>
+              ))}
+            </div>
+            <figcaption className="mt-4 border-t border-ink/30 pt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
+              Fig. 2 — one you. Each tool sees only its slice.
+            </figcaption>
+          </figure>
         </div>
         <RepetitionFeed />
       </div>
@@ -260,69 +228,85 @@ function Wedge() {
   );
 }
 
-/* ── How it works — animated beam pipeline ───────────────────── */
+/* ── № 02 · How it works ─────────────────────────────────────── */
+
+/* an engraved vignette with its meaning spelled out underneath */
+function Vignette({
+  src,
+  cap,
+  h = "h-44",
+  natural = false,
+}: {
+  src: string;
+  cap: string;
+  h?: string;
+  /* true for near-square/circular plates (medallions) — shown at their own
+     aspect, centered and modestly sized, instead of stretched to card width
+     (which is right for wide scenes but crops or letterboxes a roundel). */
+  natural?: boolean;
+}) {
+  return (
+    <figure className={`mt-5 ${natural ? "flex flex-col items-center" : ""}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        aria-hidden
+        width={640}
+        height={540}
+        className={natural ? "w-full max-w-[320px] mix-blend-multiply" : `w-full ${h} object-contain mix-blend-multiply`}
+      />
+      <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
+        {cap}
+      </figcaption>
+    </figure>
+  );
+}
 
 function HowItWorks() {
   const steps = [
     {
-      k: "01",
+      k: "I",
       label: "Import",
-      Icon: Download,
       t: "Import your history",
       d: "One command finds your Claude & ChatGPT exports, your Claude Code sessions, and your git repos, and reads them.",
+      art: <Vignette src="/art/press.webp" cap="the press — your history, taken in" h="h-[265px]" />,
       visual: <ImportViz />,
     },
     {
-      k: "02",
+      k: "II",
       label: "Learn · local",
-      Icon: Cpu,
       t: "It learns, on your machine",
-      d: "A local daemon turns that activity into a structured, evidence-linked model of who you are — kept on your machine, never our cloud.",
+      d: "A local daemon turns that history into an evidence-linked model of you — never our cloud.",
+      art: <Vignette src="/art/compositors.webp" cap="the compositors — studied, locally" h="h-[265px]" />,
       visual: <LearnViz />,
     },
     {
-      k: "03",
+      k: "III",
       label: "Serve · MCP",
-      Icon: Plug,
       t: "Every AI reads it",
-      d: "Connected over MCP — the open protocol your AI tools already speak — Claude, Cursor, and your agents read your context the moment a session starts.",
+      d: "Over MCP — the protocol your tools already speak — Claude, Cursor, and your agents read it the moment a session starts.",
+      art: <Vignette src="/art/mercury.webp" cap="the messenger — served to every tool" h="h-[265px]" />,
       visual: <ServeViz />,
     },
   ];
   return (
-    <Section id="how" className="py-28">
-      <div className="max-w-2xl">
-        <Eyebrow>How it works</Eyebrow>
-        <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
-          Your context, in every tool you touch.
-        </h2>
-      </div>
+    <Section id="how" className="py-24">
+      <SectionHead n="02" eyebrow="How it works" title="Your context, in every tool you touch." />
 
-      <div className="mt-14 flex flex-col gap-4 lg:flex-row lg:items-stretch lg:gap-3">
-        {steps.flatMap((s, i) => {
-          const card = (
-            <div key={s.k} className="flex flex-1 flex-col rounded-2xl border border-line bg-surface p-6">
-              <div className="flex items-center gap-3">
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-electric/30 bg-electric/10 text-electric shadow-[0_0_28px_-8px_var(--color-electric)]">
-                  <s.Icon className="size-5" strokeWidth={1.75} />
-                </span>
-                <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
-                  Step {s.k} · {s.label}
-                </span>
-              </div>
-              <h3 className="mt-5 text-lg font-medium text-ink">{s.t}</h3>
-              <p className="mt-2 text-[15px] leading-relaxed text-mute">{s.d}</p>
-              <div className="mt-auto pt-6">{s.visual}</div>
+      <div className="mt-12 grid gap-5 lg:grid-cols-3">
+        {steps.map((s) => (
+          <div key={s.k} className="plate flex flex-col p-6">
+            <div className="flex items-baseline justify-between border-b border-ink/20 pb-4">
+              <span className="font-display text-3xl text-ink">{s.k}.</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-mute">{s.label}</span>
             </div>
-          );
-          if (i === steps.length - 1) return [card];
-          return [
-            card,
-            <div key={`c-${i}`} className="hidden shrink-0 items-center lg:flex">
-              <ChevronRight className="size-5 text-faint" />
-            </div>,
-          ];
-        })}
+            <h3 className="font-display mt-5 text-2xl text-ink">{s.t}</h3>
+            <p className="mt-2.5 text-[15px] leading-relaxed text-mute">{s.d}</p>
+            {s.art}
+            <div className="mt-auto pt-6">{s.visual}</div>
+          </div>
+        ))}
       </div>
     </Section>
   );
@@ -330,145 +314,249 @@ function HowItWorks() {
 
 const claudeIcon = TOOLS.find((t) => t.name === "Claude")!.icon;
 
-function StepPanel({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-xl border border-line bg-night/50 p-3.5">{children}</div>;
+function Terminal({ children }: { children: React.ReactNode }) {
+  return <div className="terminal rounded-[2px] p-3.5">{children}</div>;
 }
 
 function ImportViz() {
   const sources = ["Claude & ChatGPT exports", "Claude Code sessions", "git repos"];
   return (
-    <StepPanel>
-      <p className="font-mono text-[12px] text-mute">
-        <span className="text-electric">$</span> persnally import
+    <Terminal>
+      <p className="font-mono text-[12px]">
+        <span className="text-electric-glow">$</span> persnally import
       </p>
-      <ul className="mt-2.5 space-y-1.5 font-mono text-[11px] text-faint">
+      <ul className="mt-2.5 space-y-1.5 font-mono text-[11px] opacity-75">
         {sources.map((src) => (
           <li key={src} className="flex items-center gap-2">
-            <Check className="size-3 shrink-0 text-electric" />
+            <Check className="size-3 shrink-0" />
             {src}
           </li>
         ))}
       </ul>
-    </StepPanel>
+    </Terminal>
   );
 }
 
 function LearnViz() {
   const signals = ["ships the smallest design", "prefers SQLite", "guards user trust"];
   return (
-    <StepPanel>
-      <p className="font-mono text-[11px] text-faint">building your model…</p>
-      <ul className="mt-2.5 space-y-1.5 text-[13px] text-mute">
+    <Terminal>
+      <p className="font-mono text-[11px] opacity-60">building your model…</p>
+      <ul className="mt-2.5 space-y-1.5 font-mono text-[12px]">
         {signals.map((sig) => (
           <li key={sig} className="flex items-center gap-2">
-            <span className="size-1.5 shrink-0 rounded-full bg-electric" />
+            <span className="size-1 shrink-0 rounded-full bg-current" />
             {sig}
           </li>
         ))}
       </ul>
-      <span className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-electric/30 bg-electric/10 px-2 py-0.5 font-mono text-[10px] text-electric">
-        <Cpu className="size-3" />
+      <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] opacity-60">
+        <Cpu className="mr-1.5 inline size-3" />
         on your machine
-      </span>
-    </StepPanel>
+      </p>
+    </Terminal>
   );
 }
 
 function ServeViz() {
   return (
-    <StepPanel>
-      <span className="flex items-center gap-2 text-[13px] text-ink">
-        <Glyph icon={claudeIcon} className="size-3.5 text-ink" />
+    <Terminal>
+      <p className="flex items-center gap-2 font-mono text-[12px]">
+        <Glyph icon={claudeIcon} className="size-3.5" />
         Claude · session started
-      </span>
-      <div className="mt-3 rounded-lg border border-line bg-surface/60 px-3 py-2.5">
-        <p className="font-mono text-[11px] text-electric">↳ loaded your context</p>
-        <p className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-faint">
-          persnally_context <Check className="size-3 text-electric" /> 2ms
+      </p>
+      <div className="mt-3 border-l-2 border-paper/30 pl-3">
+        <p className="font-mono text-[11px]">↳ loaded your context</p>
+        <p className="mt-1 flex items-center gap-1.5 font-mono text-[10px] opacity-60">
+          persnally_context <Check className="size-3" /> 2ms
         </p>
       </div>
-    </StepPanel>
+    </Terminal>
   );
 }
 
-/* ── AskProof — the answering loop + a real side-by-side ─────── */
+/* ── № 03 · Ask ──────────────────────────────────────────────── */
+
+/* the correction, written in your own hand — a 1657 author's quill */
+function CorrectionLedger() {
+  return (
+    <figure className="mt-5">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/art/author.webp"
+        alt=""
+        aria-hidden
+        width={640}
+        height={435}
+        className="w-full mix-blend-multiply"
+      />
+      <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
+        written in your own hand — outranks everything inferred
+      </figcaption>
+    </figure>
+  );
+}
+
+/* ── № 03 · See it ────────────────────────────────────────────── */
+
+/* a macOS traffic-light control — real semantics: red/yellow/green with the
+   subtle inner-shadow rim macOS renders, and the close/min/zoom glyphs that
+   fade in on window hover (exactly how Safari/Chrome behave on a Mac) */
+function TrafficLights() {
+  const dots: { fill: string; ring: string; glyph: string }[] = [
+    { fill: "#ff5f57", ring: "#e0443e", glyph: "M2.1 2.1L7.9 7.9M7.9 2.1L2.1 7.9" }, // close ×
+    { fill: "#febc2e", ring: "#d89e24", glyph: "M2 5H8" }, // minimize −
+    { fill: "#28c840", ring: "#1aab29", glyph: "M2 2L8 8M8 2L2 8" }, // zoom (diagonal arrows stand-in)
+  ];
+  return (
+    <div className="group/lights flex items-center gap-[8px]">
+      {dots.map((d, i) => (
+        <span
+          key={i}
+          className="relative flex size-[13px] items-center justify-center rounded-full"
+          style={{ backgroundColor: d.fill, boxShadow: `inset 0 0 0 0.5px ${d.ring}` }}
+        >
+          <svg viewBox="0 0 10 10" className="size-[7px] opacity-0 transition-opacity group-hover/lights:opacity-100">
+            <path d={d.glyph} stroke="#4d0000" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+          </svg>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/* the real dashboard, live and scrollable — not a screenshot. Same static
+   file the daemon serves; with no daemon reachable from a browser it falls
+   into its own built-in preview mode (sample data, writes disabled), so
+   this is byte-identical product code, safely sandboxed. Chrome styled to
+   read as an actual macOS Safari window, not a generic "app frame". */
+function DashboardEmbed() {
+  return (
+    <figure className="overflow-hidden rounded-[10px] border border-black/40 bg-[#0b0b0c] shadow-[0_1px_1px_rgba(0,0,0,0.3),0_30px_80px_-24px_rgba(23,21,18,0.45)]">
+      {/* macOS title bar: traffic lights + centered window title, single row */}
+      <div className="relative flex h-[38px] items-center border-b border-black/40 bg-gradient-to-b from-[#2b2b2d] to-[#242426] px-3">
+        <TrafficLights />
+        <span className="pointer-events-none absolute inset-x-0 text-center font-sans text-[12.5px] font-medium text-white/70">
+          persnally — your context engine
+        </span>
+      </div>
+      <iframe
+        src="/dashboard-preview.html"
+        title="The Persnally dashboard, running live in preview mode with sample data — scroll to explore your portrait, interest map, read receipts, and the ask loop"
+        className="block h-[480px] w-full bg-[#0b0b0c] sm:h-[600px] lg:h-[720px]"
+        loading="lazy"
+        sandbox="allow-scripts allow-same-origin allow-popups"
+      />
+    </figure>
+  );
+}
+
+function SeeIt() {
+  return (
+    <Section className="py-24">
+      <SectionHead
+        n="03"
+        eyebrow="See it"
+        title="Not a metaphor. The actual dashboard."
+        lede="Every engraving on this page is standing in for something real. Below is the real thing, live — the same page served at localhost:4983 on your machine. Scroll it, click a node, judge an answer. It's running in preview mode: sample data, nothing writable, nothing sent anywhere."
+      />
+
+      <div className="mt-12">
+        <DashboardEmbed />
+      </div>
+    </Section>
+  );
+}
 
 function AskProof() {
   return (
-    <Section id="ask" className="py-28">
-      <div className="max-w-2xl">
-        <Eyebrow>Answers, not just recall</Eyebrow>
-        <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
-          The only context engine your AI can <span className="text-gradient">ask</span>.
-        </h2>
-        <p className="mt-6 text-lg leading-relaxed text-mute">
-          Other tools store facts about you. Persnally answers <em>what you&apos;d do</em> — your
-          agents ask it directly, get an answer with a confidence score, and it hands the question
-          back to you when the evidence is thin. No confident guessing.
-        </p>
-      </div>
+    <Section id="ask" className="py-24">
+      <SectionHead
+        n="04"
+        eyebrow="Answers, not just recall"
+        title={
+          <>
+            The only context engine your AI can <Em>ask.</Em>
+          </>
+        }
+        lede={
+          <>
+            Other tools store facts. Persnally answers <em>what you&apos;d do</em> — with a
+            confidence score, deferring to you when the evidence is thin.
+          </>
+        }
+      />
 
-      {/* the two verified, uncontested capabilities */}
       <div className="mt-12 grid gap-5 md:grid-cols-2">
-        <div className="rounded-2xl border border-line bg-surface p-6">
-          <h3 className="text-lg font-medium text-ink">It answers, or it defers</h3>
-          <p className="mt-2 text-[15px] leading-relaxed text-mute">
-            &ldquo;Would they want tests here?&rdquo; &ldquo;What tone for this email?&rdquo; Your
-            agent asks Persnally instead of interrupting you. Below its confidence bar it says so and
+        <div className="plate flex flex-col p-6">
+          <h3 className="font-display text-2xl text-ink">It answers, or it defers</h3>
+          <p className="mt-2.5 text-[15px] leading-relaxed text-mute">
+            Your agent asks Persnally instead of interrupting you. Below its confidence bar, it
             sends the agent back to you — never a made-up answer.
           </p>
-          <div className="mt-5 rounded-xl border border-line bg-night/50 p-3.5 font-mono text-[12px]">
-            <p className="text-mute">persnally_ask <span className="text-faint">&ldquo;tests before I merge?&rdquo;</span></p>
-            <p className="mt-2 text-ink">↳ yes — you demand proof before merge; add e2e on the changed paths.</p>
-            <p className="mt-1 text-electric">confidence 0.92 · 3 evidence events</p>
+          <Vignette src="/art/justice.webp" cap="the evidence, weighed — below the bar, it defers to you" natural />
+          <div className="mt-auto">
+            <Terminal>
+              <p className="font-mono text-[12px] opacity-75">
+                persnally_ask <span className="opacity-60">&ldquo;tests before I merge?&rdquo;</span>
+              </p>
+              <p className="mt-2 font-mono text-[12px]">
+                ↳ yes — you demand proof before merge; add e2e on the changed paths.
+              </p>
+              <p className="mt-1.5 font-mono text-[11px] opacity-60">confidence 0.92 · 3 evidence events</p>
+            </Terminal>
           </div>
         </div>
-        <div className="rounded-2xl border border-line bg-surface p-6">
-          <h3 className="text-lg font-medium text-ink">Correct it once, it sticks</h3>
-          <p className="mt-2 text-[15px] leading-relaxed text-mute">
-            Tell it it&apos;s wrong about you and the correction becomes authoritative — it outranks
-            everything the model inferred, and the wrong answer never comes back. The model gets
-            sharper every time you push back.
+        <div className="plate flex flex-col p-6">
+          <h3 className="font-display text-2xl text-ink">Correct it once, it sticks</h3>
+          <p className="mt-2.5 text-[15px] leading-relaxed text-mute">
+            Tell it it&apos;s wrong and the correction becomes authoritative — it outranks everything
+            inferred, and the wrong answer never comes back.
           </p>
-          <div className="mt-5 rounded-xl border border-line bg-night/50 p-3.5 font-mono text-[12px]">
-            <p className="text-mute">persnally correct <span className="text-faint">&ldquo;I use pnpm, not npm&rdquo;</span></p>
-            <p className="mt-2 text-ink">↳ recorded — authoritative.</p>
-            <p className="mt-1 text-electric">every future answer respects it</p>
+          <CorrectionLedger />
+          <div className="mt-auto">
+            <Terminal>
+              <p className="font-mono text-[12px] opacity-75">
+                persnally correct <span className="opacity-60">&ldquo;I use pnpm, not npm&rdquo;</span>
+              </p>
+              <p className="mt-2 font-mono text-[12px]">↳ recorded — authoritative.</p>
+              <p className="mt-1.5 font-mono text-[11px] opacity-60">every future answer respects it</p>
+            </Terminal>
           </div>
         </div>
       </div>
 
       {/* the proof: real output, generic AI vs an AI that read your Persnally */}
-      <div className="mt-8 overflow-hidden rounded-2xl border border-line bg-surface">
-        <div className="border-b border-line px-6 py-4">
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">See the difference</p>
-          <p className="mt-1.5 text-[15px] text-mute">
+      <div className="plate mt-8">
+        <div className="border-b border-ink/20 px-6 py-4">
+          <Eyebrow>See the difference</Eyebrow>
+          <p className="mt-2 text-[15px] text-mute">
             Same prompt — <span className="text-ink">&ldquo;write a Slack message telling my team the deploy went out&rdquo;</span> —
             asked of a blank AI and an AI that read your Persnally:
           </p>
         </div>
         <div className="grid md:grid-cols-2">
-          <div className="border-b border-line p-6 md:border-b-0 md:border-r">
-            <p className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-faint">
+          <div className="border-b border-ink/20 p-6 md:border-b-0 md:border-r">
+            <p className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-faint">
               <X className="size-3.5" strokeWidth={2} /> Generic AI
             </p>
-            <p className="text-[14px] leading-relaxed text-mute">
+            <p className="text-[15px] leading-relaxed text-mute">
               🚀 <b className="text-mute">Deploy is live!</b> Just pushed the latest changes to
               production. Everything looks good so far — let me know if you spot anything unexpected.
             </p>
           </div>
-          <div className="bg-gradient-to-b from-electric/[0.06] to-transparent p-6">
-            <p className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-electric">
+          <div className="p-6">
+            <p className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-electric">
               <Check className="size-3.5" strokeWidth={2.25} /> AI + Persnally
             </p>
-            <p className="text-[14px] leading-relaxed text-ink">
+            <p className="font-mono text-[13.5px] leading-relaxed text-ink">
               deploy is out. watching sentry/logs for the next hour, will confirm clean or flag
               issues here.
             </p>
           </div>
         </div>
       </div>
-      <p className="mt-4 text-center text-[13px] text-faint">
+      <p className="mt-4 text-center text-[14px] italic text-faint">
         Terse, lowercase, no emoji, and it knew to watch Sentry — because that&apos;s how you actually
         work. Not configured; learned.
       </p>
@@ -476,7 +564,112 @@ function AskProof() {
   );
 }
 
-/* ── Compare — the honest, verified capability table ─────────── */
+/* ── № 04 · Under the hood ───────────────────────────────────── */
+
+function Engine() {
+  return (
+    <Section className="py-24">
+      <SectionHead
+        n="05"
+        eyebrow="Under the hood"
+        title="More than memory. An engine."
+        lede="Structured events, derived views, a walkable provenance graph — decay-aware, and entirely your own."
+      />
+
+      <div className="mt-12 grid gap-5 lg:grid-cols-2">
+        <div className="plate flex flex-col p-6">
+          <Eyebrow>Cross-vendor · MCP</Eyebrow>
+          <h3 className="font-display mt-4 text-2xl text-ink">One context, every tool reads it.</h3>
+          <Vignette src="/art/fountain.webp" cap="the well — one source, every tool draws" h="h-[205px]" />
+          <div className="mt-5 flex flex-1 flex-col justify-evenly space-y-0 border-t border-ink/20">
+            {[
+              { icon: <Glyph icon={claudeIcon} className="size-4" />, name: "Claude", method: "persnally_context" },
+              { icon: <Glyph icon={TOOLS.find((t) => t.name === "Cursor")!.icon} className="size-4" />, name: "Cursor", method: "persnally_context" },
+              { icon: <Glyph icon={claudeIcon} className="size-4" />, name: "Claude Code", method: "persnally_ask" },
+              { icon: <Cpu className="size-4 text-electric" />, name: "your agent", method: "persnally_search" },
+            ].map((r) => (
+              <div key={r.name + r.method} className="flex flex-1 items-center justify-between border-b border-ink/15 py-2.5">
+                <span className="flex items-center gap-2.5 text-[15px] text-ink">
+                  {r.icon}
+                  {r.name}
+                </span>
+                <span className="flex items-center gap-2 font-mono text-[11px] text-mute">
+                  {r.method}
+                  <Check className="size-3.5 text-electric" />
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
+            speaks MCP — adopted by every major AI
+          </p>
+        </div>
+
+        <div className="plate p-6">
+          <Eyebrow>Provenance</Eyebrow>
+          <h3 className="font-display mt-4 text-2xl text-ink">Every claim cites its evidence.</h3>
+          <Vignette
+            src="/art/specimen.webp"
+            cap="the specimen — every part numbered, keyed to its source"
+            natural
+          />
+          <div className="mt-5 border border-ink/25 p-4">
+            <p className="text-[15px] text-ink">Guards user trust as non-negotiable.</p>
+            <p className="mt-2 font-mono text-[11px] text-electric">
+              ↳ why does it think this? <span className="ml-1 text-faint">3 events</span>
+            </p>
+          </div>
+          {/* the claim hangs from its evidence — the hero's leader-line language */}
+          <ul className="ml-6 border-l-2 border-electric/50 font-mono text-[12px] text-mute">
+            {[
+              ["#128", "imported 142 Claude conversations"],
+              ["#412", "vetoed telemetry without consent"],
+              ["#087", "chose local-first storage"],
+            ].map(([id, t]) => (
+              <li key={id} className="relative py-2 pl-5">
+                <span aria-hidden className="absolute left-0 top-1/2 h-px w-3.5 bg-electric/50" />
+                <span className="text-electric">{id}</span> · {t}
+              </li>
+            ))}
+          </ul>
+          <p className="ml-6 pt-1 font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
+            3 events · 0 guesses · each one deletable
+          </p>
+        </div>
+
+        <div className="plate p-6 lg:col-span-2">
+          <Eyebrow>Per-client scopes</Eyebrow>
+          <h3 className="font-display mt-4 text-2xl text-ink">Decide exactly what each AI can see.</h3>
+          <div className="mt-5 grid items-center gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+            <Vignette src="/art/cards.webp" cap="the card table — each player sees only its own hand" h="h-[242px]" />
+            <div className="grid gap-x-8 gap-y-0 sm:grid-cols-1">
+            {[
+              { name: "Claude", icon: <Glyph icon={claudeIcon} className="size-4" />, state: "allowed" },
+              { name: "Cursor", icon: <Glyph icon={TOOLS.find((t) => t.name === "Cursor")!.icon} className="size-4" />, state: "allowed" },
+              { name: "Claude Code", icon: <Glyph icon={claudeIcon} className="size-4" />, state: "scoped" },
+              { name: "agents", icon: <Cpu className="size-4 text-electric" />, state: "scoped" },
+            ].map((r) => (
+              <div key={r.name} className="flex items-center justify-between border-b border-ink/15 py-2.5">
+                <span className="flex items-center gap-2.5 text-[15px] text-ink">
+                  {r.icon}
+                  {r.name}
+                </span>
+                <span
+                  className={`font-mono text-[11px] uppercase tracking-[0.12em] ${r.state === "allowed" ? "text-electric" : "text-mute"}`}
+                >
+                  {r.state}
+                </span>
+              </div>
+            ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/* ── № 05 · How it compares ──────────────────────────────────── */
 
 function Compare() {
   // ✓ has · ~ partial · ✗ no — verified against each product's own docs/repos, July 2026.
@@ -489,32 +682,38 @@ function Compare() {
     { cap: "Reads your chat exports + git history", marks: ["y", "p", "p", "p"] },
   ];
   const Mark = ({ m }: { m: "y" | "p" | "n" }) =>
-    m === "y" ? <Check className="mx-auto size-4 text-electric" strokeWidth={2.5} />
-    : m === "p" ? <Minus className="mx-auto size-4 text-faint" strokeWidth={2} />
-    : <X className="mx-auto size-4 text-line" strokeWidth={2} />;
+    m === "y" ? (
+      <Check className="mx-auto size-4 text-electric" strokeWidth={2.5} />
+    ) : m === "p" ? (
+      <Minus className="mx-auto size-4 text-faint" strokeWidth={2} />
+    ) : (
+      <X className="mx-auto size-4 text-line" strokeWidth={2} />
+    );
 
   return (
-    <Section id="compare" className="py-28">
-      <div className="max-w-2xl">
-        <Eyebrow>How it compares</Eyebrow>
-        <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
-          Everyone remembers. Persnally <span className="text-gradient">answers</span>.
-        </h2>
-        <p className="mt-6 text-lg leading-relaxed text-mute">
-          The category is full of memory. What no one else does: answer what you&apos;d do, learn when
-          you correct it, and let you verify all of it on your own machine.
-        </p>
-      </div>
+    <Section id="compare" className="py-24">
+      <SectionHead
+        n="06"
+        eyebrow="How it compares"
+        title={
+          <>
+            Everyone remembers. Persnally <Em>answers.</Em>
+          </>
+        }
+        lede="No one else answers what you'd do, learns when you correct it, and lets you verify all of it on your own machine."
+      />
 
-      <div className="mt-12 overflow-x-auto rounded-2xl border border-line bg-surface">
+      <div className="plate mt-12 overflow-x-auto">
         <table className="w-full min-w-[680px] border-collapse text-left">
           <thead>
-            <tr className="border-b border-line">
-              <th className="p-4 text-[13px] font-normal text-faint">Capability</th>
+            <tr className="border-b border-ink">
+              <th className="p-4 font-mono text-[11px] font-normal uppercase tracking-[0.14em] text-faint">
+                Capability
+              </th>
               {cols.map((c, i) => (
                 <th
                   key={c}
-                  className={`p-4 text-center text-[13px] font-medium ${i === 0 ? "text-electric" : "text-mute"}`}
+                  className={`p-4 text-center font-mono text-[11px] uppercase tracking-[0.1em] ${i === 0 ? "text-electric" : "text-mute"}`}
                 >
                   {c}
                 </th>
@@ -523,8 +722,8 @@ function Compare() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.cap} className="border-b border-line/60 last:border-0">
-                <td className="p-4 text-[14px] leading-snug text-ink">{r.cap}</td>
+              <tr key={r.cap} className="border-b border-ink/15 last:border-0">
+                <td className="p-4 text-[14.5px] leading-snug text-ink">{r.cap}</td>
                 {r.marks.map((m, i) => (
                   <td key={i} className={`p-4 ${i === 0 ? "bg-electric/[0.05]" : ""}`}>
                     <Mark m={m} />
@@ -536,185 +735,120 @@ function Compare() {
         </table>
       </div>
 
-      <p className="mx-auto mt-6 max-w-3xl text-center text-[13px] leading-relaxed text-faint">
+      <p className="mx-auto mt-6 max-w-3xl text-center text-[13.5px] leading-relaxed text-faint">
         <Check className="inline size-3 text-electric" /> has it ·{" "}
         <Minus className="inline size-3 text-faint" /> partial ·{" "}
-        <X className="inline size-3 text-line" /> no. Verified against each product&apos;s own docs and
-        repos, July 2026. claude-mem is genuinely local and open-source too — our edge isn&apos;t
-        custody alone, it&apos;s the answering loop and modeling <em>you</em> across every AI, not just
-        your code.
+        <X className="inline size-3 text-line" /> no. Verified against each product&apos;s own docs
+        and repos, July 2026.
       </p>
     </Section>
   );
 }
 
-/* ── Trust — spotlight bento ─────────────────────────────────── */
+/* ── № 06 · Trust ────────────────────────────────────────────── */
 
 function Trust() {
   const pillars = [
     {
       t: "Local-first",
-      d: "Your context lives in ~/.persnally on your machine — not our cloud, not any vendor's silo. Serving it to an AI is a local read: instant, offline, free.",
-      viz: <LocalProof />,
+      art: "/art/lock.webp",
+      d: "Your context lives in ~/.persnally — not our cloud, not any vendor's silo.",
+      viz: (
+        <Terminal>
+          <p className="font-mono text-[11px] opacity-60">~/.persnally</p>
+          <ul className="mt-2 space-y-1 font-mono text-[12px]">
+            <li>persnally.db</li>
+            <li>config.json</li>
+          </ul>
+          <p className="mt-2.5 font-mono text-[10px] opacity-60">stays on your machine, never our cloud</p>
+        </Terminal>
+      ),
     },
     {
       t: "Truly deletable",
-      d: "Forget a topic and it erases the events and everything derived from them, then rebuilds. No tombstones, no residue.",
-      viz: <DeleteProof />,
+      art: "/art/bonfire.webp",
+      d: "Forget a topic and everything derived from it is erased, then rebuilt.",
+      viz: (
+        <Terminal>
+          <p className="font-mono text-[12px]">
+            <span className="text-electric-glow">$</span> persnally forget &ldquo;rust&rdquo;
+          </p>
+          <ul className="mt-2 space-y-1 font-mono text-[11px] opacity-75">
+            <li>✓ 18 events erased</li>
+            <li>✓ derived views rebuilt</li>
+          </ul>
+          <p className="mt-2.5 font-mono text-[10px] opacity-60">no tombstones · no residue</p>
+        </Terminal>
+      ),
     },
     {
       t: "Provenance-complete",
-      d: "Every claim links to the exact events behind it. “Why does it think this?” is a real lookup, never a guess.",
-      viz: <AuditProof />,
+      art: "/art/microscope.webp",
+      d: "“Why does it think this?” is a real lookup, never a guess.",
+      viz: (
+        <Terminal>
+          <p className="font-mono text-[11px]">↳ why &ldquo;guards user trust&rdquo;?</p>
+          <ul className="mt-2 space-y-1 font-mono text-[11px] opacity-75">
+            <li>#412 · vetoed telemetry</li>
+            <li>#087 · chose local-first</li>
+            <li>#203 · removed analytics</li>
+          </ul>
+          <p className="mt-2.5 font-mono text-[10px] opacity-60">3 events · 0 guesses</p>
+        </Terminal>
+      ),
     },
     {
       t: "Source-available",
-      d: "Read the engine, audit the claims, run it yourself. The event schema and MCP interface are an open spec.",
-      viz: <SourceProof />,
+      art: "/art/ecorche.webp",
+      d: "Read the engine, audit the claims, run it yourself. The schema and MCP interface are an open spec.",
+      viz: (
+        <a href={GITHUB} {...EXT} className="group block">
+          <Terminal>
+            <p className="flex items-center gap-2 font-mono text-[12px]">
+              <GithubIcon className="size-4" />
+              persnally/persnally
+              <ArrowUpRight className="ml-auto size-3.5 opacity-60 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+            </p>
+            <p className="mt-2.5 font-mono text-[10px] opacity-60">FSL → MIT after 2y · open spec</p>
+          </Terminal>
+        </a>
+      ),
     },
   ];
   return (
-    <Section id="trust" className="py-28">
-      <div className="max-w-2xl">
-        <Eyebrow>Your data, your rules</Eyebrow>
-        <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
-          A context engine you can actually trust.
-        </h2>
-        <p className="mt-6 text-lg leading-relaxed text-mute">
-          Trust isn&apos;t a privacy policy here — it&apos;s the architecture. Not promises;
-          properties you can check.
-        </p>
-      </div>
+    <Section id="trust" className="py-24">
+      <SectionHead
+        n="07"
+        eyebrow="Your data, your rules"
+        title="A context engine you can actually trust."
+        lede="Trust isn't a privacy policy here — it's the architecture. Not promises; properties you can check."
+      />
 
-      <div className="mt-14 grid gap-5 md:grid-cols-2">
+      <div className="mt-12 grid gap-5 md:grid-cols-2">
         {pillars.map((p) => (
-          <SpotlightCard key={p.t} className="p-6">
-            <h3 className="text-lg font-medium text-ink">{p.t}</h3>
-            <p className="mt-2 text-[15px] leading-relaxed text-mute">{p.d}</p>
-            <div className="mt-5">{p.viz}</div>
-          </SpotlightCard>
+          <div key={p.t} className="plate flex flex-col overflow-hidden p-6">
+            <h3 className="font-display text-2xl text-ink">{p.t}</h3>
+            <p className="mt-2.5 text-[15px] leading-relaxed text-mute">{p.d}</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={p.art} alt="" aria-hidden width={900} height={474} className="mt-5 w-full mix-blend-multiply" />
+            <div className="mt-auto pt-5">{p.viz}</div>
+          </div>
         ))}
       </div>
 
-      <div className="mt-6 flex flex-col items-center gap-6 rounded-2xl border border-line bg-surface/50 p-8 text-center">
-        <div className="flex flex-wrap justify-center gap-2.5">
-          {["No account", "Bring your own keys", "Works offline", "Open spec"].map((c) => (
-            <span
-              key={c}
-              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-night/40 px-3 py-1 font-mono text-[11px] text-mute"
-            >
-              <Check className="size-3 text-electric" />
-              {c}
-            </span>
-          ))}
-        </div>
-        <a
-          href={GITHUB}
-          {...EXT}
-          className="group inline-flex items-center gap-1.5 text-sm text-mute transition-colors hover:text-ink"
-        >
-          <GithubIcon className="size-3.5" />
-          Read the source
-          <ArrowUpRight className="size-3 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-        </a>
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 border-y border-ink/25 px-4 py-5">
+        {["No account", "Bring your own keys", "Works offline", "Open spec"].map((c) => (
+          <span key={c} className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-mute">
+            <Check className="size-3 text-electric" />
+            {c}
+          </span>
+        ))}
       </div>
     </Section>
   );
 }
 
-function ProofPanel({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-xl border border-line bg-night/50 p-3.5">{children}</div>;
-}
-
-function LocalProof() {
-  const files = [
-    { icon: <Database className="size-3.5" />, name: "persnally.db" },
-    { icon: <FileJson className="size-3.5" />, name: "config.json" },
-  ];
-  return (
-    <ProofPanel>
-      <p className="font-mono text-[11px] text-faint">~/.persnally</p>
-      <ul className="mt-2.5 space-y-1.5 font-mono text-[12px] text-mute">
-        {files.map((f) => (
-          <li key={f.name} className="flex items-center gap-2">
-            <span className="text-electric">{f.icon}</span>
-            {f.name}
-          </li>
-        ))}
-      </ul>
-      <p className="mt-3 font-mono text-[10px] text-faint">stays on your machine, never our cloud</p>
-    </ProofPanel>
-  );
-}
-
-function DeleteProof() {
-  return (
-    <ProofPanel>
-      <p className="font-mono text-[12px] text-mute">
-        <span className="text-electric">$</span> persnally forget “rust”
-      </p>
-      <ul className="mt-2.5 space-y-1.5 font-mono text-[11px] text-faint">
-        <li className="flex items-center gap-2">
-          <Check className="size-3 shrink-0 text-electric" />
-          18 events erased
-        </li>
-        <li className="flex items-center gap-2">
-          <Check className="size-3 shrink-0 text-electric" />
-          derived views rebuilt
-        </li>
-      </ul>
-      <p className="mt-2.5 font-mono text-[10px] text-faint">no tombstones · no residue</p>
-    </ProofPanel>
-  );
-}
-
-function AuditProof() {
-  const events = [
-    { id: "#412", t: "vetoed telemetry" },
-    { id: "#087", t: "chose local-first" },
-    { id: "#203", t: "removed analytics" },
-  ];
-  return (
-    <ProofPanel>
-      <p className="font-mono text-[11px] text-electric">↳ why “guards user trust”?</p>
-      <ul className="mt-2.5 space-y-1.5 font-mono text-[11px] text-mute">
-        {events.map((e) => (
-          <li key={e.id} className="flex items-center gap-2">
-            <span className="text-faint">{e.id}</span>
-            {e.t}
-          </li>
-        ))}
-      </ul>
-      <p className="mt-2.5 font-mono text-[10px] text-faint">3 events · 0 guesses</p>
-    </ProofPanel>
-  );
-}
-
-function SourceProof() {
-  return (
-    <a
-      href={GITHUB}
-      {...EXT}
-      className="group block rounded-xl border border-line bg-night/50 p-3.5 transition-colors hover:border-electric/40"
-    >
-      <div className="flex items-center gap-2 text-ink">
-        <GithubIcon className="size-4" />
-        <span className="font-mono text-[12px]">persnally/persnally</span>
-        <ArrowUpRight className="ml-auto size-3.5 text-faint transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-      </div>
-      <div className="mt-2.5 flex items-center gap-3 font-mono text-[10px] text-faint">
-        <span className="flex items-center gap-1">
-          <Star className="size-3" />
-          star
-        </span>
-        <span>FSL → MIT after 2y</span>
-        <span>open spec</span>
-      </div>
-    </a>
-  );
-}
-
-/* ── Positioning ─────────────────────────────────────────────── */
+/* ── № 07 · The difference ───────────────────────────────────── */
 
 function Positioning() {
   const them = [
@@ -730,71 +864,60 @@ function Positioning() {
     "Every claim cites its evidence — local, auditable, deletable",
   ];
   return (
-    <Section className="py-28">
-      <div className="relative overflow-hidden rounded-3xl border border-line bg-gradient-to-b from-panel/50 to-surface px-6 py-20 sm:px-10">
-        <div className="pointer-events-none absolute inset-0 -z-10 opacity-40">
-          <div className="aurora" style={{ height: "100%", opacity: 0.28 }} />
-        </div>
+    <Section className="py-24">
+      <SectionHead n="08" eyebrow="The difference" title={<></>} center />
+      <figure className="mx-auto -mt-2 w-fit text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/art/armillary.webp"
+          alt="Engraving of an armillary sphere — a measured model of a world"
+          width={460}
+          height={500}
+          className="mx-auto w-[220px] mix-blend-multiply"
+        />
+        <figcaption className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
+          Fig. 3 — the model of you, measured.
+        </figcaption>
+      </figure>
+      <p className="font-display mx-auto mt-8 max-w-3xl text-balance text-center text-4xl leading-[1.05] sm:text-6xl">
+        Every AI knows <span className="text-mute">you.</span> And it&apos;s <Em>yours.</Em>
+      </p>
 
-        <div className="text-center">
-          <Eyebrow>The difference</Eyebrow>
-          <p className="mx-auto mt-6 max-w-3xl text-balance text-[1.9rem] font-semibold leading-tight tracking-tight sm:text-[2.9rem] sm:leading-[1.1]">
-            Every AI knows <span className="text-mute">you.</span>
-            <br className="hidden sm:block" /> And it&apos;s{" "}
-            <span className="text-gradient">yours.</span>
+      <div className="mx-auto mt-14 grid max-w-3xl gap-5 md:grid-cols-2">
+        <div className="plate p-7">
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
+            Every other memory tool
           </p>
+          <p className="mt-1.5 text-sm italic text-faint">&ldquo;a place to store facts about you&rdquo;</p>
+          <ul className="mt-6 space-y-3.5">
+            {them.map((x) => (
+              <li key={x} className="flex items-start gap-3 text-[15px] text-mute">
+                <X className="mt-0.5 size-4 shrink-0 text-faint" strokeWidth={2} />
+                {x}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className="mx-auto mt-14 grid max-w-3xl gap-5 md:grid-cols-2">
-          <div className="rounded-2xl border border-line bg-night/40 p-7">
-            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
-              Every other memory tool
-            </p>
-            <p className="mt-1.5 text-sm italic text-faint">“a place to store facts about you”</p>
-            <ul className="mt-6 space-y-3.5">
-              {them.map((x) => (
-                <li key={x} className="flex items-start gap-3 text-[15px] text-mute">
-                  <X className="mt-0.5 size-4 shrink-0 text-faint" strokeWidth={2} />
-                  {x}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="border-glow rounded-2xl border border-electric/30 bg-gradient-to-b from-electric/[0.07] to-surface p-7">
-            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-electric">Persnally</p>
-            <p className="mt-1.5 text-sm text-mute">your own context engine</p>
-            <ul className="mt-6 space-y-3.5">
-              {us.map((x) => (
-                <li key={x} className="flex items-start gap-3 text-[15px] text-ink">
-                  <Check className="mt-0.5 size-4 shrink-0 text-electric" strokeWidth={2.25} />
-                  {x}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        <p className="mx-auto mt-10 max-w-xl text-center text-sm leading-relaxed text-faint">
-          Everyone can remember facts about you. Persnally is the one your AI can <em>ask</em> — it
-          answers what you&apos;d do, defers when it&apos;s unsure, and learns the moment you correct
-          it. All of it on your machine, and yours.
-        </p>
-
-        <div className="mt-8 flex justify-center">
-          <a
-            href="#start"
-            className="rounded-lg bg-electric px-5 py-2.5 text-sm font-medium text-white shadow-[0_0_28px_-6px_var(--color-electric)] transition-colors hover:bg-electric-deep"
-          >
-            Make every AI yours
-          </a>
+        <div className="plate border-electric p-7">
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-electric">Persnally</p>
+          <p className="mt-1.5 text-sm italic text-mute">your own context engine</p>
+          <ul className="mt-6 space-y-3.5">
+            {us.map((x) => (
+              <li key={x} className="flex items-start gap-3 text-[15px] text-ink">
+                <Check className="mt-0.5 size-4 shrink-0 text-electric" strokeWidth={2.25} />
+                {x}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
+
     </Section>
   );
 }
 
-/* ── Pricing ─────────────────────────────────────────────────── */
+/* ── № 09 · Pricing ──────────────────────────────────────────── */
 
 function Pricing() {
   const free = [
@@ -803,87 +926,104 @@ function Pricing() {
     "The dashboard: inspect, audit provenance, delete",
     "Bring your own key, or run fully local with Ollama",
   ];
+  // The page's one full-bleed color moment: pricing on the electric field.
   return (
-    <Section id="pricing" className="py-28">
-      <div className="mx-auto max-w-2xl text-center">
-        <Eyebrow>Pricing</Eyebrow>
-        <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
-          The engine is free. Forever.
-        </h2>
-        <p className="mt-6 text-lg leading-relaxed text-mute">
-          Everything that touches your data runs on your machine and costs nothing. Pro adds cloud
-          conveniences on top — and the cloud only ever carries ciphertext, never your plaintext.
-        </p>
-      </div>
-
-      <div className="mx-auto mt-14 grid max-w-3xl gap-5 md:grid-cols-2">
-        <div className="flex flex-col rounded-2xl border border-line bg-night/40 p-7">
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">Free</p>
-          <p className="mt-3 text-3xl font-semibold text-ink">
-            $0 <span className="text-sm font-normal text-faint">forever</span>
+    <section id="pricing" className="bg-electric py-24 text-paper">
+      <div className="mx-auto w-full max-w-6xl px-6">
+        <div className="text-center">
+          <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-paper/70">
+            <span className="text-paper">№ 09</span> — Pricing
+          </span>
+          <h2 className="font-display mx-auto mt-6 max-w-3xl text-balance text-4xl leading-[1.02] sm:text-6xl">
+            The engine is free. <em className="italic">Forever.</em>
+          </h2>
+          <p className="mt-5 font-mono text-[12px] uppercase tracking-[0.22em] text-paper/70">
+            Free · Pro · Teams later
           </p>
-          <ul className="mt-6 space-y-3.5">
-            {free.map((x) => (
-              <li key={x} className="flex items-start gap-3 text-[15px] text-mute">
-                <Check className="mt-0.5 size-4 shrink-0 text-electric" strokeWidth={2} />
-                {x}
-              </li>
-            ))}
-          </ul>
-          <div className="mt-auto pt-7">
-            <a
-              href="#start"
-              className="block rounded-xl border border-line bg-surface/60 px-4 py-2.5 text-center text-sm font-medium text-ink transition-colors hover:border-electric/50"
-            >
-              Install now
-            </a>
-          </div>
+          <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-paper/80">
+            Everything that touches your data runs on your machine, free. Pro adds cloud
+            conveniences — carrying ciphertext only, never your plaintext.
+          </p>
         </div>
 
-        <ProCard />
-      </div>
+        <div className="mx-auto mt-12 grid max-w-3xl gap-5 md:grid-cols-2">
+          <div className="plate flex flex-col p-7">
+            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">Free</p>
+            <p className="font-display mt-3 text-4xl text-ink">
+              $0 <span className="text-lg text-faint">forever</span>
+            </p>
+            <figure className="mt-5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/art/loom.webp" alt="" aria-hidden width={900} height={360} className="w-full mix-blend-multiply" />
+              <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
+                the loom — the whole engine, at home
+              </figcaption>
+            </figure>
+            <ul className="mt-6 space-y-3.5">
+              {free.map((x) => (
+                <li key={x} className="flex items-start gap-3 text-[15px] text-mute">
+                  <Check className="mt-0.5 size-4 shrink-0 text-electric" strokeWidth={2} />
+                  {x}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-auto pt-7">
+              <a
+                href="#start"
+                className="block border border-ink px-4 py-2.5 text-center font-mono text-[12px] uppercase tracking-[0.14em] text-ink transition-colors hover:bg-ink hover:text-paper"
+              >
+                Install now
+              </a>
+            </div>
+          </div>
 
-      <p className="mx-auto mt-10 max-w-xl text-center text-sm leading-relaxed text-faint">
-        Privacy is never the paid tier. The local engine, the dashboard, and deletion stay free —
-        Pro is convenience on top, not a wall around your own data.
-      </p>
-    </Section>
+          <ProCard />
+        </div>
+
+        <p className="mx-auto mt-10 max-w-xl text-center text-[15px] italic leading-relaxed text-paper/75">
+          Privacy is never the paid tier. The local engine, the dashboard, and deletion stay free —
+          Pro is convenience on top, not a wall around your own data.
+        </p>
+      </div>
+    </section>
   );
 }
 
-/* ── Get started ─────────────────────────────────────────────── */
+/* ── № 10 · Get started ──────────────────────────────────────── */
 
 function GetStarted() {
   return (
-    <Section id="start" className="relative overflow-hidden py-28">
-      <div className="pointer-events-none absolute left-1/2 top-8 h-[420px] w-[680px] max-w-full -translate-x-1/2 rounded-full bg-electric/10 blur-[130px]" />
-      <div className="relative mx-auto max-w-2xl text-center">
-        <Eyebrow>Five minutes to your mirror</Eyebrow>
-        <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
-          Install, and see yourself.
-        </h2>
-        <p className="mt-6 text-lg leading-relaxed text-mute">
-          One command finds your exports, reads your repos, synthesizes a profile, connects your AI
-          clients, and opens the dashboard.
-        </p>
-      </div>
+    <Section className="py-24">
+      <SectionHead
+        n="10"
+        eyebrow="Five minutes to your mirror"
+        title="Install, and see yourself."
+        lede="One command finds your exports, reads your repos, synthesizes a profile, connects your AI clients, and opens the dashboard."
+        center
+      />
 
-      <div className="relative mx-auto mt-10 max-w-2xl">
+      <figure className="mx-auto mt-12 w-fit text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/art/mirror.webp"
+          alt="Engraving of a woman studying her own reflection in a hand-mirror, an eagle at her side"
+          width={900}
+          height={1001}
+          className="mx-auto w-[420px] max-w-full mix-blend-multiply"
+        />
+        <figcaption className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
+          Fig. 4 — the mirror. It shows you what it learned.
+        </figcaption>
+      </figure>
+
+      {/* the CTA lands on the command itself, not the top of the section
+          (which now opens with the mirror plate); scroll-mt clears the nav */}
+      <div id="start" className="mx-auto mt-10 max-w-2xl scroll-mt-24">
         <SetupTabs />
-        <p className="mt-5 text-center font-mono text-[12px] text-faint">
-          macOS · Linux · Windows · Node 20+ · background autostart on macOS &amp; Linux · bring your own key, or run fully local with Ollama
+        <p className="mt-5 text-center font-mono text-[11px] leading-relaxed text-faint">
+          macOS · Linux · Windows · Node 20+ · background autostart on macOS &amp; Linux · bring your
+          own key, or run fully local with Ollama
         </p>
-        <div className="mt-6 flex justify-center">
-          <a
-            href={GITHUB}
-            {...EXT}
-            className="group inline-flex items-center gap-1.5 text-sm text-mute transition-colors hover:text-ink"
-          >
-            <GithubIcon className="size-4" />
-            Read the source
-            <ArrowUpRight className={arrowCls} />
-          </a>
-        </div>
       </div>
     </Section>
   );
@@ -891,55 +1031,110 @@ function GetStarted() {
 
 /* ── Footer ──────────────────────────────────────────────────── */
 
-function Footer() {
+/* Latest tag from the actual GitHub release — never hand-bumped. ISR
+   revalidation keeps it in sync with new publishes without a redeploy. */
+async function getLatestVersion(): Promise<string | null> {
+  try {
+    const res = await fetch("https://api.github.com/repos/persnally/persnally/releases/latest", {
+      headers: { Accept: "application/vnd.github+json" },
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return null;
+    const { tag_name } = await res.json();
+    return typeof tag_name === "string" ? tag_name.replace(/^v/, "") : null;
+  } catch {
+    return null;
+  }
+}
+
+async function Footer() {
+  const version = await getLatestVersion();
   return (
-    <footer className="relative overflow-hidden border-t border-line/60">
+    <footer className="relative overflow-hidden border-t border-ink/20">
       <Section className="flex flex-col items-start justify-between gap-8 pt-14 sm:flex-row sm:items-center">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
             © 2026 Persnally
+            {version && (
+              <>
+                <span className="mx-2 text-ink/20">·</span>
+                <a
+                  href={`${GITHUB}/releases/latest`}
+                  {...EXT}
+                  className="text-mute transition-colors hover:text-ink"
+                >
+                  v{version}
+                </a>
+              </>
+            )}
           </p>
-          <p className="mt-2.5 text-xl font-medium tracking-tight text-ink">
-            So every AI finally knows <span className="text-gradient">you</span>.
+          <p className="font-display mt-2.5 text-2xl tracking-tight text-ink">
+            So every AI finally knows <Em>you.</Em>
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-x-7 gap-y-3 text-sm text-mute">
+        <div className="flex flex-col items-start gap-4 sm:items-end">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 font-mono text-[12px] uppercase tracking-[0.12em] text-mute">
+            <a
+              href={GITHUB}
+              {...EXT}
+              aria-label="Persnally on GitHub"
+              title="GitHub"
+              className="transition-colors hover:text-ink"
+            >
+              <GithubIcon className="size-[18px]" />
+            </a>
+            <a
+              href={NPM}
+              {...EXT}
+              aria-label="persnally on npm"
+              title="npm"
+              className="transition-colors hover:text-ink"
+            >
+              <NpmIcon className="size-[18px]" />
+            </a>
+            <a href={`${GITHUB}/blob/main/LICENSE`} {...EXT} className="transition-colors hover:text-ink">
+              FSL-1.1-MIT
+            </a>
+          </div>
           <a
-            href={GITHUB}
+            href="https://www.producthunt.com/products/persnally?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-persnally"
             {...EXT}
-            className="group flex items-center gap-1.5 transition-colors hover:text-ink"
+            aria-label="Persnally on Product Hunt"
+            className="transition-opacity hover:opacity-85"
           >
-            <GithubIcon className="size-4" />
-            GitHub
-            <ArrowUpRight className={arrowCls} />
-          </a>
-          <a
-            href={NPM}
-            {...EXT}
-            className="group flex items-center gap-1.5 transition-colors hover:text-ink"
-          >
-            <NpmIcon className="size-4" />
-            npm
-            <ArrowUpRight className={arrowCls} />
-          </a>
-          <a
-            href={`${GITHUB}/blob/main/LICENSE`}
-            {...EXT}
-            className="group flex items-center gap-1 transition-colors hover:text-ink"
-          >
-            FSL-1.1-MIT
-            <ArrowUpRight className={arrowCls} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1182562&theme=light&t=1782584790813"
+              alt="Persnally - So every AI finally knows you | Product Hunt"
+              width={220}
+              height={48}
+            />
           </a>
         </div>
       </Section>
 
-      {/* Giant brand wordmark — bold, full-bleed, subtle */}
-      <div aria-hidden className="pointer-events-none mt-8 select-none px-6">
-        <span className="block translate-y-[12%] bg-gradient-to-b from-ink/[0.10] to-ink/[0.02] bg-clip-text text-center text-[clamp(4rem,21vw,17rem)] font-bold leading-[0.8] tracking-tight text-transparent">
+      <Section className="pt-8">
+        <p className="font-mono text-[10px] leading-relaxed text-faint">
+          Engravings: 16th–19th-century plates —{" "}
+          <a
+            href="https://wellcomecollection.org/works"
+            {...EXT}
+            className="underline decoration-ink/30 underline-offset-2 transition-colors hover:text-ink"
+          >
+            Wellcome Collection
+          </a>
+          , public domain.
+        </p>
+      </Section>
+
+      {/* Giant engraved wordmark — outlined serif, like the plate lettering */}
+      <div aria-hidden className="pointer-events-none mt-10 select-none px-6">
+        <span
+          className="font-display block translate-y-[14%] text-center text-[clamp(4rem,20vw,16rem)] leading-[0.8] tracking-tight text-transparent"
+          style={{ WebkitTextStroke: "1.5px color-mix(in oklab, var(--color-ink) 38%, transparent)" }}
+        >
           persnally
-          <span className="bg-gradient-to-b from-electric/60 to-electric/10 bg-clip-text text-transparent">
-            .
-          </span>
+          <span style={{ WebkitTextStroke: "1.5px var(--color-electric)" }}>.</span>
         </span>
       </div>
     </footer>

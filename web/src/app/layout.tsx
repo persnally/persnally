@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
+import { Instrument_Serif, Newsreader, Geist_Mono } from "next/font/google";
 import { OpenPanelComponent } from "@openpanel/nextjs";
 import "./globals.css";
 
@@ -7,7 +7,13 @@ import "./globals.css";
 // NEXT_PUBLIC_OPENPANEL_CLIENT_ID in .env.local for dev and in your host for prod.
 const OPENPANEL_CLIENT_ID = process.env.NEXT_PUBLIC_OPENPANEL_CLIENT_ID;
 
-const sans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta" });
+const display = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-instrument",
+});
+const text = Newsreader({ subsets: ["latin"], style: ["normal", "italic"], variable: "--font-newsreader" });
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 const description =
@@ -65,7 +71,7 @@ const jsonLd = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`dark ${sans.variable} ${mono.variable}`}>
+    <html lang="en" className={`${display.variable} ${text.variable} ${mono.variable}`}>
       <body className="antialiased">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         {OPENPANEL_CLIENT_ID && (
