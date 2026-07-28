@@ -1031,12 +1031,43 @@ function GetStarted() {
 
 /* ── Footer ──────────────────────────────────────────────────── */
 
-function Footer() {
+/* Latest tag from the actual GitHub release — never hand-bumped. ISR
+   revalidation keeps it in sync with new publishes without a redeploy. */
+async function getLatestVersion(): Promise<string | null> {
+  try {
+    const res = await fetch("https://api.github.com/repos/persnally/persnally/releases/latest", {
+      headers: { Accept: "application/vnd.github+json" },
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return null;
+    const { tag_name } = await res.json();
+    return typeof tag_name === "string" ? tag_name.replace(/^v/, "") : null;
+  } catch {
+    return null;
+  }
+}
+
+async function Footer() {
+  const version = await getLatestVersion();
   return (
     <footer className="relative overflow-hidden border-t border-ink/20">
       <Section className="flex flex-col items-start justify-between gap-8 pt-14 sm:flex-row sm:items-center">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">© 2026 Persnally</p>
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
+            © 2026 Persnally
+            {version && (
+              <>
+                <span className="mx-2 text-ink/20">·</span>
+                <a
+                  href={`${GITHUB}/releases/latest`}
+                  {...EXT}
+                  className="text-mute transition-colors hover:text-ink"
+                >
+                  v{version}
+                </a>
+              </>
+            )}
+          </p>
           <p className="font-display mt-2.5 text-2xl tracking-tight text-ink">
             So every AI finally knows <Em>you.</Em>
           </p>
