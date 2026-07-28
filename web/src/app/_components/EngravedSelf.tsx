@@ -40,7 +40,10 @@ export function EngravedSelf() {
           return (
             <span
               key={p.title}
-              className="group fade-label absolute -translate-x-1/2 -translate-y-1/2"
+              /* each marker's transform makes its own stacking context, so a
+                 hovered/open point must lift its whole wrapper above the
+                 sibling markers or its tooltip gets painted over */
+              className={`group fade-label absolute -translate-x-1/2 -translate-y-1/2 hover:z-40 ${open ? "z-40" : "z-10"}`}
               style={{ top: `${p.y}%`, left: `${p.x}%`, animationDelay: `${p.delay}ms` }}
             >
               <button
