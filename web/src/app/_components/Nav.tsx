@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { PersnallyMark } from "@/components/ui/logos";
 
 
 /* Sticky nav: borderless while at rest at the top of the page; the hairline
@@ -23,7 +24,12 @@ export function Nav() {
       }`}
     >
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
-        <Link href="/" aria-label="Persnally home" className="transition-opacity hover:opacity-70">
+        <Link
+          href="/"
+          aria-label="Persnally home"
+          className="flex items-center gap-2.5 transition-opacity hover:opacity-70"
+        >
+          <PersnallyMark className="size-[19px] text-ink" />
           <span className="font-display text-[22px] tracking-tight text-ink">
             persnally<span className="text-electric">.</span>
           </span>

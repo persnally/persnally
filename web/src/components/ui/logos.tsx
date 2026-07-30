@@ -34,6 +34,21 @@ export const NpmIcon = ({ className }: { className?: string }) => (
   <Glyph icon={siNpm} className={className} />
 );
 
+/* Persnally's own mark — the Reticle: four unequal arms crossing at one point
+   calibrated off the factory default (personalization). Bars inherit
+   currentColor; the centre carries the single electric accent. */
+export const PersnallyMark = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 100 100" fill="none" className={className} aria-hidden>
+    <g fill="currentColor">
+      <rect x="45.5" y="8" width="9" height="30" rx="4.5" />
+      <rect x="45.5" y="62" width="9" height="18" rx="4.5" />
+      <rect x="14" y="45.5" width="24" height="9" rx="4.5" />
+      <rect x="62" y="45.5" width="36" height="9" rx="4.5" />
+    </g>
+    <circle cx="50" cy="50" r="9" className="fill-electric" />
+  </svg>
+);
+
 /* Tools whose context Persnally serves — for the marquee. */
 export const TOOLS: { name: string; icon: SimpleIcon }[] = [
   { name: "Claude", icon: siClaude },
