@@ -942,7 +942,7 @@ function Pricing() {
           </p>
           <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-paper/80">
             Everything that touches your data runs on your machine, free. Pro adds cloud
-            conveniences — carrying ciphertext only, never your plaintext.
+            services on top — and tells you exactly which of them can see what.
           </p>
         </div>
 
@@ -980,12 +980,59 @@ function Pricing() {
           <ProCard />
         </div>
 
+        <CustodyNote />
+
         <p className="mx-auto mt-10 max-w-xl text-center text-[15px] italic leading-relaxed text-paper/75">
           Privacy is never the paid tier. The local engine, the dashboard, and deletion stay free —
           Pro is convenience on top, not a wall around your own data.
         </p>
       </div>
     </section>
+  );
+}
+
+/**
+ * The custody model, stated before anyone else states it for us. Two of the Pro
+ * services genuinely can't be read; inference genuinely can. Saying so is the
+ * whole trust argument — a blanket "we never see your data" collapses the moment
+ * someone notices we run the model.
+ */
+function CustodyNote() {
+  return (
+    <div className="mx-auto mt-12 max-w-3xl border border-paper/25 p-7">
+      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-paper/70">
+        What the cloud can and can&apos;t see
+      </p>
+      <dl className="mt-5 space-y-4 text-[15px] leading-relaxed text-paper/85">
+        <div>
+          <dt className="font-medium text-paper">Backup and agent relay: ciphertext.</dt>
+          <dd className="text-paper/75">
+            Encrypted on your machine with a key that never leaves it. We can&apos;t read them —
+            not because we promise not to, but because we don&apos;t hold the key.
+          </dd>
+        </div>
+        <div>
+          <dt className="font-medium text-paper">Zero-setup inference: plaintext, in transit only.</dt>
+          <dd className="text-paper/75">
+            Running a model over your context means your text reaches our compute in the clear.
+            There is no end-to-end encrypted way to do inference — that&apos;s arithmetic, not
+            policy. So it&apos;s opt-in, we never store it, it never joins a training set, and the
+            client that sends it is source-available so you can check what leaves.
+          </dd>
+        </div>
+        <div>
+          <dt className="font-medium text-paper">Don&apos;t want that? Then don&apos;t buy it.</dt>
+          <dd className="text-paper/75">
+            The free engine uses your own key, or a local model through Ollama, and never touches
+            our servers at all. Everything that makes Persnally yours works without us.
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-5 text-[14px] italic leading-relaxed text-paper/70">
+        The line we won&apos;t cross: the cloud may carry ciphertext and run jobs you asked for. It
+        never becomes the place your context lives.
+      </p>
+    </div>
   );
 }
 

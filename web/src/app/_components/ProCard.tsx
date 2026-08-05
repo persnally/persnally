@@ -5,10 +5,12 @@ import { Check } from "lucide-react";
 import { ANNUAL_PER_MONTH, MONTHLY, PriceToggle } from "./PriceToggle";
 import { WaitlistForm } from "./WaitlistForm";
 
+// Each line says which side of the custody line it sits on. The section's
+// CustodyNote spells out why inference can't be ciphertext-only.
 const PRO = [
-  "Encrypted backup & restore of your accumulated self",
+  "Encrypted backup & restore of your accumulated self — ciphertext, we hold no key",
   "Agent relay — your phone and cloud agents reach your context, end-to-end encrypted",
-  "Zero-setup inference — no API key needed, inference included (fair-use)",
+  "Zero-setup inference — no API key needed (fair-use). Processed in the clear, never stored",
   "Reflection reports — what changed about you, over time",
 ];
 
@@ -41,7 +43,7 @@ export function ProCard() {
           className="w-full mix-blend-multiply"
         />
         <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
-          the key — yours alone · the cloud sees ciphertext
+          the key — yours alone · backup &amp; relay stay ciphertext
         </figcaption>
       </figure>
       <ul className="mt-6 space-y-3.5">
