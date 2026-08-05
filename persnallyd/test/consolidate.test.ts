@@ -3,8 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
+import { loadConfig, saveConfig } from "../src/config.js";
 import { runConsolidation, shouldRunNow } from "../src/consolidate.js";
 import { newEvent } from "../src/events.js";
+import type { LlmExtract } from "../src/llm.js";
 import { EventStore } from "../src/store.js";
 
 test("shouldRunNow: gated by hour and once-per-day", () => {
@@ -80,4 +82,51 @@ test("with engine + enough signal: emits derived behavior assertions", async () 
     delete process.env.PERSNALLY_DIR;
     rmSync(d2, { recursive: true, force: true });
   }
+});
+
+test("a failing run records the attempt but not the success watermark", async () => {
+  // The bug this replaces: last_consolidation was written only on success, so a
+  // persistent failure left a stale date, shouldRunNow kept returning true, and
+  // the daily job retried every 30 minutes — 229 paid attempts observed on a
+  // real install over 5 days.
+  const cfgDir = mkdtempSync(join(tmpdir(), "consolidate-fail-"));
+  const prev = process.env.PERSNALLY_DIR;
+  process.env.PERSNALLY_DIR = cfgDir;
+  after(() => {
+    if (prev === undefined) delete process.env.PERSNALLY_DIR; else process.env.PERSNALLY_DIR = prev;
+    rmSync(cfgDir, { recursive: true, force: true });
+  });
+
+  const watermark = "2026-06-11T21:30:00.000Z";
+  saveConfig({ last_consolidation: watermark });
+  store.append([topic("elixir"), topic("gleam"), topic("zig"), topic("ocaml"), topic("nim")]);
+  store.rebuild();
+
+  const exploding = {
+    extract: (async () => { throw new Error("400 credit balance is too low"); }) as unknown as LlmExtract,
+    model: "boom",
+    label: "boom",
+  };
+  const now = new Date("2026-08-05T14:00:00");
+  await assert.rejects(() => runConsolidation(store, exploding, now), /credit balance/);
+
+  const cfg = loadConfig();
+  assert.equal(cfg.last_consolidation, watermark,
+    "the success watermark must not advance — signals it never consolidated would be skipped forever");
+  assert.equal(cfg.last_consolidation_attempt, now.toISOString(), "but the attempt is on record");
+
+  // And that record is what stops the 30-minute retry.
+  assert.equal(shouldRunNow(cfg.last_consolidation_attempt as string, new Date("2026-08-05T14:30:00")), false,
+    "no retry 30 minutes later");
+  assert.equal(shouldRunNow(cfg.last_consolidation_attempt as string, new Date("2026-08-05T23:59:00")), false,
+    "and none later the same day");
+  assert.equal(shouldRunNow(cfg.last_consolidation_attempt as string, new Date("2026-08-06T03:30:00")), true,
+    "tomorrow it tries again");
+});
+
+test("an upgraded install with only the old key runs once, then settles", () => {
+  // Existing installs have last_consolidation but no attempt key. That must read
+  // as "never attempted" so the first tick after upgrade runs.
+  assert.equal(shouldRunNow(undefined, new Date("2026-08-05T14:00:00")), true);
+  assert.equal(shouldRunNow("not-a-date", new Date("2026-08-05T14:00:00")), true, "unreadable state tries once");
 });
