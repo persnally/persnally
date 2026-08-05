@@ -12,7 +12,7 @@ import { applyApiKey, configPath, loadConfig, saveConfig } from "./config.js";
 import { CLIENTS, connectAll, connectClient, installClaudeCodeHook, type Client } from "./connect.js";
 import { runConsolidation } from "./consolidate.js";
 import { chooseExtractor } from "./llm.js";
-import { CATEGORIES, clearScope, loadScopes, setScope, type Category } from "./permissions.js";
+import { CATEGORIES, clearScope, dashboardKey, loadScopes, rotateDashboardKey, setScope, type Category } from "./permissions.js";
 import { alreadyImported, DENSITY_QUESTIONS, detectExports, eventsFromAnswers, isThin, markImported } from "./setup.js";
 import { autoImportNewSessions, DEFAULT_PORT, startDaemon, VERSION } from "./daemon.js";
 import { extractChatGPTEvents, parseChatGPTExport } from "./importers/chatgpt.js";
@@ -57,8 +57,9 @@ Usage:
   persnallyd forget --style <dimension> <pattern>   Forget a "how you write" pattern for good
   persnallyd forget --all           Delete all data
   persnallyd forget --batch <id>    Undo one import batch
+  persnallyd dashboard [--rotate]   Open the local dashboard (--rotate signs out open browser sessions)
   persnallyd status                 Store stats and daemon health
-  persnallyd activity               Context-read engagement over time (retention pulse)
+  persnallyd activity [--json]      Context-read engagement over time (retention pulse)
   persnallyd start [--port N]       Start the daemon in the background
   persnallyd stop                   Stop the background daemon
   persnallyd restart                Restart the daemon (correctly handles autostart/launchd)
@@ -547,6 +548,9 @@ async function main(): Promise<void> {
       const store = new EventStore();
       const a = store.activity();
       store.close();
+      // --json is the retention-pulse snapshot: machine-readable, and reads the
+      // store directly so collecting it never needs a daemon credential.
+      if (args.includes("--json")) { console.log(JSON.stringify(a)); return; }
       if (!a.firstEventAt) { console.log("No activity yet — run an import or connect a client."); return; }
       const verdict = a.retainedWeek2 === null ? `in progress (day ${a.daysSinceFirstRead}/14 of reads)` : a.retainedWeek2 ? "active ✓" : "inactive ✗";
       console.log(`Onboarded ${a.daysSinceFirst}d ago · ${a.totalReads} context read(s) total`);
@@ -554,6 +558,16 @@ async function main(): Promise<void> {
       console.log(`Active: ${a.activeDays7d}/7 days · ${a.activeDays14d}/14 days`);
       console.log(`Week-2 retention: ${verdict}`);
       console.log(`Last 14 days: ${sparkline(a.daily.map((d) => d.reads))}`);
+      return;
+    }
+    case "dashboard": {
+      const port = parsePort(args);
+      if (args.includes("--rotate")) {
+        rotateDashboardKey();
+        console.log("New dashboard key issued — open browser sessions were signed out.");
+      }
+      if (!runningPid()) console.log("Note: the daemon isn't running — start it with `persnallyd start`.");
+      announceDashboard(port);
       return;
     }
     case "start": {
@@ -635,7 +649,8 @@ async function main(): Promise<void> {
       process.on("unhandledRejection", (e) => console.error("unhandledRejection:", e));
       process.on("uncaughtException", (e) => { console.error("uncaughtException:", e); process.exit(1); });
       console.error(`persnallyd v${VERSION} listening on 127.0.0.1:${port}`);
-      console.error(`Dashboard: http://127.0.0.1:${port}`);
+      // Deliberately not the keyed URL: this line goes to the daemon log file.
+      console.error("Dashboard: run `persnallyd dashboard` for an authenticated link");
       // Catch up on chats since the daemon last ran; the timer takes it from here.
       void autoImportNewSessions(store);
       return;
@@ -657,9 +672,13 @@ function summarize(payload: Record<string, unknown>): string {
   return s.length > 80 ? s.slice(0, 77) + "..." : s;
 }
 
-/** Print the dashboard URL and, when run interactively on macOS, open it. */
+/**
+ * Print an authenticated dashboard link and, when run interactively on macOS,
+ * open it. The key rides in the URL exactly once: the daemon swaps it for a
+ * session cookie and redirects, so it never persists in the browser.
+ */
 function announceDashboard(port: number, open = true): void {
-  const url = `http://127.0.0.1:${port}`;
+  const url = `http://127.0.0.1:${port}/?k=${dashboardKey()}`;
   console.log(`Dashboard: ${url}`);
   if (open && process.platform === "darwin" && process.stdout.isTTY) {
     try { execFileSync("open", [url]); } catch { /* non-fatal — the link is printed above */ }

@@ -363,10 +363,26 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<"
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const FONT = '-apple-system, system-ui, "Segoe UI", Roboto, sans-serif';
 
+let SIGNED_OUT = false;
 async function get(path) {
   const r = await fetch(path, { headers: { "accept": "application/json" } });
+  // An expired session must never fall through to preview data — showing
+  // sample data as if it were yours would be a lie about your own store.
+  if (r.status === 401) { SIGNED_OUT = true; renderSignedOut(); return null; }
   if (!r.ok) return null;
   return r.json();
+}
+function renderSignedOut() {
+  if ($("signedOut")) return;
+  const el = document.createElement("div");
+  el.id = "signedOut";
+  el.style.cssText = "position:fixed;inset:0;z-index:99;display:grid;place-items:center;text-align:center;"
+    + "padding:2rem;background:rgba(10,10,11,.92);backdrop-filter:blur(6px)";
+  el.innerHTML = '<div style="max-width:30rem"><div style="font-size:1.2rem;font-weight:600;margin-bottom:.6rem">'
+    + 'Your session expired</div><div style="color:#9a9aa2;margin-bottom:1.1rem">Reopen the dashboard from your '
+    + 'terminal to keep going.</div><code style="display:inline-block;padding:.6rem 1rem;border:1px solid #26262b;'
+    + 'border-radius:.5rem;background:#131316">persnally dashboard</code></div>';
+  document.body.appendChild(el);
 }
 const fmtN = (n) => n.toLocaleString("en-US");
 function timeAgo(iso) {
@@ -893,6 +909,7 @@ async function loadAll() {
     ]);
     if (!stats) throw new Error("no daemon");
   } catch (e) {
+    if (SIGNED_OUT) return;   // authenticated-but-expired, not daemon-less
     DEMO = true; $("ribbon").classList.add("show");
     ({ stats, profile, topics, reads, assertions, voice, activity, asks } = DEMO_DATA());
   }
@@ -933,7 +950,7 @@ $("reflect").onclick = async () => {
   await fetch("/consolidate", { method:"POST" }); b.disabled = false; b.textContent = "Reflect"; loadAll();
 };
 setInterval(async () => {
-  if (DEMO) return;
+  if (DEMO || SIGNED_OUT) return;
   const [reads, stats, voice, activity, asks] = await Promise.all([get("/events?type=context.read&limit=60"), get("/stats"), get("/voice"), get("/activity"), get("/questions?limit=8")]);
   if (reads && stats) renderReads(reads, (stats.byType && stats.byType["context.read"]) || reads.length);
   if (voice) renderVoice(voice); // live: voice signals captured mid-session show up without a reload

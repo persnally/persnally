@@ -6,7 +6,7 @@ import { after, before, test } from "node:test";
 import { startDaemon } from "../src/daemon.js";
 import { newEvent } from "../src/events.js";
 import type { LlmExtract } from "../src/llm.js";
-import { setScope } from "../src/permissions.js";
+import { createSession, issueToken, SESSION_COOKIE, setScope } from "../src/permissions.js";
 import { refreshScopedProfiles, scopeKey, synthesizeScopedProfile } from "../src/profile.js";
 import { EventStore } from "../src/store.js";
 
@@ -16,6 +16,10 @@ const dir = mkdtempSync(join(tmpdir(), "scoped-profile-test-"));
 process.env.PERSNALLY_DIR = dir; // scopes live in config — isolate from the real machine
 const store = new EventStore(join(dir, "test.db"));
 let server: ReturnType<typeof startDaemon>;
+
+// Scope enforcement follows the client's token; the owner always reads unscoped.
+const owner = () => ({ headers: { cookie: `${SESSION_COOKIE}=${createSession()}` } });
+const bearer = (t: string) => ({ headers: { authorization: `Bearer ${t}` } });
 
 const FAKE_PROFILE = { headline: "A tech-only slice", sections: [{ title: "Focus", body: "Builds tools.", evidence_event_ids: [] }] };
 const fakeExtract = (calls?: { content: string }): LlmExtract => (async (opts) => {
@@ -63,17 +67,17 @@ test("a scope with no topics synthesizes nothing", async () => {
   assert.equal(store.getScopedProfile("health"), null);
 });
 
-test("GET /profile serves the scoped narrative to a scoped client, the full one to everyone else", async () => {
+test("GET /profile serves the scoped narrative to a scoped client, the full one to the owner", async () => {
   setScope("cursor", ["technology"]);
-  const scoped = await (await fetch(`${BASE}/profile?client=cursor`)).json() as { headline: string };
+  const scoped = await (await fetch(`${BASE}/profile`, bearer(issueToken("cursor")))).json() as { headline: string };
   assert.equal(scoped.headline, "A tech-only slice");
-  const full = await (await fetch(`${BASE}/profile`)).json() as { headline: string };
+  const full = await (await fetch(`${BASE}/profile`, owner())).json() as { headline: string };
   assert.equal(full.headline, "The full narrative");
 });
 
 test("GET /profile still 403s a scoped client whose scope has no cached profile", async () => {
   setScope("windsurf", ["health", "science"]);
-  const r = await fetch(`${BASE}/profile?client=windsurf`);
+  const r = await fetch(`${BASE}/profile`, bearer(issueToken("windsurf")));
   assert.equal(r.status, 403);
   assert.equal(((await r.json()) as { scoped: boolean }).scoped, true);
 });
