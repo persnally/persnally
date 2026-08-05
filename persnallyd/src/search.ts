@@ -20,7 +20,8 @@ const STOPWORDS = new Set([
   "what", "how", "does", "do", "is", "are", "this", "that", "user", "they", "their",
 ]);
 
-function tokens(text: string): string[] {
+/** Query tokenizer, shared with the ask corpus so both rank material the same way. */
+export function queryTokens(text: string): string[] {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9\s.+#-]/g, " ")
@@ -28,10 +29,11 @@ function tokens(text: string): string[] {
     .filter((t) => t.length > 1 && !STOPWORDS.has(t));
 }
 
-function overlap(queryTokens: string[], text: string): number {
+/** How many of the query's tokens appear in `text`. */
+export function overlapScore(tokens: string[], text: string): number {
   const hay = ` ${text.toLowerCase()} `;
   let hits = 0;
-  for (const q of queryTokens) if (hay.includes(q)) hits++;
+  for (const q of tokens) if (hay.includes(q)) hits++;
   return hits;
 }
 
@@ -40,7 +42,7 @@ export function searchContext(
   query: string,
   opts: { limit?: number; allowed?: Category[] | null } = {},
 ): SearchHit[] {
-  const q = tokens(query);
+  const q = queryTokens(query);
   if (!q.length) return [];
   const limit = opts.limit ?? 10;
   const allowed = opts.allowed ?? null;
@@ -51,7 +53,7 @@ export function searchContext(
   for (const t of topics) {
     // Name matches say more than entity matches; decayed weight breaks ties
     // toward what's current.
-    const score = overlap(q, t.topic) * 3 + overlap(q, t.entities.join(" ")) * 2;
+    const score = overlapScore(q, t.topic) * 3 + overlapScore(q, t.entities.join(" ")) * 2;
     if (score > 0) hits.push({ kind: "topic", text: t.topic, detail: describeTopic(t), score: score * (0.5 + t.weight), event_ids: t.event_ids.slice(0, 3) });
   }
 
@@ -60,7 +62,7 @@ export function searchContext(
   if (!allowed) {
     for (const e of store.query({ type: "signal.assertion", limit: 1_000_000 })) {
       const p = e.payload as { claim: string; kind: string; confidence: number; evidence: string };
-      const score = overlap(q, p.claim) * 2 + overlap(q, p.evidence);
+      const score = overlapScore(q, p.claim) * 2 + overlapScore(q, p.evidence);
       if (score > 0) hits.push({ kind: "assertion", text: p.claim, detail: `${p.kind} · confidence ${p.confidence}`, score: score * (0.5 + p.confidence), event_ids: [e.id] });
     }
   }
