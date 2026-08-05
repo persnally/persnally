@@ -285,7 +285,7 @@ function HowItWorks() {
       k: "III",
       label: "Serve · MCP",
       t: "Every AI reads it",
-      d: "Over MCP — the protocol your tools already speak — Claude, Cursor, and your agents read it the moment a session starts.",
+      d: "Over MCP — the protocol your tools already speak. Claude Code pulls it in the moment a session starts; Claude, Cursor, and your agents read it whenever they need you.",
       art: <Vignette src="/art/mercury.webp" cap="the messenger — served to every tool" h="h-[265px]" />,
       visual: <ServeViz />,
     },
