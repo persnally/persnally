@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import { startDaemon } from "../src/daemon.js";
 import { newEvent } from "../src/events.js";
-import { allowedCategories, clearScope, clientForToken, hasToken, isAllowed, issueToken, loadScopes, setScope } from "../src/permissions.js";
+import { allowedCategories, clearScope, clientForToken, createSession, hasToken, isAllowed, issueToken, loadScopes, SESSION_COOKIE, setScope } from "../src/permissions.js";
 import { EventStore } from "../src/store.js";
 
 const dir = mkdtempSync(join(tmpdir(), "perms-test-"));
@@ -35,6 +35,8 @@ describe("daemon enforcement", () => {
   const BASE = `http://127.0.0.1:${PORT}`;
   const store = new EventStore(join(dir, "test.db"));
   let server: ReturnType<typeof startDaemon>;
+  let cursorToken: string;
+  let desktopToken: string;
 
   const topic = (name: string, category: string) =>
     newEvent("signal.topic", "import:claude", {
@@ -42,34 +44,41 @@ describe("daemon enforcement", () => {
       depth: "deep", category, entities: [],
     }, { kind: "import", batch: "b1", file: "conversations.json" });
 
+  // A client's scope now follows its token, never a self-reported ?client=, so
+  // enforcement is tested through real credentials. The owner reads unscoped.
+  const owner = () => ({ headers: { cookie: `${SESSION_COOKIE}=${createSession()}` } });
+  const bearer = (t: string) => ({ headers: { authorization: `Bearer ${t}` } });
+
   before(() => {
     store.append([topic("rust", "technology"), topic("therapy", "health"), topic("raise", "finance")]);
     store.rebuild();
     store.saveProfile({ headline: "h", sections: [], generated_at: "2026-06-12T00:00:00Z", model: "t" });
     setScope("cursor", ["technology"]);
+    cursorToken = issueToken("cursor");
+    desktopToken = issueToken("claude-desktop");
     server = startDaemon(store, PORT);
   });
   after(() => { server.close(); store.close(); });
 
   test("/topics filters to the client's allowed categories", async () => {
-    const all = await (await fetch(`${BASE}/topics`)).json() as { category: string }[];
-    assert.equal(all.length, 3, "unscoped request sees all");
+    const all = await (await fetch(`${BASE}/topics`, owner())).json() as { category: string }[];
+    assert.equal(all.length, 3, "the owner sees all");
 
-    const scoped = await (await fetch(`${BASE}/topics?client=cursor`)).json() as { category: string }[];
+    const scoped = await (await fetch(`${BASE}/topics`, bearer(cursorToken))).json() as { category: string }[];
     assert.deepEqual(scoped.map((t) => t.category), ["technology"], "cursor sees only technology");
 
-    const open = await (await fetch(`${BASE}/topics?client=claude-desktop`)).json() as unknown[];
-    assert.equal(open.length, 3, "unscoped client sees all");
+    const open = await (await fetch(`${BASE}/topics`, bearer(desktopToken))).json() as unknown[];
+    assert.equal(open.length, 3, "an unscoped client sees all");
   });
 
   test("/profile is 403 for a scoped client, 200 otherwise", async () => {
-    assert.equal((await fetch(`${BASE}/profile?client=cursor`)).status, 403);
-    assert.equal((await fetch(`${BASE}/profile?client=claude-desktop`)).status, 200);
-    assert.equal((await fetch(`${BASE}/profile`)).status, 200);
+    assert.equal((await fetch(`${BASE}/profile`, bearer(cursorToken))).status, 403);
+    assert.equal((await fetch(`${BASE}/profile`, bearer(desktopToken))).status, 200);
+    assert.equal((await fetch(`${BASE}/profile`, owner())).status, 200);
   });
 
   test("/scopes reports the config", async () => {
-    const scopes = await (await fetch(`${BASE}/scopes`)).json() as Record<string, string[]>;
+    const scopes = await (await fetch(`${BASE}/scopes`, owner())).json() as Record<string, string[]>;
     assert.deepEqual(scopes.cursor, ["technology"]);
   });
 
@@ -79,7 +88,6 @@ describe("daemon enforcement", () => {
       token = issueToken("editor-y");
       setScope("editor-y", ["finance"]);
     });
-    const bearer = (t: string) => ({ headers: { authorization: `Bearer ${t}` } });
 
     test("issue / lookup / rotate round-trip", () => {
       assert.equal(hasToken("editor-y"), true);
@@ -120,8 +128,12 @@ describe("daemon enforcement", () => {
       assert.equal((await fetch(`${BASE}/topics`, bearer("stale-after-rotation"))).status, 401);
     });
 
-    test("untokened names keep the legacy default-open path", async () => {
-      assert.equal((await fetch(`${BASE}/topics?client=never-connected`)).status, 200);
+    test("an untokened name gets no default-open path", async () => {
+      // The closed hole: loopback reachability is not a credential, so a name
+      // that was never issued a token can't read anything.
+      const r = await fetch(`${BASE}/topics?client=never-connected`);
+      assert.equal(r.status, 401);
+      assert.match((await r.json() as { error: string }).error, /authentication required/);
     });
 
     test("writes claiming an mcp identity are bound the same way", async () => {
@@ -139,7 +151,7 @@ describe("daemon enforcement", () => {
       assert.equal((await post([event("editor-y")])).status, 401, "no token, no write");
       assert.equal((await post([event("editor-y")], bearer(token))).status, 201);
       assert.equal((await post([event("cursor")], bearer(token))).status, 401, "can't write as another client");
-      assert.equal((await post([event("never-connected")])).status, 201, "legacy untokened write still lands");
+      assert.equal((await post([event("never-connected")])).status, 401, "an untokened write is refused too");
     });
   });
 });

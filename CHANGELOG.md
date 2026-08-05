@@ -2,6 +2,21 @@
 
 All notable changes to Persnally will be documented in this file.
 
+## [Unreleased]
+
+The daemon now authenticates every request. Loopback binding was never a credential — the port is reachable by every process and every user on the machine — so the routes that weren't token-checked were readable and writable by anything running locally, including the raw event log and the "delete everything" endpoint.
+
+### Security
+- **Every route requires a credential.** Only `/topics`, `/profile`, `/search`, `/ask`, and `POST /events` were checked before. Now `GET /events`, `/voice`, `/activity`, `/questions`, `/scopes`, `/stats`, `/engine`, `POST /synthesize`, `/consolidate`, `/engine/key`, `/feedback`, and every `DELETE` demand one too. `/health` stays open — it carries no store data and the daemon's own startup probe needs it.
+- **The dashboard authenticates with a session, not the open port.** `persnally dashboard` prints a link carrying a key from your mode-0600 config; the daemon exchanges it for an `HttpOnly; SameSite=Strict` session cookie and redirects, so the key never lingers in the address bar, browser history, or a `Referer` header. Bare `http://127.0.0.1:4983` now shows a locked page telling you which command to run. Sessions last 12h and die the moment the key rotates — `persnally dashboard --rotate` signs out every open browser, from any process.
+- **Client tokens reach only the client surface.** A connected AI can read context and record events, but can no longer read the raw event log via `GET /events`, widen its own grant via `/scopes`, or spend your inference budget on `/synthesize` — closing a scope bypass where a category-limited client could read everything through the log.
+- **A client's scope comes from its verified token, never a self-reported `?client=`.**
+
+### Changed
+- **Breaking:** clients that were never issued a token no longer get default-open access. If a client 401s, run `persnally connect <client>` and restart it — the error message says so.
+- An expired dashboard session shows "your session expired" instead of silently falling back to preview data — sample data must never be mistaken for your own.
+- New `persnallyd dashboard [--rotate]` and `persnallyd activity --json` (a machine-readable retention snapshot that reads the store directly, so collecting it needs no daemon credential).
+
 ## [2.10.0] - 2026-07-19
 
 Identity gets real and imports get fast: connected AIs now prove who they are — so your scopes and revocations actually bind — and large exports land about 4× faster.

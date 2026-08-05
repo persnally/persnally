@@ -8,7 +8,11 @@ import { readFileSync } from "node:fs";
 import { askUserModel } from "./ask.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { runConsolidation, shouldRunNow } from "./consolidate.js";
-import { allowedCategories, CATEGORIES, clearScope, clientForToken, hasToken, loadScopes, setScope, type Category } from "./permissions.js";
+import {
+  allowedCategories, CATEGORIES, clearScope, clientForToken, createSession, dashboardKey,
+  hasToken, loadScopes, SESSION_COOKIE, SESSION_TTL_SECONDS, sessionValid, setScope,
+  verifyDashboardKey, type Category,
+} from "./permissions.js";
 import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Provenance } from "./events.js";
 import { importNewClaudeCodeSessions } from "./importers/claude-code.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
@@ -43,27 +47,86 @@ function askAllowed(now: number): boolean {
 }
 
 /**
- * Token-verified client identity. A name with an issued token can only be used
- * by presenting that token, so scopes and revocations hold against clients
- * that misreport who they are. Names never issued a token (or no name at all)
- * pass through unchanged — the pre-token default-open behavior.
+ * Who is calling. Every route except /health and the dashboard bootstrap needs
+ * one of these two identities — loopback binding is not a credential, since the
+ * port is reachable by every process and every user on the machine.
+ *
+ * `owner`  — the user's own surface: a browser session minted from the
+ *            mode-0600 dashboard key, or that key presented as a bearer.
+ * `client` — a connected AI client, identified by the token issued at connect.
  */
-function resolveClient(req: http.IncomingMessage, claimed: string | null): { client: string | null; error?: string } {
-  const auth = req.headers.authorization ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+type Auth =
+  | { kind: "owner" }
+  | { kind: "client"; client: string }
+  | { kind: "none"; error: string };
+
+const NEEDS_AUTH =
+  "authentication required — open the dashboard with `persnally dashboard`, or connect an AI client with `persnally connect <client>`";
+
+function authenticate(req: http.IncomingMessage, claimed: string | null): Auth {
+  const session = cookie(req, SESSION_COOKIE);
+  if (session && sessionValid(session)) return { kind: "owner" };
+
+  const header = req.headers.authorization ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
   if (token) {
-    const owner = clientForToken(token);
-    if (!owner) return { client: null, error: "unrecognized client token — reconnect with: persnallyd connect <client>, then restart the client" };
-    if (claimed && claimed !== owner) return { client: null, error: `token identifies '${owner}' but the request claims '${claimed}'` };
-    return { client: owner };
+    const client = clientForToken(token);
+    if (client) return { kind: "client", client };
+    // The dashboard key doubles as a bearer so local scripts and curl can use it.
+    if (verifyDashboardKey(token)) return { kind: "owner" };
+    return { kind: "none", error: "unrecognized token — reconnect with: persnallyd connect <client>, then restart the client" };
   }
   if (claimed && hasToken(claimed)) {
-    return { client: null, error: `client '${claimed}' has an identity token and must present it — re-run: persnallyd connect ${claimed}, then restart the client` };
+    return { kind: "none", error: `client '${claimed}' has an identity token and must present it — re-run: persnallyd connect ${claimed}, then restart the client` };
   }
-  return { client: claimed };
+  return { kind: "none", error: NEEDS_AUTH };
+}
+
+/**
+ * Routes a connected AI client legitimately needs. Everything else is the
+ * owner's own surface, so a client token cannot read the raw event log via
+ * /events, widen its own grant via /scopes, or spend inference on /synthesize.
+ */
+function clientMayReach(method: string, path: string): boolean {
+  switch (method) {
+    case "GET":
+      return path === "/topics" || path === "/profile" || path === "/voice"
+        || path === "/search" || path === "/stats";
+    case "POST":
+      return path === "/events" || path === "/ask";
+    case "DELETE":
+      return path === "/events" || path.startsWith("/topics/") || path.startsWith("/voice/");
+    default:
+      return false;
+  }
+}
+
+/**
+ * The scope a request reads under. It comes from the verified token, never from
+ * a self-reported `?client=` — but a name claimed alongside a token still has
+ * to match it, so a client can't act under another's identity. The owner reads
+ * unscoped.
+ */
+function scopeFor(auth: Auth, claimed: string | null): { client: string | null; error?: string } {
+  if (auth.kind !== "client") return { client: null };
+  if (claimed && claimed !== auth.client) {
+    return { client: null, error: `token identifies '${auth.client}' but the request claims '${claimed}'` };
+  }
+  return { client: auth.client };
+}
+
+function cookie(req: http.IncomingMessage, name: string): string {
+  const raw = req.headers.cookie;
+  if (!raw) return "";
+  for (const part of raw.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq > 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim();
+  }
+  return "";
 }
 
 export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server {
+  dashboardKey(); // mint on first run so `persnally dashboard` always has a link to print
   const localHosts = [`127.0.0.1:${port}`, `localhost:${port}`];
   const server = http.createServer(async (req, res) => {
     // Loopback binding alone doesn't stop browsers: webpages can fire
@@ -77,13 +140,21 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
     }
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
     try {
-      if (req.method === "GET" && url.pathname === "/") {
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        return res.end(dashboardHtml());
-      }
+      // Liveness only (no store data) — lifecycle probes it before any
+      // credential exists, so it stays open.
       if (req.method === "GET" && url.pathname === "/health") {
         return json(res, 200, { ok: true, version: VERSION });
       }
+      if (req.method === "GET" && url.pathname === "/") {
+        return serveDashboard(req, res, url);
+      }
+
+      const auth = authenticate(req, url.searchParams.get("client"));
+      if (auth.kind === "none") return json(res, 401, { error: auth.error });
+      if (auth.kind === "client" && !clientMayReach(req.method ?? "", url.pathname)) {
+        return json(res, 403, { error: "the owner's surface — not reachable with a client token" });
+      }
+
       if (req.method === "GET" && url.pathname === "/stats") {
         return json(res, 200, store.stats());
       }
@@ -91,7 +162,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         return json(res, 200, store.activity());
       }
       if (req.method === "GET" && url.pathname === "/topics") {
-        const id = resolveClient(req, url.searchParams.get("client"));
+        const id = scopeFor(auth, url.searchParams.get("client"));
         if (id.error) return json(res, 401, { error: id.error });
         const allowed = id.client ? allowedCategories(id.client) : null;
         let topics = store.topics(num(url, "limit", 50));
@@ -101,7 +172,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       if (req.method === "GET" && url.pathname === "/profile") {
         // The holistic profile is cross-category prose — a scoped client gets
         // its scope's own synthesized narrative instead, never the full one.
-        const id = resolveClient(req, url.searchParams.get("client"));
+        const id = scopeFor(auth, url.searchParams.get("client"));
         if (id.error) return json(res, 401, { error: id.error });
         const allowed = id.client ? allowedCategories(id.client) : null;
         if (allowed !== null) {
@@ -219,7 +290,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         const claimed = typeof body.client === "string" && body.client
           ? body.client.toLowerCase().replace(/[^a-z0-9._-]/g, "-")
           : null;
-        const id = resolveClient(req, claimed);
+        const id = scopeFor(auth, claimed);
         if (id.error) return json(res, 401, { error: id.error });
         const client = id.client;
         const asker = typeof body.asker === "string" && body.asker ? body.asker : (client ?? "dashboard");
@@ -243,7 +314,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       if (req.method === "GET" && url.pathname === "/search") {
         const q = (url.searchParams.get("q") ?? "").trim();
         if (!q || q.length > 200) return json(res, 400, { error: "q required (1–200 chars)" });
-        const id = resolveClient(req, url.searchParams.get("client"));
+        const id = scopeFor(auth, url.searchParams.get("client"));
         if (id.error) return json(res, 401, { error: id.error });
         return json(res, 200, searchContext(store, q, {
           limit: num(url, "limit", 10),
@@ -311,7 +382,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
           if (e.source.startsWith("mcp:")) claimedClients.add(e.source.slice(4));
         }
         for (const c of claimedClients) {
-          const id = resolveClient(req, c);
+          const id = scopeFor(auth, c);
           if (id.error) return json(res, 401, { error: id.error });
         }
         store.append(events);
@@ -384,6 +455,56 @@ function dashboardHtml(): string {
   cachedHtml ??= readFileSync(new URL("./dashboard.html", import.meta.url), "utf-8");
   return cachedHtml;
 }
+
+// The page itself never carries the credential — the key arrives once as ?k=,
+// is exchanged for an HttpOnly cookie, and the redirect drops it from the
+// address bar so it can't leak through history or a Referer on an outbound link.
+const DASHBOARD_HEADERS = {
+  "Content-Type": "text/html; charset=utf-8",
+  "Cache-Control": "no-store",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+};
+
+function serveDashboard(req: http.IncomingMessage, res: http.ServerResponse, url: URL): void {
+  const key = url.searchParams.get("k");
+  if (key && verifyDashboardKey(key)) {
+    res.writeHead(302, {
+      ...DASHBOARD_HEADERS,
+      "Location": "/",
+      "Set-Cookie": `${SESSION_COOKIE}=${createSession()}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict`,
+    });
+    res.end();
+    return;
+  }
+  const session = cookie(req, SESSION_COOKIE);
+  if (session && sessionValid(session)) {
+    res.writeHead(200, DASHBOARD_HEADERS);
+    res.end(dashboardHtml());
+    return;
+  }
+  res.writeHead(401, DASHBOARD_HEADERS);
+  res.end(LOCKED_PAGE);
+}
+
+// Static, self-contained: a bookmark that outlives its session lands here.
+const LOCKED_PAGE = `<!doctype html><meta charset="utf-8"><title>Persnally — locked</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{color-scheme:dark}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0a0b;color:#e7e7e9;
+  font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+main{max-width:31rem;padding:2rem;text-align:center}
+h1{margin:0 0 .75rem;font-size:1.25rem;font-weight:600;letter-spacing:-.01em}
+p{margin:0 0 1.25rem;color:#9a9aa2}
+code{display:inline-block;padding:.6rem 1rem;border:1px solid #26262b;border-radius:.5rem;background:#131316;
+  color:#e7e7e9;font:14px/1 ui-monospace,SFMono-Regular,Menlo,monospace}
+</style>
+<main>
+  <h1>Your dashboard is locked</h1>
+  <p>This page needs a session from your own machine. Open it from the terminal:</p>
+  <code>persnally dashboard</code>
+</main>`;
 
 // Re-derive the voice fingerprint alongside synthesize/reflect so "how you write"
 // stays current and clean. Deterministic + offline; must never break the caller.

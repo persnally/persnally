@@ -33,7 +33,7 @@ persnallyd import claude ~/Downloads/<your-claude-export>
 persnallyd import claude-code         # your local Claude Code sessions
 persnallyd import git ~/Projects      # offline, no API needed
 persnallyd profile                    # synthesize who you are
-open http://127.0.0.1:4983            # see it, with evidence for every claim
+persnallyd dashboard                  # see it, with evidence for every claim
 ```
 
 ## How it works
@@ -95,7 +95,8 @@ persnallyd profile                       # synthesize the profile
 persnallyd consolidate                   # reflect now: refresh decay, add behavior patterns
 persnallyd voice                         # refresh your "how you write" fingerprint (offline)
 persnallyd show [topics|events|profile]
-persnallyd activity                      # context-read engagement over time (retention pulse)
+persnallyd dashboard                     # open the local dashboard (authenticated link)
+persnallyd activity [--json]             # context-read engagement over time (retention pulse)
 persnallyd forget <topic> | --all | --batch <id> | --style <dim> <pattern>
 persnallyd config set-key <sk-ant-…>     # key for the background daemon
 ```

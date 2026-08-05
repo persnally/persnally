@@ -6,12 +6,18 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { startDaemon } from "../src/daemon.js";
 import { newEvent } from "../src/events.js";
+import { createSession, issueToken, SESSION_COOKIE } from "../src/permissions.js";
 import { EventStore } from "../src/store.js";
 
 const PORT = 49831;
 const BASE = `http://127.0.0.1:${PORT}`;
+// Every route needs a credential now. These suites exercise route behavior, so
+// they run as the owner; the auth boundary itself is daemon.auth.test.ts.
+const owner = () => ({ cookie: `${SESSION_COOKIE}=${createSession()}` });
+const authed = (path: string, init: RequestInit = {}) =>
+  fetch(BASE + path, { ...init, headers: { ...owner(), ...(init.headers as Record<string, string> | undefined) } });
 const postJson = (path: string, body: unknown, headers: Record<string, string> = {}) =>
-  fetch(BASE + path, {
+  authed(path, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
@@ -21,6 +27,7 @@ process.env.PERSNALLY_DIR = dir;       // isolate config writes (POST /engine/ke
 delete process.env.ANTHROPIC_API_KEY;  // clean baseline for the engine-status / key tests
 const store = new EventStore(join(dir, "test.db"));
 let server: ReturnType<typeof startDaemon>;
+let cursorToken: string;
 
 const topicEvent = newEvent("signal.topic", "import:claude", {
   topic: "rust", weight: 0.9, intent: "building", sentiment: "positive",
@@ -31,23 +38,24 @@ before(() => {
   store.append([topicEvent]);
   store.rebuild();
   server = startDaemon(store, PORT);
+  cursorToken = issueToken("cursor");
 });
 after(() => { server.close(); store.close(); rmSync(dir, { recursive: true, force: true }); });
 
 test("GET / serves the dashboard", async () => {
-  const r = await fetch(BASE + "/");
+  const r = await authed("/");
   assert.equal(r.status, 200);
   assert.match(r.headers.get("content-type") ?? "", /text\/html/);
   assert.match(await r.text(), /persnally/);
 });
 
 test("GET /topics returns the derived view", async () => {
-  const topics = await (await fetch(BASE + "/topics")).json() as Array<{ topic_key: string }>;
+  const topics = await (await authed("/topics")).json() as Array<{ topic_key: string }>;
   assert.equal(topics[0]?.topic_key, "rust");
 });
 
 test("GET /events?ids= resolves provenance lookups", async () => {
-  const events = await (await fetch(`${BASE}/events?ids=${topicEvent.id},missing`)).json() as Array<{ id: string }>;
+  const events = await (await authed(`/events?ids=${topicEvent.id},missing`)).json() as Array<{ id: string }>;
   assert.equal(events.length, 1);
   assert.equal(events[0]?.id, topicEvent.id);
 });
@@ -58,9 +66,9 @@ test("POST /events validates and rejects garbage", async () => {
 });
 
 test("GET /profile is 404 before synthesis, 200 after save", async () => {
-  assert.equal((await fetch(BASE + "/profile")).status, 404);
+  assert.equal((await authed("/profile")).status, 404);
   store.saveProfile({ headline: "h", sections: [], generated_at: "2026-06-11T00:00:00Z", model: "test" });
-  assert.equal((await fetch(BASE + "/profile")).status, 200);
+  assert.equal((await authed("/profile")).status, 200);
 });
 
 test("POST /events without id gets one assigned, and signal batches rebuild views", async () => {
@@ -77,7 +85,7 @@ test("POST /events without id gets one assigned, and signal batches rebuild view
   const body = await r.json() as { inserted: number; ids: string[] };
   assert.equal(body.inserted, 1);
   assert.match(body.ids[0] ?? "", /^[0-9a-f-]{36}$/);
-  const topics = await (await fetch(BASE + "/topics")).json() as Array<{ topic_key: string }>;
+  const topics = await (await authed("/topics")).json() as Array<{ topic_key: string }>;
   assert.ok(topics.some((t) => t.topic_key === "sqlite"), "rebuild must run for signal events");
 });
 
@@ -102,7 +110,7 @@ test("requests with a foreign Host are rejected (DNS rebinding)", async () => {
 });
 
 test("POST /events without JSON content type is rejected (CSRF preflight bypass)", async () => {
-  const r = await fetch(BASE + "/events", {
+  const r = await authed("/events", {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify({ type: "signal.topic" }),
@@ -111,7 +119,7 @@ test("POST /events without JSON content type is rejected (CSRF preflight bypass)
 });
 
 test("GET /engine reports engine status shape", async () => {
-  const e = await (await fetch(BASE + "/engine")).json() as {
+  const e = await (await authed("/engine")).json() as {
     hasKey: boolean; ollama: { reachable: boolean; models: string[] }; recommended: string; pull: { state: string };
   };
   assert.equal(typeof e.hasKey, "boolean");
@@ -128,19 +136,19 @@ test("POST /engine/key rejects non-Anthropic keys, accepts + masks a valid one, 
   const body = await r.json() as { ok: boolean; keyMasked: string };
   assert.equal(body.ok, true);
   assert.ok(body.keyMasked.startsWith("sk-ant-test0") && body.keyMasked.endsWith("cdef") && body.keyMasked.includes("…"));
-  const e = await (await fetch(BASE + "/engine")).json() as { hasKey: boolean }; // applied live, no restart
+  const e = await (await authed("/engine")).json() as { hasKey: boolean }; // applied live, no restart
   assert.equal(e.hasKey, true);
 });
 
 test("POST /engine/key without JSON content type is rejected", async () => {
-  const r = await fetch(BASE + "/engine/key", {
+  const r = await authed("/engine/key", {
     method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ key: "sk-ant-x" }),
   });
   assert.equal(r.status, 415);
 });
 
 test("POST /events accepts context.read and keeps it out of /topics", async () => {
-  const before = await (await fetch(BASE + "/topics")).json() as Array<{ topic_key: string }>;
+  const before = await (await authed("/topics")).json() as Array<{ topic_key: string }>;
   const r = await postJson("/events", {
     type: "context.read",
     source: "mcp:cursor",
@@ -148,15 +156,15 @@ test("POST /events accepts context.read and keeps it out of /topics", async () =
     provenance: { kind: "mcp", client: "cursor" },
   });
   assert.equal(r.status, 201);
-  const after = await (await fetch(BASE + "/topics")).json() as Array<{ topic_key: string }>;
+  const after = await (await authed("/topics")).json() as Array<{ topic_key: string }>;
   assert.deepEqual(after.map((t) => t.topic_key), before.map((t) => t.topic_key));
 });
 
 test("DELETE /events requires explicit confirmation, then wipes", async () => {
-  assert.equal((await fetch(BASE + "/events", { method: "DELETE" })).status, 400);
-  const r = await fetch(BASE + "/events?confirm=all", { method: "DELETE" });
+  assert.equal((await authed("/events", { method: "DELETE" })).status, 400);
+  const r = await authed("/events?confirm=all", { method: "DELETE" });
   assert.equal(r.status, 200);
-  const stats = await (await fetch(BASE + "/stats")).json() as { total: number };
+  const stats = await (await authed("/stats")).json() as { total: number };
   assert.equal(stats.total, 0);
   // Restore the fixture for the remaining tests.
   store.append([topicEvent]);
@@ -164,41 +172,43 @@ test("DELETE /events requires explicit confirmation, then wipes", async () => {
 });
 
 test("DELETE /topics/:topic hard-deletes and rebuilds", async () => {
-  const r = await fetch(BASE + "/topics/" + encodeURIComponent("rust"), { method: "DELETE" });
+  const r = await authed("/topics/" + encodeURIComponent("rust"), { method: "DELETE" });
   const body = await r.json() as { deleted: number };
   assert.equal(body.deleted, 1);
-  const topics = await (await fetch(BASE + "/topics")).json() as unknown[];
+  const topics = await (await authed("/topics")).json() as unknown[];
   assert.equal(topics.length, 0);
 });
 
 test("POST /scopes sets a client allowlist and GET /scopes reflects it", async () => {
   const r = await postJson("/scopes", { client: "cursor", categories: ["technology", "career"] });
   assert.equal(r.status, 200);
-  const scopes = await (await fetch(BASE + "/scopes")).json() as Record<string, string[]>;
+  const scopes = await (await authed("/scopes")).json() as Record<string, string[]>;
   assert.deepEqual(scopes.cursor, ["technology", "career"]);
 });
 
 test("POST /scopes with [] revokes (client reads nothing) — enforced on /profile", async () => {
   await postJson("/scopes", { client: "cursor", categories: [] });
-  // A revoked client is 'scoped' → /profile is scoped-out (403 unless a scoped profile exists).
-  assert.equal((await fetch(BASE + "/profile?client=cursor")).status, 403);
+  // Enforcement follows the client's own token: the owner always reads unscoped.
+  const r = await fetch(BASE + "/profile", { headers: { authorization: `Bearer ${cursorToken}` } });
+  assert.equal(r.status, 403, "a revoked client is scoped-out of the profile");
 });
 
 test("POST /scopes validates: unknown category 400, missing client 400, non-JSON 415", async () => {
   assert.equal((await postJson("/scopes", { client: "cursor", categories: ["bogus"] })).status, 400);
   assert.equal((await postJson("/scopes", { categories: ["technology"] })).status, 400);
   assert.equal((await postJson("/scopes", { client: "cursor", categories: "technology" })).status, 400);
-  const r = await fetch(BASE + "/scopes", { method: "POST", headers: { "Content-Type": "text/plain" }, body: "{}" });
+  const r = await authed("/scopes", { method: "POST", headers: { "Content-Type": "text/plain" }, body: "{}" });
   assert.equal(r.status, 415);
 });
 
 test("DELETE /scopes/:client clears the scope (restores full access)", async () => {
   await postJson("/scopes", { client: "cursor", categories: ["technology"] });
-  const r = await fetch(BASE + "/scopes/cursor", { method: "DELETE" });
+  const r = await authed("/scopes/cursor", { method: "DELETE" });
   assert.equal(r.status, 200);
   assert.deepEqual(await r.json(), { cleared: true });
-  const scopes = await (await fetch(BASE + "/scopes")).json() as Record<string, string[]>;
+  const scopes = await (await authed("/scopes")).json() as Record<string, string[]>;
   assert.equal(scopes.cursor, undefined);
   // Cleared → unrestricted again: /profile no longer scoped-out (404 = none synthesized, not 403).
-  assert.equal((await fetch(BASE + "/profile?client=cursor")).status, 404);
+  const r2 = await fetch(BASE + "/profile", { headers: { authorization: `Bearer ${cursorToken}` } });
+  assert.equal(r2.status, 404);
 });
