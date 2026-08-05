@@ -10,6 +10,10 @@ import { anthropicExtract, DEFAULT_EXTRACT_MODEL, type LlmExtract } from "../llm
 import { proseLines, stripNoise } from "../prose.js";
 import { analyzeVoice } from "../stylometry.js";
 
+// Enough attempts to tell a bad response apart from a dead engine, few enough
+// that a dead engine costs a handful of calls instead of the whole batch.
+const FAILFAST_AFTER = 3;
+
 const MAX_CONVO_CHARS = 30_000;
 const MAX_IMPORT_FILE_BYTES = 400 * 1024 * 1024; // ~400 MB — under Node's ~512 MB string cap; larger needs streaming
 const DEFAULT_CONCURRENCY = 4;
@@ -63,6 +67,11 @@ export interface ImportResult {
   events: PersnallyEvent[];
   batch: string;
   conversationsProcessed: number;
+  /** Extraction outcomes. Zero succeeded with some failed means the engine is
+      down, not that these conversations were unusual — callers back off on that
+      rather than retrying the same content on the next tick. */
+  extractionsSucceeded: number;
+  extractionsFailed: number;
 }
 
 /**
@@ -110,7 +119,13 @@ export async function extractEvents(
 
   // Extraction calls run concurrently (each conversation is independent); events
   // are appended in conversation order below, so output is identical to a serial run.
+  let succeeded = 0;
+  let failed = 0;
   const topicsPerConvo = await mapBounded(jobs, concurrency, async ({ convo, text }) => {
+    // Several failures and nothing working yet means the engine is broken — a bad
+    // key, no credits, a provider outage — and every remaining call will fail the
+    // same way. Stop paying for the rest of the batch.
+    if (succeeded === 0 && failed >= FAILFAST_AFTER) return [];
     try {
       const result = await extract({
         model,
@@ -119,8 +134,11 @@ export async function extractEvents(
         schema: topicsExtraction,
         content: `Conversation title: ${convo.name}\n\nUser messages:\n${text}`,
       });
-      return topicsExtraction.parse(result).topics;
+      const topics = topicsExtraction.parse(result).topics;
+      succeeded++;
+      return topics;
     } catch (e) {
+      failed++;
       // One malformed extraction (e.g. the model returns an out-of-enum value)
       // must not abort a whole multi-conversation import. Skip it — leaving no
       // conversation_uuid marker, so the next pass retries it — and keep the rest.
@@ -174,5 +192,10 @@ export async function extractEvents(
     ...(span.length ? { source_span: [span[0]!, span[span.length - 1]!] } : {}),
   }, { kind: "import", batch, file: opts.file }));
 
-  return { events, batch, conversationsProcessed: parsed.conversations.length };
+  return {
+    events, batch,
+    conversationsProcessed: parsed.conversations.length,
+    extractionsSucceeded: succeeded,
+    extractionsFailed: failed,
+  };
 }
