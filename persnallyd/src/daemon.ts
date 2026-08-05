@@ -430,6 +430,10 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
   return server;
 }
 
+// A pass slower than the 30-minute timer would otherwise overlap the next one:
+// duplicate extraction spend, and two writers racing the same source.
+let importing = false;
+
 /**
  * Ingest Claude Code sessions created since the last pass — the daemon's
  * automatic capture of new chats (no user action, no per-session hook). A
@@ -437,6 +441,11 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
  * Never throws — capture must not take the daemon down.
  */
 export async function autoImportNewSessions(store: EventStore): Promise<void> {
+  if (importing) {
+    console.error("auto-import: previous pass still running — skipping this tick");
+    return;
+  }
+  importing = true;
   try {
     const engine = await chooseExtractor("extract").catch(() => null);
     if (!engine) return;
@@ -447,6 +456,10 @@ export async function autoImportNewSessions(store: EventStore): Promise<void> {
     }
   } catch (e) {
     console.error("auto-import failed:", e instanceof Error ? e.message : e);
+  } finally {
+    // finally, not the end of try: the engine-less path returns early, and a
+    // stuck flag would silence auto-import until the next daemon restart.
+    importing = false;
   }
 }
 

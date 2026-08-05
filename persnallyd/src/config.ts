@@ -4,7 +4,7 @@
  * are preserved (the file predates v2). Saved with owner-only permissions.
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DATA_DIR } from "./paths.js";
 
@@ -14,9 +14,28 @@ function configFile(): string {
 }
 
 export function loadConfig(): Record<string, unknown> {
+  const file = configFile();
+  let raw: string;
   try {
-    return JSON.parse(readFileSync(configFile(), "utf-8")) as Record<string, unknown>;
+    raw = readFileSync(file, "utf-8");
   } catch {
+    return {}; // not created yet — the normal first-run path
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not a JSON object");
+    return parsed as Record<string, unknown>;
+  } catch (e) {
+    // An unreadable config holds the API key, client tokens and scopes. Treating
+    // it as empty silently drops all three and the next save overwrites it, so
+    // keep a copy and say so loudly instead.
+    const backup = `${file}.corrupt`;
+    try {
+      if (!existsSync(backup)) copyFileSync(file, backup);
+      console.error(`config at ${file} is unreadable (${e instanceof Error ? e.message : e}); kept a copy at ${backup}`);
+    } catch {
+      console.error(`config at ${file} is unreadable and could not be backed up: ${e instanceof Error ? e.message : e}`);
+    }
     return {};
   }
 }
