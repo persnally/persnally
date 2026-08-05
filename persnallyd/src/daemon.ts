@@ -431,15 +431,17 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
   // Every 30 min: pick up new Claude Code chats, then run the once-a-day reflection.
   const timer = setInterval(async () => {
     await autoImportNewSessions(store);
-    const lastRun = loadConfig().last_consolidation;
-    if (!shouldRunNow(typeof lastRun === "string" ? lastRun : undefined, new Date())) return;
+    // The attempt timestamp, not the success one: a failing run must back off to
+    // daily instead of retrying on every tick.
+    const lastAttempt = loadConfig().last_consolidation_attempt;
+    if (!shouldRunNow(typeof lastAttempt === "string" ? lastAttempt : undefined, new Date())) return;
     try {
       const engine = await chooseExtractor("extract").catch(() => null);
       const r = await runConsolidation(store, engine);
       safeRefreshVoice(store, "cli"); // nightly: keep the voice fingerprint fresh + clean
       console.error(`consolidation: ${r.newSignals} new signals, ${r.assertions} assertions, profile ${r.profileRefreshed ? "refreshed" : "kept"}, ${r.stylePruned} style signals pruned`);
     } catch (e) {
-      console.error("consolidation failed:", e instanceof Error ? e.message : e);
+      console.error(`consolidation failed (retrying tomorrow, not this hour): ${e instanceof Error ? e.message : e}`);
     }
   }, 30 * 60 * 1000);
   timer.unref();
