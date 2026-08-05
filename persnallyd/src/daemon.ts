@@ -395,12 +395,30 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         if (url.searchParams.get("confirm") !== "all") {
           return json(res, 400, { error: "destructive: requires ?confirm=all" });
         }
+        // A client that can't read everything can't destroy everything. Scoped
+        // clients keep per-topic forget; the wipe is the owner's to run.
+        if (auth.kind === "client" && allowedCategories(auth.client) !== null) {
+          return json(res, 403, {
+            error: `'${auth.client}' is limited to specific categories, so it can't delete data it can't read. Wipe everything from the dashboard, or run: persnallyd forget --all`,
+          });
+        }
         store.forgetAll();
         return json(res, 200, { deleted: "all" });
       }
       if (req.method === "DELETE" && url.pathname.startsWith("/topics/")) {
         const topic = decodeURIComponent(url.pathname.slice("/topics/".length));
         if (!topic) return json(res, 400, { error: "topic required" });
+        // Same rule one route down: a scoped client could otherwise delete a
+        // topic in a category it isn't allowed to read. Out-of-scope topics
+        // report the same "nothing deleted" as topics that don't exist —
+        // answering differently would confirm what the scope exists to hide.
+        if (auth.kind === "client") {
+          const allowed = allowedCategories(auth.client);
+          const category = store.topicCategory(topic);
+          if (allowed !== null && (category === null || !allowed.includes(category as Category))) {
+            return json(res, 200, { deleted: 0 });
+          }
+        }
         return json(res, 200, { deleted: store.forgetTopic(topic) });
       }
       return json(res, 404, { error: "not found" });

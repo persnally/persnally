@@ -425,6 +425,15 @@ export class EventStore {
     return { items, stats };
   }
 
+  /** A topic's category, or null if it isn't in the graph — lets the daemon hold
+      a destructive request to the same categories the client is allowed to read. */
+  topicCategory(topic: string): string | null {
+    const key = normalizeTopic(topic);
+    if (!key) return null;
+    const row = this.db.prepare("SELECT category FROM view_topics WHERE topic_key = ?").get(key) as { category: string } | undefined;
+    return row?.category ?? null;
+  }
+
   topics(limit = 50): TopicRow[] {
     const rows = this.db
       .prepare("SELECT * FROM view_topics ORDER BY weight DESC LIMIT ?")

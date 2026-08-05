@@ -15,7 +15,7 @@ import { saveConfig } from "../src/config.js";
 import { startDaemon } from "../src/daemon.js";
 import { newEvent } from "../src/events.js";
 import {
-  clearSessions, createSession, dashboardKey, issueToken, rotateDashboardKey,
+  clearScope, clearSessions, createSession, dashboardKey, issueToken, rotateDashboardKey,
   SESSION_COOKIE, sessionValid, setScope, verifyDashboardKey,
 } from "../src/permissions.js";
 import { EventStore } from "../src/store.js";
@@ -319,5 +319,76 @@ describe("the browser guards still hold", () => {
   test("the loopback Origin still passes", async () => {
     const r = await raw("/stats", { Origin: BASE, ...asOwner() });
     assert.equal(r.status, 200);
+  });
+});
+
+describe("destructive actions respect the client's scope", () => {
+  // A client that cannot read a category must not be able to destroy it.
+  const scopedToken = () => { setScope("editor-z", ["technology"]); return issueToken("editor-z"); };
+  const openToken = () => { clearScope("editor-open"); return issueToken("editor-open"); };
+
+  const health = () => newEvent("signal.topic", "import:claude", {
+    topic: "therapy", weight: 0.8, intent: "learning", sentiment: "positive",
+    depth: "deep", category: "health", entities: [],
+  }, { kind: "import", batch: "b2", file: "conversations.json" });
+
+  test("a scoped client cannot wipe the store, and nothing is deleted", async () => {
+    const token = scopedToken();
+    const before = store.stats().total;
+    const r = await fetch(`${BASE}/events?confirm=all`, { method: "DELETE", headers: asBearer(token) });
+    assert.equal(r.status, 403);
+    assert.match(((await r.json()) as { error: string }).error, /can't delete data it can't read/);
+    assert.equal(store.stats().total, before, "the store survived");
+  });
+
+  test("a scoped client cannot delete a topic outside its categories", async () => {
+    const token = scopedToken();
+    const t = health();
+    store.append([t]);
+    store.rebuild();
+    assert.equal(store.topicCategory("therapy"), "health");
+
+    const r = await fetch(`${BASE}/topics/therapy`, { method: "DELETE", headers: asBearer(token) });
+    assert.equal(r.status, 200);
+    assert.deepEqual(await r.json(), { deleted: 0 }, "reports nothing deleted, not a 403");
+    assert.equal(store.topicCategory("therapy"), "health", "the out-of-scope topic still exists");
+  });
+
+  test("an out-of-scope topic is indistinguishable from one that doesn't exist", async () => {
+    const token = scopedToken();
+    const outOfScope = await (await fetch(`${BASE}/topics/therapy`, { method: "DELETE", headers: asBearer(token) })).json();
+    const nonexistent = await (await fetch(`${BASE}/topics/does-not-exist-at-all`, { method: "DELETE", headers: asBearer(token) })).json();
+    assert.deepEqual(outOfScope, nonexistent, "the response must not confirm the topic exists");
+  });
+
+  test("a scoped client can still delete a topic inside its categories", async () => {
+    const token = scopedToken();
+    const t = newEvent("signal.topic", "import:claude", {
+      topic: "zig lang", weight: 0.7, intent: "learning", sentiment: "positive",
+      depth: "deep", category: "technology", entities: [],
+    }, { kind: "import", batch: "b3", file: "conversations.json" });
+    store.append([t]);
+    store.rebuild();
+    const r = await fetch(`${BASE}/topics/zig%20lang`, { method: "DELETE", headers: asBearer(token) });
+    assert.equal(r.status, 200);
+    assert.equal(((await r.json()) as { deleted: number }).deleted, 1, "in-scope forget still works");
+    assert.equal(store.topicCategory("zig lang"), null, "and really deleted it");
+  });
+
+  test("an unscoped client keeps the wipe — the grant it always had", async () => {
+    const token = openToken();
+    store.append([health()]);
+    store.rebuild();
+    const r = await fetch(`${BASE}/events?confirm=all`, { method: "DELETE", headers: asBearer(token) });
+    assert.equal(r.status, 200);
+    assert.equal(store.stats().total, 0, "an unscoped client may still wipe");
+  });
+
+  test("the owner keeps the wipe", async () => {
+    store.append([health()]);
+    store.rebuild();
+    const r = await fetch(`${BASE}/events?confirm=all`, { method: "DELETE", headers: asOwner() });
+    assert.equal(r.status, 200);
+    assert.equal(store.stats().total, 0);
   });
 });
