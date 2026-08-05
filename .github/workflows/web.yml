@@ -5,16 +5,31 @@ name: Web
 on:
   push:
     branches: [main, dev]
-    paths: ["web/**", ".github/workflows/web.yml"]
+    paths: ["web/**", "persnallyd/src/dashboard.html", ".github/workflows/web.yml"]
   pull_request:
     branches: [main, dev]
-    paths: ["web/**", ".github/workflows/web.yml"]
+    paths: ["web/**", "persnallyd/src/dashboard.html", ".github/workflows/web.yml"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # The landing page shows the real dashboard in an iframe. If the copy drifts,
+  # the site advertises a product that no longer looks like the one you install.
+  preview-sync:
+    name: Web — Dashboard preview in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: dashboard-preview.html matches the dashboard it mirrors
+        run: |
+          if ! diff -q persnallyd/src/dashboard.html web/public/dashboard-preview.html; then
+            echo "::error file=web/public/dashboard-preview.html::Drifted from persnallyd/src/dashboard.html. Re-sync with: cp persnallyd/src/dashboard.html web/public/dashboard-preview.html"
+            diff persnallyd/src/dashboard.html web/public/dashboard-preview.html | head -40
+            exit 1
+          fi
+
   web:
     name: Web — Lint
     runs-on: ubuntu-latest

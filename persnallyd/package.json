@@ -48,7 +48,10 @@
   "homepage": "https://persnally.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sidpan2011/persnally"
+    "url": "git+https://github.com/persnally/persnally.git"
+  },
+  "bugs": {
+    "url": "https://github.com/persnally/persnally/issues"
   },
   "publishConfig": {
     "access": "public"

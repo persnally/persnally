@@ -61,14 +61,16 @@ persnallyd dashboard                  # see it, with evidence for every claim
 persnallyd connect --all     # writes the MCP config for Claude Desktop, Claude Code, Cursor
 ```
 
-Or add the MCP server to any client manually. It exposes four tools backed by the daemon:
+Or add the MCP server to any client manually. It exposes six tools backed by the daemon:
 
 | Tool | What it does |
 |------|-------------|
 | `persnally_context` | Returns who you are + current interests, for the AI to use |
+| `persnally_ask` | Answers a question *about you* with a confidence score, or defers to asking you directly |
+| `persnally_search` | Looks up what Persnally knows on one subject (offline, no model call) |
 | `persnally_track` | Records signals from the conversation (topics, decisions, preferences) |
 | `persnally_interests` | Shows you your own tracked profile |
-| `persnally_forget` | Deletes a topic, or wipes everything |
+| `persnally_forget` | Deletes a topic, a writing pattern, or everything |
 
 ```jsonc
 // e.g. Claude Desktop — claude_desktop_config.json
@@ -103,12 +105,12 @@ persnallyd config set-key <sk-ant-…>     # key for the background daemon
 
 ## Status
 
-Early and moving fast — see [ROADMAP.md](./ROADMAP.md). Today: import from Claude, ChatGPT, Claude Code, and git; a decay-weighted interest graph; an evidence-linked profile; a voice & convention layer so connected tools answer the way you write; a local dashboard with full provenance and one-click deletion; per-client permission scoping; nightly consolidation; and the MCP layer that serves it all. Next: cross-tool context everywhere, then a behavior model that can answer *what would I do here?*
+Early and moving fast — see [ROADMAP.md](https://github.com/persnally/persnally/blob/main/ROADMAP.md). Today: import from Claude, ChatGPT, Claude Code, and git; a decay-weighted interest graph; an evidence-linked profile; a voice & convention layer so connected tools answer the way you write; a local dashboard with full provenance and one-click deletion; per-client permission scoping; nightly consolidation; and the MCP layer that serves it all. Next: cross-tool context everywhere, then a behavior model that can answer *what would I do here?*
 
 ## License
 
-[FSL-1.1-MIT](./LICENSE) — read it, audit it, run it, fork it for anything except reselling it as a competing service. Every release automatically becomes plain MIT two years after it ships. The [event schema](./docs/EVENT_SCHEMA.md) and [MCP interface](./docs/MCP_INTERFACE.md) are versioned open specs (CC-BY) — build against them freely.
+[FSL-1.1-MIT](./LICENSE) — read it, audit it, run it, fork it for anything except reselling it as a competing service. Every release automatically becomes plain MIT two years after it ships. The [event schema](https://github.com/persnally/persnally/blob/main/docs/EVENT_SCHEMA.md) and [MCP interface](https://github.com/persnally/persnally/blob/main/docs/MCP_INTERFACE.md) are versioned open specs (CC-BY) — build against them freely.
 
 ## Contributing
 
-Issues and PRs welcome. The codebase holds itself to a high bar — see [CONTRIBUTING.md](./CONTRIBUTING.md).
+Issues and PRs welcome. The codebase holds itself to a high bar — see [CONTRIBUTING.md](https://github.com/persnally/persnally/blob/main/CONTRIBUTING.md).
