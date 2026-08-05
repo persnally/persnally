@@ -75,7 +75,7 @@ test("only the genuinely new session is imported on a later pass", async () => {
 
 test("a missing transcripts directory is a no-op, not an error", async () => {
   const r = await importNewClaudeCodeSessions(store, extract, "model", join(root, "does-not-exist"));
-  assert.deepEqual(r, { newSessions: 0, events: 0, skipped: 0 });
+  assert.deepEqual(r, { newSessions: 0, events: 0, skipped: 0, engineFailed: false });
 });
 
 test("one conversation's malformed extraction is skipped; the rest still import", async () => {
@@ -112,4 +112,36 @@ test("one conversation's malformed extraction is skipped; the rest still import"
       .map((e) => (e.provenance as { conversation_uuid?: string }).conversation_uuid),
   );
   assert.equal(succeeded.size, 2, "the two valid sessions imported; the failed one was skipped, not fatal");
+});
+
+test("a dead engine is reported as engineFailed, and stops after a few calls", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "autoimport-dead-"));
+  const sessions = join(dir, "-p");
+  mkdirSync(sessions, { recursive: true });
+  for (let i = 0; i < 9; i++) {
+    writeFileSync(join(sessions, `dead${i}.jsonl`),
+      [user(`prompt a ${i}`, `dead${i}`), user(`prompt b ${i}`, `dead${i}`)].join("\n") + "\n");
+  }
+  const dbDir = mkdtempSync(join(tmpdir(), "autoimport-dead-db-"));
+  const s = new EventStore(join(dbDir, "t.db"));
+  after(() => { s.close(); rmSync(dir, { recursive: true, force: true }); rmSync(dbDir, { recursive: true, force: true }); });
+
+  let calls = 0;
+  const dead: LlmExtract = async () => { calls++; throw new Error("400 credit balance is too low"); };
+  const r = await importNewClaudeCodeSessions(s, dead, "model", dir);
+
+  assert.equal(r.engineFailed, true, "an engine that never succeeds must be reported, not silently retried");
+  assert.equal(r.newSessions, 9, "the sessions were seen");
+  assert.ok(calls <= 4, `fail-fast must cap the wasted calls; made ${calls} for 9 conversations`);
+  assert.equal(s.importedConversationUuids("import:claude-code").size, 0,
+    "nothing marked imported — which is why the caller has to back off");
+});
+
+test("a working engine reports engineFailed false", async () => {
+  const dbDir = mkdtempSync(join(tmpdir(), "autoimport-ok-db-"));
+  const s = new EventStore(join(dbDir, "t.db"));
+  after(() => { s.close(); rmSync(dbDir, { recursive: true, force: true }); });
+  const r = await importNewClaudeCodeSessions(s, extract, "model", root);
+  assert.equal(r.engineFailed, false);
+  assert.ok(r.newSessions > 0);
 });

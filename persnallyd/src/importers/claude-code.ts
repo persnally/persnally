@@ -111,6 +111,9 @@ export interface IncrementalImport {
   newSessions: number;
   events: number;
   skipped: number; // sessions already in the store
+  /** The engine failed outright, so nothing was marked as imported. The caller
+      must back off: these sessions will otherwise be retried on every tick. */
+  engineFailed: boolean;
 }
 
 /**
@@ -126,13 +129,18 @@ export async function importNewClaudeCodeSessions(
   model = DEFAULT_EXTRACT_MODEL,
   root: string = DEFAULT_TRANSCRIPTS_DIR,
 ): Promise<IncrementalImport> {
-  if (!existsSync(root)) return { newSessions: 0, events: 0, skipped: 0 };
+  if (!existsSync(root)) return { newSessions: 0, events: 0, skipped: 0, engineFailed: false };
   const { parsed } = parseClaudeCodeTranscripts(root);
   const seen = store.importedConversationUuids("import:claude-code");
   const fresh = parsed.conversations.filter((c) => !seen.has(c.uuid));
   const skipped = parsed.conversations.length - fresh.length;
-  if (!fresh.length) return { newSessions: 0, events: 0, skipped };
-  const { events } = await extractClaudeCodeEvents({ ...parsed, conversations: fresh }, extract, model, root);
+  if (!fresh.length) return { newSessions: 0, events: 0, skipped, engineFailed: false };
+  const { events, extractionsSucceeded, extractionsFailed } =
+    await extractClaudeCodeEvents({ ...parsed, conversations: fresh }, extract, model, root);
   store.append(events);
-  return { newSessions: fresh.length, events: events.length, skipped };
+  // Nothing extracted and something failed = the engine, not the transcripts.
+  // These sessions stay unmarked and will retry, so the caller has to stop
+  // calling — otherwise the same content is re-attempted every tick forever.
+  const engineFailed = extractionsSucceeded === 0 && extractionsFailed > 0;
+  return { newSessions: fresh.length, events: events.length, skipped, engineFailed };
 }
