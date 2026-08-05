@@ -9,6 +9,7 @@ import { z } from "zod";
 import { newEvent, type Provenance } from "./events.js";
 import type { LlmExtract } from "./llm.js";
 import type { Category } from "./permissions.js";
+import { overlapScore, queryTokens } from "./search.js";
 import type { EventStore } from "./store.js";
 
 // Below this, a wrong answer costs more trust than a deferral saves time.
@@ -55,7 +56,7 @@ export async function askUserModel(
   engine: { extract: LlmExtract; model: string } | null,
 ): Promise<AskResult> {
   const allowed = opts.allowed ?? null;
-  const { content, knownIds } = buildMaterial(store, allowed);
+  const { content, knownIds } = buildMaterial(store, opts.question, allowed);
 
   if (!engine) return record(store, opts, { deferred: true, reason: "no-engine" });
   if (!content) return record(store, opts, { deferred: true, reason: "not-enough-context" });
@@ -82,18 +83,42 @@ export async function askUserModel(
   return record(store, opts, { deferred: false, answer: parsed.answer, confidence: parsed.confidence, evidence });
 }
 
-/** Evidence corpus for the model. Scoped clients get only their allowed
-    categories' topics (never the cross-category profile or assertions) —
-    the same boundary the daemon enforces on /profile. */
-function buildMaterial(store: EventStore, allowed: Category[] | null): { content: string; knownIds: Set<string> } {
+// Identity-level material (profile, corrections, voice) is relevant to any
+// question and always goes in. Topics and assertions are the high-volume half,
+// so they're ranked against the question and budgeted — 150 assorted assertions
+// crowd out the handful that actually bear on what was asked.
+const TOPIC_BUDGET = 24;
+const ASSERTION_BUDGET = 24;
+// Relevance outranks strength, and strength orders whatever the question doesn't
+// match — so a question that matches nothing still gets the strongest material
+// rather than an empty corpus.
+const RELEVANCE_WEIGHT = 10;
+// Candidate pool before ranking, ordered by decayed weight. Matches what
+// search_context considers; a relevant topic weaker than the 1000th strongest
+// is out of reach, which is an accepted bound rather than an oversight.
+const TOPIC_CANDIDATES = 1000;
+
+/** Evidence corpus for the model, ranked against the question. Scoped clients
+    get only their allowed categories' topics (never the cross-category profile
+    or assertions) — the same boundary the daemon enforces on /profile. */
+function buildMaterial(store: EventStore, question: string, allowed: Category[] | null): { content: string; knownIds: Set<string> } {
   const knownIds = new Set<string>();
   const lines: string[] = [];
+  const q = queryTokens(question);
 
-  let topics = store.topics(30);
+  let topics = store.topics(TOPIC_CANDIDATES);
   if (allowed) topics = topics.filter((t) => allowed.includes(t.category as Category));
-  if (topics.length) {
+  const rankedTopics = topics
+    .map((t) => ({
+      t,
+      score: RELEVANCE_WEIGHT * (overlapScore(q, t.topic) * 3 + overlapScore(q, t.entities.join(" ")) * 2) + t.weight,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, TOPIC_BUDGET)
+    .map((r) => r.t);
+  if (rankedTopics.length) {
     lines.push("## Weighted interests (decayed)");
-    for (const t of topics) {
+    for (const t of rankedTopics) {
       const id = t.event_ids[0] ?? "";
       if (id) knownIds.add(id);
       lines.push(
@@ -109,12 +134,20 @@ function buildMaterial(store: EventStore, allowed: Category[] | null): { content
       lines.push(`# ${profile.headline}`);
       for (const s of profile.sections) lines.push(`### ${s.title}\n${s.body}`);
     }
-    const assertions = store.query({ type: "signal.assertion", limit: 150 });
+    const assertions = store.query({ type: "signal.assertion", limit: 1_000 })
+      .map((e) => {
+        const p = e.payload as { claim: string; kind: string; confidence: number; evidence: string };
+        return {
+          e, p,
+          score: RELEVANCE_WEIGHT * (overlapScore(q, p.claim) * 2 + overlapScore(q, p.evidence)) + p.confidence,
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, ASSERTION_BUDGET);
     if (assertions.length) {
       lines.push("", "## Extracted assertions");
-      for (const e of assertions) {
+      for (const { e, p } of assertions) {
         knownIds.add(e.id);
-        const p = e.payload as { claim: string; kind: string; confidence: number };
         lines.push(`- [${e.id}] (${p.kind}, conf ${p.confidence}) ${p.claim}`);
       }
     }
