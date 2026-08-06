@@ -22,7 +22,7 @@ export function stripNoise(text: string): string {
     .replace(/<(?:task-notification|system-reminder|local-command[^>]*|command-[^>]*)>[\s\S]*?<\/[^>]+>/gi, " ")
     .replace(/<\/?[a-z][^>]*>/gi, " ")
     .replace(/https?:\/\/\S+/g, " ")
-    .replace(/(?:[~\w.\-]+)?(?:\/[\w.\-]+){2,}\/?/g, " ") // /a/b style paths
+    .replace(/(?:[~\w.-]+)?(?:\/[\w.-]+){2,}\/?/g, " ") // /a/b style paths
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

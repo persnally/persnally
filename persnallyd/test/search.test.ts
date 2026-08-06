@@ -45,7 +45,7 @@ test("finds topics by name and entities, assertions by claim", () => {
 test("entity-only matches surface the parent topic", () => {
   const hits = searchContext(store, "tokio");
   assert.equal(hits[0]?.kind, "topic");
-  assert.match(hits[0]!.text, /Rust async/);
+  assert.match(hits[0].text, /Rust async/);
 });
 
 test("no token overlap → no hits; stopword-only queries → no hits", () => {

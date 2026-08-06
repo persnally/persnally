@@ -42,7 +42,7 @@ export function analyzeVoice(messages: string[]): VoiceProfile {
   const uni = new Map<string, number>(), tri = new Map<string, number>(), quad = new Map<string, number>();
   const sentLens: number[] = [];
   const wordSet = new Set<string>();
-  let total = 0, sent = 0, q = 0, dir = 0, hedge = 0, emoji = 0, lowerI = 0, upperI = 0, please = 0, bulletLines = 0;
+  let sent = 0, dir = 0, hedge = 0, emoji = 0, lowerI = 0, upperI = 0, please = 0, bulletLines = 0;
 
   for (const msg of messages) {
     emoji += (msg.match(EMOJI) || []).length;
@@ -51,7 +51,6 @@ export function analyzeVoice(messages: string[]): VoiceProfile {
     for (const ln of msg.split("\n")) if (/^\s*[-*•]\s/.test(ln)) bulletLines++;
 
     const words = tokenize(msg);
-    total += words.length;
     words.forEach((w) => {
       wordSet.add(w);
       if (!STOP.has(w) && w.length >= 4 && !/^\d+$/.test(w)) uni.set(w, (uni.get(w) || 0) + 1);
@@ -63,7 +62,6 @@ export function analyzeVoice(messages: string[]): VoiceProfile {
       const s = raw.trim(); if (!s) continue;
       sent++;
       const sw = tokenize(s); if (sw.length) sentLens.push(sw.length);
-      if (/\?\s*$/.test(s)) q++;
       const low = " " + s.toLowerCase() + " ";
       if (HEDGE.some((h) => low.includes(h))) hedge++;
       if (sw[0] && DIRECTIVE.has(sw[0])) dir++;

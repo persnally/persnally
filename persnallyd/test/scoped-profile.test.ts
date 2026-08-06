@@ -22,10 +22,10 @@ const owner = () => ({ headers: { cookie: `${SESSION_COOKIE}=${createSession()}`
 const bearer = (t: string) => ({ headers: { authorization: `Bearer ${t}` } });
 
 const FAKE_PROFILE = { headline: "A tech-only slice", sections: [{ title: "Focus", body: "Builds tools.", evidence_event_ids: [] }] };
-const fakeExtract = (calls?: { content: string }): LlmExtract => (async (opts) => {
+const fakeExtract = (calls?: { content: string }): LlmExtract => async (opts) => {
   if (calls) calls.content = opts.content;
   return FAKE_PROFILE;
-}) as LlmExtract;
+};
 
 before(() => {
   store.append([

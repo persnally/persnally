@@ -27,7 +27,7 @@ test("synthesizes, persists, and round-trips a profile with evidence ids", async
   store.rebuild();
 
   let seenContent = "";
-  const profile = await synthesizeProfile(store, async ({ content }) => {
+  await synthesizeProfile(store, async ({ content }) => {
     seenContent = content;
     return {
       headline: "A builder",

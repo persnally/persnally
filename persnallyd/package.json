@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "build": "tsc && node -e \"require('fs').copyFileSync('src/dashboard.html','build/src/dashboard.html')\"",
+    "lint": "eslint .",
     "test": "npm run build && node --test build/test/*.test.js && node test-mcp-e2e.mjs",
     "serve": "npm run build && node build/src/cli.js serve",
     "prepublishOnly": "node -e \"const fs=require('fs');fs.copyFileSync('../README.md','README.md');fs.copyFileSync('../LICENSE','LICENSE')\" && npm test"
@@ -43,9 +44,13 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.13.5",
-    "typescript": "^5.7.3"
+    "eslint": "^10.8.0",
+    "eslint-plugin-security": "^4.0.1",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.66.0"
   },
   "keywords": [
     "mcp",

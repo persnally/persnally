@@ -45,7 +45,7 @@ async function guarded(fn: () => Promise<{ content: { type: "text"; text: string
   try {
     return await fn();
   } catch (e) {
-    return text(e instanceof DaemonUnreachable ? DAEMON_HINT : `Persnally error: ${e instanceof Error ? e.message : e}`);
+    return text(e instanceof DaemonUnreachable ? DAEMON_HINT : `Persnally error: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 

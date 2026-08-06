@@ -116,11 +116,11 @@ test("a failing run records the attempt but not the success watermark", async ()
   assert.equal(cfg.last_consolidation_attempt, now.toISOString(), "but the attempt is on record");
 
   // And that record is what stops the 30-minute retry.
-  assert.equal(shouldRunNow(cfg.last_consolidation_attempt as string, new Date("2026-08-05T14:30:00")), false,
+  assert.equal(shouldRunNow(cfg.last_consolidation_attempt, new Date("2026-08-05T14:30:00")), false,
     "no retry 30 minutes later");
-  assert.equal(shouldRunNow(cfg.last_consolidation_attempt as string, new Date("2026-08-05T23:59:00")), false,
+  assert.equal(shouldRunNow(cfg.last_consolidation_attempt, new Date("2026-08-05T23:59:00")), false,
     "and none later the same day");
-  assert.equal(shouldRunNow(cfg.last_consolidation_attempt as string, new Date("2026-08-06T03:30:00")), true,
+  assert.equal(shouldRunNow(cfg.last_consolidation_attempt, new Date("2026-08-06T03:30:00")), true,
     "tomorrow it tries again");
 });
 

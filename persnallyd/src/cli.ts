@@ -186,7 +186,7 @@ async function main(): Promise<void> {
       }
       if (connections.some((r) => r.client === "claude-code" && r.file)) {
         try { installClaudeCodeHook(); console.log("✓ Context hook installed (injects on every Claude Code session)"); }
-        catch (e) { console.error(`· Context hook skipped: ${e instanceof Error ? e.message : e}`); }
+        catch (e) { console.error(`· Context hook skipped: ${e instanceof Error ? e.message : String(e)}`); }
       }
 
       console.log(`\nDone${imported ? ` — ${imported} events imported` : ""}.`);
@@ -222,7 +222,7 @@ async function main(): Promise<void> {
             ? `Synthesized a ${cats.join("+")}-only profile for scoped clients.`
             : `No ${cats.join("/")} topics yet — scoped clients get topics only until there's material.`);
         } catch (e) {
-          console.error(`Scoped profile not synthesized (${e instanceof Error ? e.message : e}) — it will be built on the next synthesis.`);
+          console.error(`Scoped profile not synthesized (${e instanceof Error ? e.message : String(e)}) — it will be built on the next synthesis.`);
         } finally {
           store.close();
         }
@@ -267,7 +267,7 @@ async function main(): Promise<void> {
         try {
           console.log(`Installed Claude Code context hook (${installClaudeCodeHook()})`);
         } catch (e) {
-          console.error(`Context hook not installed: ${e instanceof Error ? e.message : e}`);
+          console.error(`Context hook not installed: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
       return;

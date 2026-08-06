@@ -5,7 +5,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, openSync, readSync, closeSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, openSync, readSync, closeSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, saveConfig } from "./config.js";
@@ -44,7 +44,7 @@ function zipHasConversations(zipPath: string): boolean {
     // permission denied) — an ordinary non-matching zip never throws here, so
     // this can't spam on unrelated Downloads clutter. Surface it: a real export
     // failing silently is the worst onboarding failure mode there is.
-    console.error(`persnally: couldn't read ${zipPath} (${e instanceof Error ? e.message : e}) — skipping`);
+    console.error(`persnally: couldn't read ${zipPath} (${e instanceof Error ? e.message : String(e)}) — skipping`);
     return false;
   }
 }
