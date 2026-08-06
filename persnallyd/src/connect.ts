@@ -6,17 +6,25 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { ensurePrivateFile, FILE_MODE } from "./paths.js";
 import { issueToken } from "./permissions.js";
 
 export const CLIENTS = ["claude-code", "claude-desktop", "cursor"] as const;
 export type Client = (typeof CLIENTS)[number];
 
-/** Write JSON via temp file + rename: a crash mid-write can't corrupt the user's config. */
+/**
+ * Write JSON via temp file + rename: a crash mid-write can't corrupt the user's
+ * config. The temp file is created owner-only because we are about to write a
+ * bearer token into it — and because rename replaces the destination's mode
+ * with the temp file's, so anything looser here would silently downgrade a
+ * config the user had already restricted.
+ */
 function writeJsonAtomic(file: string, cfg: unknown): void {
   mkdirSync(dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(cfg, null, 2) + "\n");
+  writeFileSync(tmp, JSON.stringify(cfg, null, 2) + "\n", { mode: FILE_MODE });
   renameSync(tmp, file);
+  ensurePrivateFile(file);
 }
 
 function configPathFor(client: Client): { file: string; installed: boolean } {
