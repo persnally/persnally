@@ -3,6 +3,9 @@ name: Web
 # Marketing site. Vercel already builds + deploys every PR, so CI only adds
 # the lint gate Vercel doesn't run. Triggers only on web changes.
 on:
+  # Manual trigger: on 2026-08-06 pushes stopped producing runs entirely and
+  # there was no way to force one.
+  workflow_dispatch:
   push:
     branches: [main, dev]
     paths: ["web/**", "persnallyd/src/dashboard.html", ".github/workflows/web.yml"]
