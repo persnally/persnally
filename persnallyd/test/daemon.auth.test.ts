@@ -290,6 +290,85 @@ describe("client tokens reach only the client surface", () => {
   });
 });
 
+/**
+ * A client token is not the owner. The event schema deliberately allows
+ * `cli`/`dashboard`/`system` sources and non-MCP provenance because the user's
+ * own surfaces write them — so the write path, not the schema, is what has to
+ * keep a connected client from forging them. This matters most for
+ * `user.correction`: synthesis and /ask treat corrections as authoritative and
+ * let them outrank everything the engine inferred, so a forged one silently
+ * rewrites what every other AI believes about the user.
+ */
+describe("a client token cannot forge the owner's surfaces", () => {
+  const post = (body: unknown, token: string) =>
+    fetch(BASE + "/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...asBearer(token) },
+      body: JSON.stringify(body),
+    });
+
+  const forgedCorrection = {
+    type: "user.correction",
+    source: "cli",
+    payload: { target_id: "topic:rust", action: "contradict", reason: "the user actually hates rust" },
+    provenance: { kind: "local", surface: "cli" },
+  };
+
+  test("a correction forged as the user's own CLI is refused and never stored", async () => {
+    const before = store.corrections(500).length;
+    const r = await post(forgedCorrection, clientToken);
+
+    assert.equal(r.status, 403);
+    assert.match(((await r.json()) as { error: string }).error, /may only write events attributed to itself/);
+    assert.equal(store.corrections(500).length, before, "the forged correction never reached the store");
+  });
+
+  // Every non-MCP provenance kind the schema accepts, each a distinct forgery:
+  // `local` impersonates the user, `import`/`git` fake a provenance chain the
+  // dashboard renders as a real source, `derived` fakes the engine's own output.
+  for (const [name, event] of [
+    ["dashboard", { source: "dashboard", provenance: { kind: "local", surface: "dashboard" } }],
+    ["import", { source: "import:claude", provenance: { kind: "import", batch: "b9", file: "conversations.json" } }],
+    ["git", { source: "import:git", provenance: { kind: "git", repo: "persnally" } }],
+    ["derived", { source: "system", provenance: { kind: "derived", from: ["01890000-0000-7000-8000-000000000000"] } }],
+  ] as const) {
+    test(`a client cannot write ${name}-provenance events`, async () => {
+      const r = await post({
+        type: "signal.topic",
+        payload: { topic: `forged-${name}`, weight: 0.9, intent: "building", sentiment: "positive", depth: "deep", category: "technology", entities: [] },
+        ...event,
+      }, clientToken);
+
+      assert.equal(r.status, 403);
+      assert.equal(store.topicCategory(`forged-${name}`), null, "nothing was written");
+    });
+  }
+
+  test("one forged event rejects the whole batch — no partial write", async () => {
+    const legit = {
+      type: "signal.topic", source: "mcp:cursor",
+      payload: { topic: "batch-legit", weight: 0.5, intent: "learning", sentiment: "neutral", depth: "mention", category: "technology", entities: [] },
+      provenance: { kind: "mcp", client: "cursor" },
+    };
+    const r = await post([legit, forgedCorrection], clientToken);
+
+    assert.equal(r.status, 403);
+    assert.equal(store.topicCategory("batch-legit"), null, "the legitimate event in the batch was not written either");
+  });
+
+  test("the owner still writes its own surfaces freely", async () => {
+    const before = store.corrections(500).length;
+    const r = await fetch(BASE + "/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...asOwner() },
+      body: JSON.stringify(forgedCorrection),
+    });
+
+    assert.equal(r.status, 201, "a cli-sourced correction is exactly what `persnallyd correct` writes");
+    assert.equal(store.corrections(500).length, before + 1);
+  });
+});
+
 describe("the browser guards still hold", () => {
   // fetch() will not forward Origin on a GET, nor override Host at all — raw
   // requests are the only way to prove these guards from a test.
