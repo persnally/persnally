@@ -32,9 +32,9 @@ export function loadConfig(): Record<string, unknown> {
     const backup = `${file}.corrupt`;
     try {
       if (!existsSync(backup)) copyFileSync(file, backup);
-      console.error(`config at ${file} is unreadable (${e instanceof Error ? e.message : e}); kept a copy at ${backup}`);
+      console.error(`config at ${file} is unreadable (${e instanceof Error ? e.message : String(e)}); kept a copy at ${backup}`);
     } catch {
-      console.error(`config at ${file} is unreadable and could not be backed up: ${e instanceof Error ? e.message : e}`);
+      console.error(`config at ${file} is unreadable and could not be backed up: ${e instanceof Error ? e.message : String(e)}`);
     }
     return {};
   }

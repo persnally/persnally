@@ -465,7 +465,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       safeRefreshVoice(store, "cli"); // nightly: keep the voice fingerprint fresh + clean
       console.error(`consolidation: ${r.newSignals} new signals, ${r.assertions} assertions, profile ${r.profileRefreshed ? "refreshed" : "kept"}, ${r.stylePruned} style signals pruned`);
     } catch (e) {
-      console.error(`consolidation failed (retrying tomorrow, not this hour): ${e instanceof Error ? e.message : e}`);
+      console.error(`consolidation failed (retrying tomorrow, not this hour): ${e instanceof Error ? e.message : String(e)}`);
     }
   }, 30 * 60 * 1000);
   timer.unref();

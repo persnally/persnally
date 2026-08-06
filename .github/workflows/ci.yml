@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   persnallyd:
-    name: persnallyd — Type Check, Build, Test
+    name: persnallyd — Lint, Type Check, Build, Test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -31,6 +31,9 @@ jobs:
           cache-dependency-path: persnallyd/package-lock.json
 
       - run: npm ci
+
+      - name: ESLint
+        run: npm run lint
 
       - name: Build (tsc strict) + test (incl. MCP protocol e2e)
         run: npm test

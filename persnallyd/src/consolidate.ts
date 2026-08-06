@@ -77,9 +77,9 @@ export async function runConsolidation(
   if (engine && newSignals.length >= ASSERTION_MIN_SIGNALS) {
     const summary = newSignals
       .map((e) => {
-        const p = e.payload as Record<string, unknown>;
+        const p = e.payload;
         return e.type === "signal.topic"
-          ? `- topic: ${p.topic} (${p.intent}, ${p.sentiment}, weight ${p.weight})`
+          ? `- topic: ${String(p.topic)} (${String(p.intent)}, ${String(p.sentiment)}, weight ${String(p.weight)})`
           : `- ${e.type}: ${JSON.stringify(p).slice(0, 140)}`;
       })
       .join("\n");

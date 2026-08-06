@@ -153,8 +153,9 @@ function installSystemd(cliPath: string, port: number): string {
     // Don't leave a half-installed unit that autostartInstalled() would report as live.
     rmSync(path, { force: true });
     throw new Error(
-      `systemd user service could not be enabled (${e instanceof Error ? e.message : e}) — ` +
+      `systemd user service could not be enabled (${e instanceof Error ? e.message : String(e)}) — ` +
       "is this a systemd distro with a user session? Fallback: `persnallyd start`.",
+      { cause: e },
     );
   }
   return path;
