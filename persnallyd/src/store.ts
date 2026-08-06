@@ -4,11 +4,10 @@
  */
 
 import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { topicWeight, type WeightSignal } from "./decay.js";
 import { newEvent, normalizeTopic, validateEvent, type PersnallyEvent } from "./events.js";
-import { DATA_DIR } from "./paths.js";
+import { DATA_DIR, ensurePrivateDir, ensurePrivateFile } from "./paths.js";
 import { assemblePack, type StyleSignal } from "./stylometry.js";
 
 const VIEW_SCHEMA_VERSION = 2;
@@ -88,9 +87,11 @@ export class EventStore {
   private db: Database.Database;
 
   constructor(path: string = DEFAULT_DB_PATH) {
-    mkdirSync(dirname(path), { recursive: true });
+    ensurePrivateDir(dirname(path));
     this.db = new Database(path);
     this.db.pragma("journal_mode = WAL");
+    // WAL brings up -wal and -shm alongside the db; all three hold event data.
+    for (const f of [path, `${path}-wal`, `${path}-shm`]) ensurePrivateFile(f);
     // The CLI and the daemon each open their own connection; a blocked writer
     // waits instead of failing fast with SQLITE_BUSY (better-sqlite3 defaults
     // to 5s — set explicitly with headroom for large rebuilds).

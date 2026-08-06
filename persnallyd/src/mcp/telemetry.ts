@@ -4,9 +4,10 @@
  * timestamps only, never conversation content. Analyzed by experiments/capture_rate.py.
  */
 
-import { appendFileSync, existsSync, mkdirSync } from "fs";
+import { appendFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { ensurePrivateDir, ensurePrivateFile, FILE_MODE } from "../paths.js";
 
 const DIR = join(homedir(), ".persnally");
 const FILE = join(DIR, "telemetry.jsonl");
@@ -25,9 +26,11 @@ export function getClient(): string {
 
 export function logEvent(event: string, data: Record<string, unknown> = {}): void {
   try {
-    if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true });
+    ensurePrivateDir(DIR);
     const line = JSON.stringify({ ts: new Date().toISOString(), event, client: clientName, ...data });
-    appendFileSync(FILE, line + "\n");
+    // Names which AI clients this user runs and when — owner-only on create.
+    appendFileSync(FILE, line + "\n", { mode: FILE_MODE });
+    ensurePrivateFile(FILE);
   } catch {
     // Telemetry must never break the server.
   }
