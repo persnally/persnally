@@ -53,6 +53,7 @@ persnallyd dashboard                  # see it, with evidence for every claim
 - **Event-sourced.** Everything is an append-only event; the profile and interest graph are *derived views* you can rebuild or delete at will.
 - **Provenance-complete.** Every claim in your profile links to the exact events behind it — the dashboard's "why does it think this?" is a real answer, not a guess.
 - **Truly deletable.** `persnallyd forget <topic>` hard-deletes the events *and* everything derived from them. No tombstones, no residue.
+- **Yours to take.** `persnallyd export` writes the whole store — events, profile, interests, voice — to a file you keep. No lock-in to prove.
 - **Deterministic reads.** Serving context to an AI never calls a model — it's instant, free, and works offline. Models run only at import and synthesis.
 
 ## Make your AI tools use it
@@ -99,6 +100,7 @@ persnallyd voice                         # refresh your "how you write" fingerpr
 persnallyd show [topics|events|profile]
 persnallyd dashboard                     # open the local dashboard (authenticated link)
 persnallyd activity [--json]             # context-read engagement over time (retention pulse)
+persnallyd export [--md] [--out <file>] # take everything with you (JSON, or a readable portrait)
 persnallyd forget <topic> | --all | --batch <id> | --style <dim> <pattern>
 persnallyd config set-key <sk-ant-…>     # key for the background daemon
 ```
