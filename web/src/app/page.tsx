@@ -441,7 +441,7 @@ function DashboardEmbed() {
         </span>
       </div>
       <iframe
-        src="/dashboard-preview.html"
+        src="/dashboard-preview.html?demo=1"
         title="The Persnally dashboard, running live in preview mode with sample data — scroll to explore your portrait, interest map, read receipts, and the ask loop"
         className="block h-[480px] w-full bg-[#0b0b0c] sm:h-[600px] lg:h-[720px]"
         loading="lazy"

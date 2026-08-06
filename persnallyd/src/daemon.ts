@@ -10,7 +10,7 @@ import { loadConfig, saveConfig } from "./config.js";
 import { runConsolidation, shouldRunNow } from "./consolidate.js";
 import {
   allowedCategories, CATEGORIES, clearScope, clientForToken, createSession, dashboardKey,
-  hasToken, loadScopes, SESSION_COOKIE, SESSION_TTL_SECONDS, sessionValid, setScope,
+  hasToken, isRevoked, loadScopes, SESSION_COOKIE, SESSION_TTL_SECONDS, sessionValid, setScope,
   verifyDashboardKey, type Category,
 } from "./permissions.js";
 import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Provenance } from "./events.js";
@@ -156,7 +156,12 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       }
 
       if (req.method === "GET" && url.pathname === "/stats") {
-        return json(res, 200, store.stats());
+        const stats = store.stats();
+        if (auth.kind !== "client") return json(res, 200, stats);
+        // `bySource` enumerates every other connected client — the owner's
+        // view, not a peer's. A revoked client gets no counts at all.
+        if (isRevoked(auth.client)) return json(res, 200, { total: 0, byType: {}, bySource: {}, first: null, last: null });
+        return json(res, 200, { ...stats, bySource: {} });
       }
       if (req.method === "GET" && url.pathname === "/activity") {
         return json(res, 200, store.activity());
@@ -184,12 +189,18 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         return profile ? json(res, 200, profile) : json(res, 404, { error: "no profile synthesized yet" });
       }
       if (req.method === "GET" && url.pathname === "/voice") {
-        // Stylistic, not topical — served to every client (it's how you write, not what about).
+        // Stylistic, not topical — a scoped client still gets it (it's how you
+        // write, not what about). A revoked one does not: "reads nothing" is
+        // stated without qualification in the dashboard, so it has to be true.
+        if (auth.kind === "client" && isRevoked(auth.client)) return json(res, 200, { pack: "", items: [] });
         return json(res, 200, store.voice());
       }
       if (req.method === "DELETE" && url.pathname.startsWith("/voice/")) {
         const [, , dimension, pattern] = url.pathname.split("/");
         if (!dimension || !pattern) return json(res, 400, { error: "dimension and pattern required" });
+        // A client that can't read a pattern can't tombstone it either, and the
+        // answer doesn't reveal whether it existed — same rule as /topics/.
+        if (auth.kind === "client" && isRevoked(auth.client)) return json(res, 200, { deleted: 0 });
         return json(res, 200, { deleted: store.forgetStyle(dimension, decodeURIComponent(pattern)) });
       }
       if (req.method === "GET" && url.pathname === "/scopes") {
@@ -405,11 +416,14 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         if (url.searchParams.get("confirm") !== "all") {
           return json(res, 400, { error: "destructive: requires ?confirm=all" });
         }
-        // A client that can't read everything can't destroy everything. Scoped
-        // clients keep per-topic forget; the wipe is the owner's to run.
-        if (auth.kind === "client" && allowedCategories(auth.client) !== null) {
+        // The wipe is the owner's alone. Connect is default-open, so allowing
+        // it here handed every freshly connected AI the power to irreversibly
+        // destroy the user's accumulated model — one prompt injection away,
+        // with no undo. Clients keep per-topic and per-style forget, which is
+        // what honoring a "delete that" request actually needs.
+        if (auth.kind === "client") {
           return json(res, 403, {
-            error: `'${auth.client}' is limited to specific categories, so it can't delete data it can't read. Wipe everything from the dashboard, or run: persnallyd forget --all`,
+            error: `wiping everything is the owner's action, not '${auth.client}'s — do it from the dashboard, or run: persnallyd forget --all`,
           });
         }
         store.forgetAll();
