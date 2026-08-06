@@ -373,17 +373,27 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
                 typeof r.ts === "string" ? r.ts : undefined,
               );
         });
-        // Writes claiming an MCP client identity are held to the same token
-        // binding as reads — otherwise a client could poison provenance by
-        // writing events under another client's name.
-        const claimedClients = new Set<string>();
-        for (const e of events) {
-          if (e.provenance.kind === "mcp") claimedClients.add(e.provenance.client);
-          if (e.source.startsWith("mcp:")) claimedClients.add(e.source.slice(4));
-        }
-        for (const c of claimedClients) {
-          const id = scopeFor(auth, c);
-          if (id.error) return json(res, 401, { error: id.error });
+        // A client token may only write events attributed to itself. Claiming
+        // another client's name poisons provenance; claiming a non-MCP one
+        // (`cli`, `dashboard`, `import`, `derived`) forges the owner's own
+        // surfaces — and a `user.correction` forged that way is treated as
+        // authoritative by synthesis and /ask, outranking everything the
+        // engine inferred. Rejected whole-batch, before any write.
+        if (auth.kind === "client") {
+          const expected = `mcp:${auth.client}`;
+          for (const e of events) {
+            const claimed = e.provenance.kind === "mcp" ? e.provenance.client
+              : e.source.startsWith("mcp:") ? e.source.slice(4)
+              : null;
+            if (claimed !== null && claimed !== auth.client) {
+              return json(res, 401, { error: `token identifies '${auth.client}' but the request claims '${claimed}'` });
+            }
+            if (e.provenance.kind !== "mcp" || e.source !== expected) {
+              return json(res, 403, {
+                error: `'${auth.client}' may only write events attributed to itself — expected source '${expected}' with 'mcp' provenance, got '${e.source}' with '${e.provenance.kind}'`,
+              });
+            }
+          }
         }
         store.append(events);
         // Views derive only from signal.* events — skip the O(all-events) rebuild
