@@ -364,6 +364,11 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const FONT = '-apple-system, system-ui, "Segoe UI", Roboto, sans-serif';
 
 let SIGNED_OUT = false;
+// Sample data renders only when explicitly asked for: the marketing preview
+// iframe links /dashboard-preview.html?demo=1. A real user whose daemon is
+// simply not running gets told that, never someone else's portrait.
+const PREVIEW = new URLSearchParams(location.search).has("demo");
+let DAEMON_DOWN = false;
 async function get(path) {
   const r = await fetch(path, { headers: { "accept": "application/json" } });
   // An expired session must never fall through to preview data — showing
@@ -382,6 +387,20 @@ function renderSignedOut() {
     + 'Your session expired</div><div style="color:#9a9aa2;margin-bottom:1.1rem">Reopen the dashboard from your '
     + 'terminal to keep going.</div><code style="display:inline-block;padding:.6rem 1rem;border:1px solid #26262b;'
     + 'border-radius:.5rem;background:#131316">persnally dashboard</code></div>';
+  document.body.appendChild(el);
+}
+function renderNoDaemon() {
+  DAEMON_DOWN = true;
+  if ($("noDaemon")) return;
+  const el = document.createElement("div");
+  el.id = "noDaemon";
+  el.style.cssText = "position:fixed;inset:0;z-index:99;display:grid;place-items:center;text-align:center;"
+    + "padding:2rem;background:rgba(10,10,11,.92);backdrop-filter:blur(6px)";
+  el.innerHTML = '<div style="max-width:30rem"><div style="font-size:1.2rem;font-weight:600;margin-bottom:.6rem">'
+    + 'Persnally isn\'t running</div><div style="color:#9a9aa2;margin-bottom:1.1rem">Your data is still on this '
+    + 'machine — the daemon that serves it just isn\'t up. Start it, then reload.</div>'
+    + '<code style="display:inline-block;padding:.6rem 1rem;border:1px solid #26262b;'
+    + 'border-radius:.5rem;background:#131316">persnally start</code></div>';
   document.body.appendChild(el);
 }
 const fmtN = (n) => n.toLocaleString("en-US");
@@ -912,6 +931,11 @@ async function loadAll() {
     if (!stats) throw new Error("no daemon");
   } catch (e) {
     if (SIGNED_OUT) return;   // authenticated-but-expired, not daemon-less
+    // Sample data is a portrait of someone who does not exist. Showing it
+    // because the daemon happens to be down means a screenshot of a fabricated
+    // person is indistinguishable from a real one — so it is opt-in, and only
+    // the marketing preview (which links with ?demo=1) ever asks for it.
+    if (!PREVIEW) return renderNoDaemon();
     DEMO = true; $("ribbon").classList.add("show");
     ({ stats, profile, topics, reads, assertions, voice, activity, asks } = DEMO_DATA());
   }
@@ -952,7 +976,7 @@ $("reflect").onclick = async () => {
   await fetch("/consolidate", { method:"POST" }); b.disabled = false; b.textContent = "Reflect"; loadAll();
 };
 setInterval(async () => {
-  if (DEMO || SIGNED_OUT) return;
+  if (DEMO || SIGNED_OUT || DAEMON_DOWN) return;
   const [reads, stats, voice, activity, asks] = await Promise.all([get("/events?type=context.read&limit=60"), get("/stats"), get("/voice"), get("/activity"), get("/questions?limit=8")]);
   if (reads && stats) renderReads(reads, (stats.byType && stats.byType["context.read"]) || reads.length);
   if (voice) renderVoice(voice); // live: voice signals captured mid-session show up without a reload
