@@ -34,3 +34,10 @@ jobs:
 
       - name: Build (tsc strict) + test (incl. MCP protocol e2e)
         run: npm test
+
+      # Catches a moderate+ vulnerability landing via a *transitive* bump with
+      # no diff to review — Dependency Review only sees deps a PR adds or
+      # changes directly, not ones that shift because a sibling dep's lockfile
+      # entry moved. --omit=dev: a vulnerable devDependency never ships to a user.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
