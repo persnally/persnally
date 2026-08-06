@@ -1,0 +1,9 @@
+# Fingerprints of confirmed false positives, verified by hand — not a way to
+# suppress a real finding. Each entry must have a one-line reason above it.
+# Format: <commit>:<file>:<rule>:<line> (gitleaks detect -v prints this).
+
+# Deliberately unique, made-up marker string used to prove a deleted event's
+# content is actually gone from the DB/-wal bytes (test/deletion.test.ts).
+# Flagged by generic-api-key on entropy + a variable named SECRET; not a
+# credential of any kind.
+61436bfcb559a1a4a3f825a07bdbc2c8073840c1:persnallyd/test/deletion.test.ts:generic-api-key:47

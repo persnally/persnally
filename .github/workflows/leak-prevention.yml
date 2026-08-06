@@ -1,0 +1,48 @@
+name: Leak Prevention
+
+# Defense in depth alongside GitHub's native secret scanning + push
+# protection (enabled at the repo level): gitleaks gives inline PR feedback
+# rather than a separate Security-tab alert, and the second job guards this
+# repo's own documented failure mode — internal strategy docs (PIVOT.md,
+# launch/) were committed and had to be scrubbed from history in 2026-06.
+# They're gitignored now; this catches a future `git add -f` before it ships.
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks-action needs full history to scan the PR's commit range
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No GITLEAKS_LICENSE: only required for private repos: this one is public.
+
+  internal-docs-not-tracked:
+    name: Internal docs stay untracked
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PIVOT.md and launch/ must not be committed
+        run: |
+          tracked=$(git ls-files PIVOT.md launch/ 2>/dev/null)
+          if [ -n "$tracked" ]; then
+            echo "::error::Internal strategy docs are tracked in git — these were scrubbed from history in 2026-06 and must stay local-only (see .gitignore):"
+            echo "$tracked"
+            exit 1
+          fi
