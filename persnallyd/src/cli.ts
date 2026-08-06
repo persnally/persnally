@@ -5,12 +5,13 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { applyApiKey, configPath, loadConfig, saveConfig } from "./config.js";
 import { CLIENTS, connectAll, connectClient, installClaudeCodeHook, type Client } from "./connect.js";
 import { runConsolidation } from "./consolidate.js";
+import { buildBundle, renderMarkdown } from "./export.js";
 import { chooseExtractor } from "./llm.js";
 import { CATEGORIES, clearScope, dashboardKey, loadScopes, rotateDashboardKey, setScope, type Category } from "./permissions.js";
 import { alreadyImported, DENSITY_QUESTIONS, detectExports, eventsFromAnswers, isThin, markImported } from "./setup.js";
@@ -53,6 +54,7 @@ Usage:
   persnallyd consolidate            Reflect now: refresh decay, add behavior patterns, re-synthesize
   persnallyd show [topics|events|profile]   Show topics (default), recent events, or the profile
   persnallyd context [--full]       Emit profile + interests for AI injection (records a context read)
+  persnallyd export [--md] [--out <file>]   Take everything with you (JSON by default; --md for a readable portrait)
   persnallyd forget <topic>         Hard-delete a topic and everything derived from it
   persnallyd forget --style <dimension> <pattern>   Forget a "how you write" pattern for good
   persnallyd forget --all           Delete all data
@@ -542,6 +544,21 @@ async function main(): Promise<void> {
       const pid = runningPid();
       console.log(pid ? `Daemon: running (pid ${pid})` : "Daemon: not running");
       console.log(`Autostart: ${autostartInstalled() ? "installed" : "not installed"}`);
+      return;
+    }
+    case "export": {
+      const store = new EventStore();
+      const bundle = buildBundle(store, VERSION);
+      store.close();
+      const markdown = args.includes("--md");
+      const body = markdown ? renderMarkdown(bundle) : JSON.stringify(bundle, null, 2);
+      const outFlag = args.indexOf("--out");
+      const out = outFlag >= 0 ? args[outFlag + 1] : undefined;
+      if (outFlag >= 0 && !out) { console.error("--out needs a file path"); process.exit(1); }
+      if (!out) { console.log(body); return; }
+      writeFileSync(out, body.endsWith("\n") ? body : body + "\n", { mode: 0o600 });
+      // stderr, so `persnallyd export --out f && cat f` stays clean to pipe.
+      console.error(`Exported ${bundle.counts.events} events, ${bundle.counts.topics} topics → ${out}`);
       return;
     }
     case "activity": {
