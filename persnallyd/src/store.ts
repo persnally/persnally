@@ -95,6 +95,10 @@ export class EventStore {
     // waits instead of failing fast with SQLITE_BUSY (better-sqlite3 defaults
     // to 5s — set explicitly with headroom for large rebuilds).
     this.db.pragma("busy_timeout = 10000");
+    // Deletion is a product promise, not just a DML statement: without this,
+    // freed pages keep their bytes and `strings persnally.db` still finds a
+    // topic the user forgot. Overwrites freed content on every delete.
+    this.db.pragma("secure_delete = ON");
     this.migrate();
   }
 
@@ -587,6 +591,7 @@ export class EventStore {
                       || lower(json_extract(payload, '$.pattern')) = ?`)
       .run(key).changes;
     this.append([newEvent("user.correction", "dashboard", { target_id: key, action: "delete", reason: "" }, { kind: "local", surface: "dashboard" })]);
+    this.reclaim();
     return deleted;
   }
 
@@ -633,12 +638,23 @@ export class EventStore {
     );
     // Derived events are the only ones that can reference what we're deleting;
     // this used to read every event of every type to find them.
-    for (const r of this.db
+    const derived = (this.db
       .prepare(`SELECT id, json_extract(provenance, '$.from') f FROM events
                 WHERE json_extract(provenance, '$.kind') = 'derived'`)
-      .all() as { id: string; f: string | null }[]) {
-      const from = r.f ? (JSON.parse(r.f) as string[]) : [];
-      if (from.some((id) => ids.has(id))) ids.add(r.id);
+      .all() as { id: string; f: string | null }[])
+      .map((r) => ({ id: r.id, from: r.f ? (JSON.parse(r.f) as string[]) : [] }));
+    // A derived event can itself be derived from — a nightly assertion built on
+    // an earlier one. One pass leaves those grandchildren behind (and which
+    // ones depended on row order), so walk to a fixpoint: EVENT_SCHEMA.md
+    // promises everything whose `from` chain reaches a deleted event.
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const d of derived) {
+        if (!ids.has(d.id) && d.from.some((id) => ids.has(id))) {
+          ids.add(d.id);
+          grew = true;
+        }
+      }
     }
     const del = this.db.prepare("DELETE FROM events WHERE id = ?");
     const run = this.db.transaction((toDelete: string[]) => {
@@ -646,6 +662,7 @@ export class EventStore {
     });
     run([...ids]);
     this.rebuild();
+    this.reclaim();
     return ids.size;
   }
 
@@ -655,6 +672,7 @@ export class EventStore {
       .prepare("DELETE FROM events WHERE json_extract(provenance, '$.batch') = ?")
       .run(batch);
     this.rebuild();
+    this.reclaim();
     return result.changes;
   }
 
@@ -662,6 +680,20 @@ export class EventStore {
     // Clear the profiles too — they're prose derived from now-deleted events.
     // Leaving them would serve a profile after a full wipe ("deletable for real").
     this.db.exec("DELETE FROM events; DELETE FROM view_topics; DELETE FROM view_profile; DELETE FROM view_scoped_profile;");
+    this.reclaim();
+    // Only on the full wipe: rebuilds the file so even pages freed before
+    // secure_delete was enabled (an install that upgraded into it) are gone.
+    // Cheap here precisely because everything was just deleted.
+    this.db.exec("VACUUM");
+  }
+
+  /**
+   * Freed pages are zeroed by `secure_delete`, but in WAL mode the pre-delete
+   * copy lives on in `-wal` until a checkpoint. Truncating it is what makes
+   * "deleted" true on disk rather than only inside a transaction.
+   */
+  private reclaim(): void {
+    this.db.pragma("wal_checkpoint(TRUNCATE)");
   }
 
   close(): void {
