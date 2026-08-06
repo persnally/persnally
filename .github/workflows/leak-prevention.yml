@@ -28,7 +28,7 @@ jobs:
         with:
           fetch-depth: 0 # gitleaks-action needs full history to scan the PR's commit range
 
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # No GITLEAKS_LICENSE: only required for private repos: this one is public.
