@@ -552,7 +552,9 @@ function renderAccess(reads, scopes) {
     let state, cls;
     if (s === undefined) { state = "reads everything"; cls = "full"; }
     else if (!s.length) { state = "revoked — reads nothing"; cls = "revoked"; }
-    else { state = "limited: " + s.join(", "); cls = "limited"; }
+    // Style is served to limited clients by design (how you write, not what
+    // about) — say so, or "limited" reads as narrower than it is.
+    else { state = "limited: " + s.join(", ") + ", and how you write"; cls = "limited"; }
     const revoked = Array.isArray(s) && !s.length;
     const btn = revoked
       ? `<button class="del" data-client="${esc(c)}" data-act="restore">restore</button>`

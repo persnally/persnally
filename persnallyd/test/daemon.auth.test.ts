@@ -369,6 +369,74 @@ describe("a client token cannot forge the owner's surfaces", () => {
   });
 });
 
+/**
+ * The dashboard states "revoked — reads nothing" without qualification, and the
+ * revoke confirmation repeats it. Everything a revoked client can still reach
+ * makes that copy a lie, which is the claim the whole custody pitch rests on.
+ */
+describe("revoked means revoked", () => {
+  const revoked = () => { setScope("revoked-client", []); return issueToken("revoked-client"); };
+
+  before(() => {
+    // A style signal to be revoked *from* — otherwise an empty pack proves nothing.
+    store.append([newEvent("signal.style", "import:claude", {
+      dimension: "voice", pattern: "terse imperatives", polarity: "does",
+      confidence: 0.9, evidence: "sampled across 3k prompts", basis: "stylometry",
+    }, { kind: "import", batch: "b5", file: "conversations.json" })]);
+  });
+
+  test("the style pack is not served to a revoked client", async () => {
+    const token = revoked();
+    assert.ok(store.voice().items.length > 0, "the owner has voice signals to leak");
+
+    const r = await fetch(BASE + "/voice", { headers: asBearer(token) });
+
+    assert.equal(r.status, 200);
+    const body = (await r.json()) as { pack: string; items: unknown[] };
+    assert.equal(body.items.length, 0, "the most prescriptive layer we hold");
+    assert.equal(body.pack, "");
+  });
+
+  test("a scoped-but-not-revoked client still gets style — it is how you write, not what about", async () => {
+    setScope("cursor", ["technology"]);
+    const r = await fetch(BASE + "/voice", { headers: asBearer(clientToken) });
+    assert.equal(r.status, 200);
+    assert.ok(((await r.json()) as { items: unknown[] }).items.length > 0, "the deliberate exception is preserved");
+  });
+
+  test("a revoked client cannot tombstone a style pattern", async () => {
+    const token = revoked();
+    const before = store.voice().items.length;
+
+    const r = await fetch(`${BASE}/voice/voice/${encodeURIComponent("terse imperatives")}`, {
+      method: "DELETE", headers: asBearer(token),
+    });
+
+    assert.equal(r.status, 200);
+    assert.deepEqual(await r.json(), { deleted: 0 }, "and the answer doesn't confirm it exists");
+    assert.equal(store.voice().items.length, before, "the pattern survived");
+  });
+
+  test("a revoked client gets no counts", async () => {
+    const token = revoked();
+    assert.ok(store.stats().total > 0, "the owner has events to leak");
+
+    const r = await fetch(BASE + "/stats", { headers: asBearer(token) });
+
+    assert.equal(((await r.json()) as { total: number }).total, 0);
+  });
+
+  test("no client sees which other clients are connected", async () => {
+    setScope("cursor", ["technology"]);
+    const asClient = (await (await fetch(BASE + "/stats", { headers: asBearer(clientToken) })).json()) as { bySource: Record<string, number>; total: number };
+    const asOwnerStats = (await (await fetch(BASE + "/stats", { headers: asOwner() })).json()) as { bySource: Record<string, number> };
+
+    assert.deepEqual(asClient.bySource, {}, "bySource enumerates every other connected client");
+    assert.ok(asClient.total > 0, "a scoped client still gets its own counts");
+    assert.ok(Object.keys(asOwnerStats.bySource).length > 0, "the owner still sees the full breakdown");
+  });
+});
+
 describe("the browser guards still hold", () => {
   // fetch() will not forward Origin on a GET, nor override Host at all — raw
   // requests are the only way to prove these guards from a test.
@@ -416,7 +484,7 @@ describe("destructive actions respect the client's scope", () => {
     const before = store.stats().total;
     const r = await fetch(`${BASE}/events?confirm=all`, { method: "DELETE", headers: asBearer(token) });
     assert.equal(r.status, 403);
-    assert.match(((await r.json()) as { error: string }).error, /can't delete data it can't read/);
+    assert.match(((await r.json()) as { error: string }).error, /owner's action/);
     assert.equal(store.stats().total, before, "the store survived");
   });
 
@@ -454,13 +522,35 @@ describe("destructive actions respect the client's scope", () => {
     assert.equal(store.topicCategory("zig lang"), null, "and really deleted it");
   });
 
-  test("an unscoped client keeps the wipe — the grant it always had", async () => {
+  // Connect is default-open, so an unscoped client used to hold the wipe the
+  // moment it was connected — a single prompt injection from destroying months
+  // of accumulated model, with no undo. The wipe is the owner's alone now.
+  test("an unscoped client cannot wipe the store either", async () => {
     const token = openToken();
     store.append([health()]);
     store.rebuild();
+    const before = store.stats().total;
+
     const r = await fetch(`${BASE}/events?confirm=all`, { method: "DELETE", headers: asBearer(token) });
+
+    assert.equal(r.status, 403);
+    assert.match(((await r.json()) as { error: string }).error, /owner's action/);
+    assert.equal(store.stats().total, before, "the store survived");
+  });
+
+  test("clients keep the per-topic forget they need to honor 'delete that'", async () => {
+    const token = openToken();
+    store.append([newEvent("signal.topic", "import:claude", {
+      topic: "temp topic", weight: 0.7, intent: "learning", sentiment: "neutral",
+      depth: "moderate", category: "technology", entities: [],
+    }, { kind: "import", batch: "b4", file: "conversations.json" })]);
+    store.rebuild();
+
+    const r = await fetch(`${BASE}/topics/temp%20topic`, { method: "DELETE", headers: asBearer(token) });
+
     assert.equal(r.status, 200);
-    assert.equal(store.stats().total, 0, "an unscoped client may still wipe");
+    assert.equal(((await r.json()) as { deleted: number }).deleted, 1);
+    assert.equal(store.topicCategory("temp topic"), null);
   });
 
   test("the owner keeps the wipe", async () => {

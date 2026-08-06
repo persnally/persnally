@@ -45,6 +45,16 @@ export function isAllowed(client: string, category: string): boolean {
   return allowed === null || allowed.includes(category as Category);
 }
 
+/**
+ * Revoked (`categories: []`) is distinct from scoped: the dashboard promises a
+ * revoked client "reads nothing", so it reads nothing at all — not topics, not
+ * the style pack, not event counts. A *scoped* client still gets style, which
+ * is how the user writes rather than what about.
+ */
+export function isRevoked(client: string): boolean {
+  return allowedCategories(client)?.length === 0;
+}
+
 // ── Identity tokens ──────────────────────────────────────────
 
 // Compare secrets by digest: constant-time and length-independent.
