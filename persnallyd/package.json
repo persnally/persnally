@@ -23,9 +23,22 @@
   "engines": {
     "node": ">=20"
   },
+  "overrides": {
+    "@modelcontextprotocol/sdk": {
+      "@hono/node-server": "^2.0.5",
+      "hono": "^4.12.34",
+      "ip-address": "^10.3.1",
+      "express": {
+        "body-parser": "^2.2.3"
+      },
+      "ajv": {
+        "fast-uri": "^3.1.5"
+      }
+    }
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
-    "@modelcontextprotocol/sdk": "^1.5.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "better-sqlite3": "^11.8.0",
     "zod": "^4.4.3"
   },
