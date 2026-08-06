@@ -2,6 +2,9 @@ name: persnallyd
 
 # The v2 product. Runs only when the package changes.
 on:
+  # Manual trigger: on 2026-08-06 pushes stopped producing runs entirely and
+  # there was no way to force one.
+  workflow_dispatch:
   push:
     branches: [main, dev]
     paths: ["persnallyd/**", ".github/workflows/ci.yml"]

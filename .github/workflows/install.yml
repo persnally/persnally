@@ -5,6 +5,9 @@ name: Install smoke
 # before users do. Heavy (macOS/Windows minutes), so it runs only when the
 # package itself changes.
 on:
+  # Manual trigger: on 2026-08-06 pushes stopped producing runs entirely and
+  # there was no way to force one.
+  workflow_dispatch:
   push:
     branches: [main, dev]
     paths: ["persnallyd/**", ".github/workflows/install.yml"]
