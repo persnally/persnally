@@ -53,3 +53,8 @@ jobs:
 
       - name: ESLint
         run: npm run lint
+
+      # Same reasoning as persnallyd's ci.yml: catches a vulnerability landing
+      # via a transitive shift with no diff to review.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate

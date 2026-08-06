@@ -1,0 +1,41 @@
+version: 2
+
+# Weekly, grouped, and capped: this is a solo-maintained repo, so the goal is
+# a small number of reviewable PRs, not a PR per package. Security updates for
+# any severity open immediately regardless of this schedule — that behavior is
+# Dependabot's default and isn't configurable here.
+updates:
+  - package-ecosystem: npm
+    directory: /persnallyd
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: "ci(deps)"
