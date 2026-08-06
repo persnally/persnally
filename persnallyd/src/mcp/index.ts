@@ -261,27 +261,22 @@ server.tool(
 
 server.tool(
   "persnally_forget",
-  `Hard-delete a topic or a voice/style pattern (and everything derived from it) from the user's context, or wipe all data. Privacy control — always honor it. A forgotten style pattern stays gone permanently, even if later conversations would otherwise re-observe it.`,
+  `Hard-delete a topic or a voice/style pattern (and everything derived from it) from the user's context. Privacy control — always honor it. A forgotten style pattern stays gone permanently, even if later conversations would otherwise re-observe it. Wiping everything is the user's own action: point them at the dashboard or \`persnallyd forget --all\`.`,
   {
     topic: z.string().optional().describe("Topic to remove."),
     style: z.object({
       dimension: z.enum(["voice", "convention", "emphasis", "format", "workflow"]),
       pattern: z.string(),
     }).optional().describe("A 'How you write' pattern to remove, e.g. {dimension: 'emphasis', pattern: 'be 100% sure'}."),
-    clear_all: z.boolean().optional().default(false),
   },
-  async ({ topic, style, clear_all }) =>
+  async ({ topic, style }) =>
     guarded(async () => {
-      logEvent("tool_call", { tool: "persnally_forget", clear_all });
-      if (clear_all) {
-        await daemonDelete("/events?confirm=all");
-        return text("All Persnally data deleted. The store is empty.");
-      }
+      logEvent("tool_call", { tool: "persnally_forget" });
       if (style) {
         const r = await daemonDelete<{ deleted: number }>(`/voice/${encodeURIComponent(style.dimension)}/${encodeURIComponent(style.pattern)}`);
         return text(r.deleted ? `Forgot "${style.pattern}" — it won't be re-learned.` : `"${style.pattern}" not found.`);
       }
-      if (!topic) return text("Name a topic or a style pattern to forget, or set clear_all.");
+      if (!topic) return text("Name a topic or a style pattern to forget.");
       const r = await daemonDelete<{ deleted: number }>(`/topics/${encodeURIComponent(topic)}`);
       return text(r.deleted ? `Deleted ${r.deleted} event(s) for "${topic}", including derived data.` : `"${topic}" not found.`);
     }),
