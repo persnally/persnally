@@ -12,11 +12,12 @@ Thanks for your interest! Persnally is source-available and contributions are we
 ### Local development
 
 ```bash
-git clone https://github.com/sidpan2011/persnally.git
+git clone https://github.com/persnally/persnally.git
 cd persnally/persnallyd
 npm install
 npm run build
-npm test          # node:test unit suite + protocol e2e
+npm run lint       # ESLint (typescript-eslint + eslint-plugin-security)
+npm test           # node:test unit suite + protocol e2e
 ```
 
 Run the daemon locally:
@@ -43,10 +44,18 @@ experiments/  # Phase-0 validation scripts (standalone)
 
 ## Submitting code
 
-1. Fork and branch from the default branch.
+1. Fork and branch from `dev` — that's the default branch and where every PR targets, `main` is not. If you're stacking a PR on another still-open one, open it against `dev` anyway rather than the other branch's head; a stacked PR can silently merge into its parent branch instead of `dev` if the merge order doesn't go the way you expect, and the change never actually ships. Verify a merge landed by checking the file content on `dev`, not the PR's "Merged" badge.
 2. Make focused changes — one feature or fix per PR.
-3. Verify: `cd persnallyd && npm test && npm run build` (strict `tsc --noEmit` must be clean).
+3. Verify locally before pushing: `cd persnallyd && npm run lint && npm run build && npm test` (strict `tsc --noEmit`, ESLint, and the full suite incl. the MCP protocol e2e must all be clean).
 4. Open a PR with a clear description: what changed, why, how it was verified, known risks.
+5. `dev` requires passing status checks before merge — persnallyd (lint + type check + build + test), the install smoke matrix, CodeQL, Dependency Review, gitleaks, and an `npm audit` gate all run on every PR. A red check means something real; don't merge past it.
+
+### Security & data hygiene
+
+- Never commit secrets, API keys, or tokens — GitHub's secret scanning and push protection are on, and gitleaks scans every PR as a second layer.
+- If you add a dependency, Dependency Review will block a known-vulnerable or copyleft-licensed one automatically — expect that, don't route around it.
+- `PIVOT.md` and `launch/` are internal strategy docs and must stay gitignored — a CI check fails the build if either is re-tracked (this repo had to scrub them from history once already).
+- If you find a security issue, follow `SECURITY.md` — don't open a public issue for it.
 
 ## Code style (TypeScript)
 
