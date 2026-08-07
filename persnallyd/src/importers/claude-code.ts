@@ -63,6 +63,7 @@ function parseSession(path: string): SessionConversation | null {
   let sessionId = "";
   const userMessages: string[] = [];
   const assistantMessages: string[] = [];
+  const toolCommands: string[] = [];
   const messageIds: string[] = [];
   const messageTimestamps: string[] = [];
 
@@ -76,8 +77,10 @@ function parseSession(path: string): SessionConversation | null {
     // Assistant prose only: the text blocks, never the tool_use blocks beside
     // them (those are #120's territory and would be noise here).
     if (entry.type === "assistant" && !entry.isSidechain) {
-      const reply = textBlocks((entry.message as Record<string, unknown> | undefined)?.content);
+      const content = (entry.message as Record<string, unknown> | undefined)?.content;
+      const reply = textBlocks(content);
       if (reply) assistantMessages.push(reply);
+      toolCommands.push(...bashCommands(content));
       continue;
     }
     if (entry.type !== "user" || entry.isMeta || entry.isSidechain || "toolUseResult" in entry) continue;
@@ -103,12 +106,29 @@ function parseSession(path: string): SessionConversation | null {
     created_at: firstTs || new Date().toISOString(),
     userMessages,
     assistantMessages,
+    toolCommands,
     messageIds,
     messageTimestamps,
     // No per-message ids (older transcript shapes) ⇒ no watermark ⇒ the session
     // imports whole and never tops up, same as before this existed.
     ...(lastId ? { lastMessageId: lastId } : {}),
   };
+}
+
+/** Shell commands the session actually ran. The convention signal — which
+    package manager, which test runner, rebase or merge — lives here, and these
+    blocks were previously dropped wholesale. */
+function bashCommands(content: unknown): string[] {
+  if (!Array.isArray(content)) return [];
+  const out: string[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue;
+    const b = block as { type?: unknown; name?: unknown; input?: unknown };
+    if (b.type !== "tool_use" || b.name !== "Bash") continue;
+    const cmd = (b.input as { command?: unknown } | undefined)?.command;
+    if (typeof cmd === "string" && cmd.trim()) out.push(cmd);
+  }
+  return out;
 }
 
 /** The text blocks of a message — used for both roles. Drops slash-command
