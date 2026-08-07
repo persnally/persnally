@@ -22,7 +22,7 @@
     "prepublishOnly": "node -e \"const fs=require('fs');fs.copyFileSync('../README.md','README.md');fs.copyFileSync('../LICENSE','LICENSE')\" && npm test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "overrides": {
     "@modelcontextprotocol/sdk": {
@@ -40,12 +40,12 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "better-sqlite3": "^11.8.0",
+    "better-sqlite3": "^13.0.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/better-sqlite3": "^7.6.12",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.1.2",
     "eslint": "^10.8.0",
     "eslint-plugin-security": "^4.0.1",

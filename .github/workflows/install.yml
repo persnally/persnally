@@ -27,7 +27,7 @@ jobs:
       fail-fast: false # one platform failing must not hide the others
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node: [20, 22]
+        node: [22] # better-sqlite3 13.x requires >=22 (Node 20 is EOL and unsupported)
     defaults:
       run:
         shell: bash # one script across Linux/macOS/Windows runners
