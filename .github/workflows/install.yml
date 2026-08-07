@@ -2,18 +2,18 @@ name: Install smoke
 
 # Proves the PUBLISHED artifact installs and runs on a clean machine across
 # OS/arch/Node — catches the native-module (better-sqlite3) breakage class
-# before users do. Heavy (macOS/Windows minutes), so it runs only when the
-# package itself changes.
+# before users do. Unconditional on main/dev, despite the macOS/Windows
+# minutes cost: this job is a required branch check, and a required check
+# tied to a path filter never reports (so never unblocks a merge) on any PR
+# that happens not to touch persnallyd/**.
 on:
   # Manual trigger: on 2026-08-06 pushes stopped producing runs entirely and
   # there was no way to force one.
   workflow_dispatch:
   push:
     branches: [main, dev]
-    paths: ["persnallyd/**", ".github/workflows/install.yml"]
   pull_request:
     branches: [main, dev]
-    paths: ["persnallyd/**", ".github/workflows/install.yml"]
 
 concurrency:
   group: install-${{ github.ref }}

@@ -1,17 +1,19 @@
 name: Web
 
 # Marketing site. Vercel already builds + deploys every PR, so CI only adds
-# the lint gate Vercel doesn't run. Triggers only on web changes.
+# the lint gate Vercel doesn't run. Unconditional on main/dev: these jobs are
+# required branch checks, and a required check tied to a path filter never
+# reports (so never unblocks a merge) on any PR that happens not to touch
+# web/**. Cheap enough (~30s combined) that always running is the simpler,
+# more robust choice over conditional-skip-but-report machinery.
 on:
   # Manual trigger: on 2026-08-06 pushes stopped producing runs entirely and
   # there was no way to force one.
   workflow_dispatch:
   push:
     branches: [main, dev]
-    paths: ["web/**", "persnallyd/src/dashboard.html", ".github/workflows/web.yml"]
   pull_request:
     branches: [main, dev]
-    paths: ["web/**", "persnallyd/src/dashboard.html", ".github/workflows/web.yml"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
