@@ -18,6 +18,7 @@ import { importNewClaudeCodeSessions } from "./importers/claude-code.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
 import { refreshScopedProfiles, scopeKey, synthesizeProfile } from "./profile.js";
 import { searchContext } from "./search.js";
+import { importAllSources } from "./setup.js";
 import { refreshVoice } from "./voice.js";
 import type { EventStore } from "./store.js";
 
@@ -227,6 +228,23 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         const client = decodeURIComponent(url.pathname.slice("/scopes/".length));
         if (!client) return json(res, 400, { error: "client required" });
         return json(res, 200, { cleared: clearScope(client) });
+      }
+      // Import whatever setup had to skip. The dashboard calls this right after
+      // an engine is configured (Ollama pull or pasted key) — before this
+      // existed it only re-synthesized, so a user who onboarded their engine
+      // from the dashboard got a portrait built from git alone and was never
+      // told their chat history had been passed over.
+      if (req.method === "POST" && url.pathname === "/import") {
+        if (importing) return json(res, 409, { error: "an import is already running" });
+        const engine = await chooseExtractor("extract").catch(() => null);
+        if (!engine) return json(res, 400, { error: "no extraction engine — set a key or pull a local model first" });
+        importing = true;
+        try {
+          const r = await importAllSources(store, engine);
+          return json(res, 200, r);
+        } finally {
+          importing = false;
+        }
       }
       if (req.method === "POST" && url.pathname === "/synthesize") {
         const engine = await chooseExtractor("profile");

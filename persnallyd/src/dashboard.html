@@ -904,9 +904,27 @@ async function startPull(model) {
     $("obFill").style.width = (p.percent||0) + "%";
     if (p.state === "pulling") { $("obStat").textContent = (p.status||"downloading") + " · " + (p.percent||0) + "%"; return void setTimeout(poll, 1500); }
     if (p.state === "error") { $("obStat").textContent = "Failed: " + (p.error||"unknown"); $("obPull").disabled=false; return; }
-    if (p.state === "done") { $("obStat").textContent = "Model ready — writing your portrait…"; await fetch("/synthesize", { method:"POST" }); return void loadAll(); }
+    if (p.state === "done") { await buildPortrait((m) => { $("obStat").textContent = m; }); return void loadAll(); }
     setTimeout(poll, 1500);
   })();
+}
+
+// Import first, then synthesize. Setup skips every conversation source when no
+// engine exists, so an engine configured here is the first chance to read that
+// history — synthesizing alone would portray the user from git commits only.
+async function buildPortrait(say) {
+  say("Reading your history…");
+  const r = await fetch("/import", { method:"POST", headers:{ "content-type":"application/json" }, body:"{}" });
+  if (r.ok) {
+    const imp = await r.json().catch(() => null);
+    if (imp && imp.events) say("Imported " + imp.events + " signals — writing your portrait…");
+    else say("Writing your portrait…");
+  } else {
+    // A failed import must not cost the user their portrait: whatever is
+    // already in the store still deserves synthesis.
+    say("Writing your portrait…");
+  }
+  await fetch("/synthesize", { method:"POST" });
 }
 
 async function saveKey() {
@@ -915,8 +933,8 @@ async function saveKey() {
   $("obSaveKey").disabled = true; $("obKeyMsg").textContent = "Saving…";
   const r = await fetch("/engine/key", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ key }) });
   if (!r.ok) { const e = await r.json().catch(()=>({})); $("obKeyMsg").textContent = e.error || ("Failed (" + r.status + ")"); $("obSaveKey").disabled=false; return; }
-  $("obKeyMsg").textContent = "Saved — writing your portrait…";
-  await fetch("/synthesize", { method:"POST" }); loadAll();
+  await buildPortrait((m) => { $("obKeyMsg").textContent = m; });
+  loadAll();
 }
 
 /* ── load ── */

@@ -5,16 +5,16 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { applyApiKey, configPath, loadConfig, saveConfig } from "./config.js";
 import { CLIENTS, connectAll, connectClient, installClaudeCodeHook, type Client } from "./connect.js";
 import { runConsolidation } from "./consolidate.js";
 import { buildBundle, renderMarkdown } from "./export.js";
-import { chooseExtractor } from "./llm.js";
+import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL, type ChosenExtractor } from "./llm.js";
 import { CATEGORIES, clearScope, dashboardKey, loadScopes, rotateDashboardKey, setScope, type Category } from "./permissions.js";
-import { alreadyImported, DENSITY_QUESTIONS, detectExports, eventsFromAnswers, isThin, markImported } from "./setup.js";
+import { alreadyImported, DENSITY_QUESTIONS, eventsFromAnswers, importAllSources, isThin, markImported } from "./setup.js";
 import { autoImportNewSessions, DEFAULT_PORT, startDaemon, VERSION } from "./daemon.js";
 import { extractChatGPTEvents, parseChatGPTExport } from "./importers/chatgpt.js";
 import { extractClaudeEvents, parseClaudeExport } from "./importers/claude.js";
@@ -33,6 +33,10 @@ import { refreshScopedProfiles, renderProfile, synthesizeProfile, synthesizeScop
 import { askUserModel } from "./ask.js";
 import { renderHits, searchContext } from "./search.js";
 import { DEFAULT_DB_PATH, EventStore } from "./store.js";
+
+/** One spelling in everything the user is told to retype. `persnallyd` is the
+    same file (both bins point at cli.js); mixing them mid-flow reads as two tools. */
+const BIN = "persnally";
 
 const USAGE = `persnallyd ${VERSION} — so every AI finally knows you
 
@@ -84,14 +88,10 @@ async function main(): Promise<void> {
       const port = parsePort(args);
       console.log("Persnally setup — so every AI finally knows you.\n");
 
-      // 1. Extraction engine (optional — git-only works without one)
-      let engine = null;
-      try {
-        engine = await chooseExtractor("extract");
-        console.log(`✓ Extraction engine: ${engine.label}`);
-      } catch {
-        console.log("· No extraction engine (no API key, no Ollama) — conversation imports skipped, git still works.");
-      }
+      // 1. Extraction engine. Optional (git works without one) but everything
+      //    that makes the portrait worth reading needs it, so try to get one
+      //    rather than silently degrading to a git-only mirror.
+      const engine = await resolveSetupEngine();
 
       // 2. Daemon
       if (!runningPid()) {
@@ -101,42 +101,16 @@ async function main(): Promise<void> {
         console.log("✓ Daemon already running");
       }
 
-      // 3. Conversation exports from ~/Downloads (zipped or unzipped)
+      // 3. Conversation sources: Claude/ChatGPT exports on disk + Claude Code
+      //    transcripts. Same path the dashboard's POST /import runs, so an
+      //    engine configured later picks up exactly what was skipped here.
       const store = new EventStore();
       let imported = 0;
-      for (const found of detectExports()) {
-        if (alreadyImported(found.origin)) {
-          console.log(`· Skipping ${found.origin} (already imported)`);
-        } else if (engine) {
-          console.log(`→ Importing ${found.kind} export: ${found.origin}`);
-          const parsed = found.kind === "claude" ? parseClaudeExport(found.path) : parseChatGPTExport(found.path);
-          const result = found.kind === "claude"
-            ? await extractClaudeEvents(parsed, engine.extract, engine.model)
-            : await extractChatGPTEvents(parsed, engine.extract, engine.model);
-          store.append(result.events);
-          markImported(found.origin);
-          imported += result.events.length;
-          console.log(`  ✓ ${result.events.length} events`);
-        }
-        if (found.cleanup) rmSync(found.cleanup, { recursive: true, force: true });
-      }
-
-      // 3b. Claude Code transcripts — local, no export wait. Capped at the 50 most
-      // recent sessions so setup stays fast; full history via `import claude-code`.
-      if (engine && existsSync(DEFAULT_TRANSCRIPTS_DIR) && !alreadyImported(DEFAULT_TRANSCRIPTS_DIR)) {
-        const { parsed, sessionsFound, sessionsDropped } = parseClaudeCodeTranscripts(DEFAULT_TRANSCRIPTS_DIR, 50);
-        if (parsed.conversations.length) {
-          console.log(
-            `→ Importing Claude Code transcripts: ${parsed.conversations.length} session(s)` +
-            (sessionsDropped ? ` (most recent of ${sessionsFound} — full history: persnallyd import claude-code)` : ""),
-          );
-          const result = await extractClaudeCodeEvents(parsed, engine.extract, engine.model);
-          store.append(result.events);
-          markImported(DEFAULT_TRANSCRIPTS_DIR);
-          imported += result.events.length;
-          console.log(`  ✓ ${result.events.length} events`);
-        }
-      }
+      const conv = await importAllSources(store, engine, {
+        onProgress: (label) => console.log(`→ ${label}`),
+      });
+      imported += conv.events;
+      if (conv.imported.length) console.log(`  ✓ ${conv.events} events from ${conv.imported.length} source(s)`);
 
       // 4. Git activity from ~/Projects
       const projects = join(homedir(), "Projects");
@@ -189,7 +163,18 @@ async function main(): Promise<void> {
         catch (e) { console.error(`· Context hook skipped: ${e instanceof Error ? e.message : String(e)}`); }
       }
 
-      console.log(`\nDone${imported ? ` — ${imported} events imported` : ""}.`);
+      // Never report plain success over history we silently passed over: the
+      // user has an export sitting on disk and no way to know it was skipped.
+      if (conv.skipped.length) {
+        console.log(`\n⚠ Set up an AI engine to finish — ${conv.skipped.length} source(s) not imported yet:`);
+        for (const s of conv.skipped) console.log(`    · ${s}`);
+        console.log("  Your portrait is built from git alone until then. To finish:");
+        console.log("    · open the dashboard below and set up local AI in one click (free, private), or");
+        console.log(`    · ${BIN} config set-key <sk-ant-…>`);
+        console.log(`  then re-run: ${BIN} setup`);
+      } else {
+        console.log(`\nDone${imported ? ` — ${imported} events imported` : ""}.`);
+      }
       announceDashboard(port);
       return;
     }
@@ -676,6 +661,66 @@ async function main(): Promise<void> {
       console.log(USAGE);
       process.exitCode = cmd ? 1 : 0;
   }
+}
+
+/**
+ * The engine `setup` runs on. Beyond chooseExtractor's normal resolution: when
+ * Ollama is running with no model pulled, offer the download here instead of
+ * only in the dashboard. Without an engine the entire conversation import is
+ * skipped, and a terminal user shouldn't have to find the dashboard to learn
+ * that — this is the one failure case setup can actually fix in place.
+ */
+async function resolveSetupEngine(): Promise<ChosenExtractor | null> {
+  const found = await chooseExtractor("extract").catch(() => null);
+  if (found) {
+    console.log(`✓ Extraction engine: ${found.label}`);
+    return found;
+  }
+
+  const tags = await ollamaTags();
+  if (tags === null) {
+    console.log("· No extraction engine — no API key, and Ollama isn't running.");
+    console.log(`    Local & free: install from https://ollama.com/download, then re-run \`${BIN} setup\``);
+    console.log(`    Or use a key: ${BIN} config set-key <sk-ant-…>`);
+    return null;
+  }
+
+  const pull = `ollama pull ${RECOMMENDED_LOCAL_MODEL}`;
+  if (!process.stdin.isTTY) {
+    console.log(`· Ollama is running but has no model. Run \`${pull}\`, then re-run \`${BIN} setup\`.`);
+    return null;
+  }
+
+  const { createInterface } = await import("node:readline/promises");
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const reply = (await rl.question(
+    `· Ollama is running but has no model yet.\n  Download ${RECOMMENDED_LOCAL_MODEL} now (~2GB, free, never leaves this machine)? [Y/n] `,
+  )).trim().toLowerCase();
+  rl.close();
+  if (reply && !reply.startsWith("y")) {
+    console.log(`  Skipped — conversation imports need a model. Re-run \`${BIN} setup\` after \`${pull}\`.`);
+    return null;
+  }
+
+  try {
+    let shown = -1;
+    await pullOllamaModel(RECOMMENDED_LOCAL_MODEL, ({ percent }) => {
+      // One redraw per 10%: a multi-GB download would otherwise emit thousands
+      // of lines into a piped log.
+      const decile = Math.floor(percent / 10);
+      if (decile <= shown) return;
+      shown = decile;
+      process.stdout.write(`\r  downloading ${RECOMMENDED_LOCAL_MODEL}… ${percent}%   `);
+    });
+    process.stdout.write("\n");
+  } catch (e) {
+    console.log(`\n  Download failed (${e instanceof Error ? e.message : String(e)}) — continuing without an engine.`);
+    return null;
+  }
+
+  const engine = await chooseExtractor("extract").catch(() => null);
+  if (engine) console.log(`✓ Extraction engine: ${engine.label}`);
+  return engine;
 }
 
 function sparkline(values: number[]): string {

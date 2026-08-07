@@ -295,6 +295,24 @@ describe("client tokens reach only the client surface", () => {
     assert.deepEqual(still["cursor"], ["technology"], "grant unchanged");
   });
 
+  // /import spends inference and reads ~/Downloads — the owner's surface, not a
+  // connected AI's. It exists so the dashboard can finish onboarding an engine.
+  test("a client token cannot trigger an import", async () => {
+    const r = await fetch(BASE + "/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...asBearer(clientToken) },
+      body: "{}",
+    });
+    assert.equal(r.status, 403);
+    assert.match(((await r.json()) as { error: string }).error, /owner's surface/);
+  });
+
+  // Deliberately not exercising the owner path here: it resolves a real engine
+  // and imports the machine's real ~/Downloads, so the result would depend on
+  // whether the developer happens to have Ollama running (it hung locally for
+  // exactly that reason). The import logic itself is covered deterministically
+  // in import-all-sources.test.ts; this suite covers the boundary.
+
   test("a client token cannot spend inference or read the engine's key state", async () => {
     for (const path of ["/synthesize", "/consolidate"]) {
       const r = await fetch(BASE + path, { method: "POST", headers: { "Content-Type": "application/json", ...asBearer(clientToken) }, body: "{}" });
