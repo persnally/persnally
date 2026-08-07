@@ -144,6 +144,21 @@ export function markImported(origin: string): void {
   if (!list.includes(origin)) saveConfig({ imported_sources: [...list, origin] });
 }
 
+/** Content hashes of memory/projects snapshots already extracted from, so a
+    re-import re-reads memory only when it has actually grown. */
+export function importedMemoryHashes(): Set<string> {
+  const h = loadConfig().imported_memory_hashes;
+  return new Set(Array.isArray(h) ? (h as string[]) : []);
+}
+
+export function markMemoryImported(hash: string): void {
+  if (!hash) return;
+  const list = [...importedMemoryHashes()];
+  if (list.includes(hash)) return;
+  // Bounded: only the most recent snapshots matter for "has this changed?".
+  saveConfig({ imported_memory_hashes: [...list, hash].slice(-20) });
+}
+
 // ── Conversation import, shared by `setup` and POST /import ──
 
 import { extractChatGPTEvents, parseChatGPTExport } from "./importers/chatgpt.js";
