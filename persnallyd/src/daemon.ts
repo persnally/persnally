@@ -543,13 +543,13 @@ export async function autoImportNewSessions(store: EventStore, now: number = Dat
       // back every tick. Back off, doubling while it stays broken.
       const minutes = nextImportBackoff();
       saveConfig({ import_backoff_minutes: minutes, import_backoff_until: new Date(now + minutes * 60_000).toISOString() });
-      console.error(`auto-import: extraction engine is failing — pausing imports for ${minutes} min (${r.newSessions} session(s) left unimported)`);
+      console.error(`auto-import: extraction engine is failing — pausing imports for ${minutes} min (${r.newSessions + r.toppedUp} session(s) left unimported)`);
       return;
     }
     if (importBackoffActive()) saveConfig({ import_backoff_minutes: 0, import_backoff_until: "" }); // recovered
     if (r.events) {
       store.rebuild();
-      console.error(`auto-import: ${r.newSessions} new Claude Code session(s) → ${r.events} events`);
+      console.error(`auto-import: ${r.newSessions} new + ${r.toppedUp} resumed Claude Code session(s) → ${r.events} events`);
     }
   } catch (e) {
     console.error("auto-import failed:", e instanceof Error ? e.message : e);
