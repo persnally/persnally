@@ -10,6 +10,7 @@ import { newEvent, safeIso, uuidv7, PAYLOAD_SCHEMAS, type PersnallyEvent } from 
 import { anthropicExtract, DEFAULT_EXTRACT_MODEL, type LlmExtract } from "../llm.js";
 import { proseLines, stripNoise } from "../prose.js";
 import { analyzeVoice } from "../stylometry.js";
+import { toolConventions } from "../workflow.js";
 
 // Enough attempts to tell a bad response apart from a dead engine, few enough
 // that a dead engine costs a handful of calls instead of the whole batch.
@@ -28,8 +29,10 @@ const FAILFAST_AFTER = 3;
  *
  * v2 — extraction reads the assistant's replies too, not just the user's
  *      prompts, so it can see what was answered and decided.
+ * v3 — shell commands from Claude Code sessions become convention/workflow
+ *      signals (deterministic, no extra inference).
  */
-export const EXTRACTOR_VERSION = 2;
+export const EXTRACTOR_VERSION = 3;
 
 const MAX_CONVO_CHARS = 30_000;
 // The assistant half is context, not the subject: replies run several times
@@ -112,6 +115,9 @@ export interface ParsedConversation {
       resolved — extraction saw only their questions before this. Never enters
       the voice corpus: stylometry is how the *user* writes. */
   assistantMessages?: string[];
+  /** Shell commands run during the session — the source of convention and
+      workflow signals (deterministic, no model). */
+  toolCommands?: string[];
   /** Id of the last message consumed, recorded as the provenance watermark so a
       resumed session can be topped up with only what came after it. */
   lastMessageId?: string;
@@ -183,6 +189,7 @@ export async function extractEvents(
   const events: PersnallyEvent[] = [];
   const voiceCorpus: string[] = []; // clean prose for the deterministic voice fingerprint
 
+  const commandCorpus: string[] = []; // shell commands → convention/workflow signals
   const jobs: { convo: ParsedConversation; text: string; replies: string }[] = [];
   for (const convo of parsed.conversations) {
     if (!convo.userMessages.length) continue;
@@ -192,6 +199,7 @@ export async function extractEvents(
     voiceCorpus.push(...proseLines(joined));
     const text = stripNoise(joined).slice(0, MAX_CONVO_CHARS); // strip pasted paths/URLs/logs before the LLM sees it
     if (!text) continue;
+    commandCorpus.push(...(convo.toolCommands ?? []));
     const replies = budgetedTurns(convo.assistantMessages ?? [], MAX_ASSISTANT_TURN_CHARS, MAX_ASSISTANT_CHARS);
     jobs.push({ convo, text, replies });
   }
@@ -271,6 +279,12 @@ export async function extractEvents(
 
   // Deterministic voice fingerprint over the user's own prose — no LLM, no tokens.
   for (const s of analyzeVoice(voiceCorpus).signals) {
+    events.push(newEvent("signal.style", opts.source, s, { kind: "import", batch, file: opts.file }));
+  }
+
+  // Conventions and workflow from the commands the sessions actually ran —
+  // also deterministic, and the only producer of these two dimensions.
+  for (const s of toolConventions(commandCorpus)) {
     events.push(newEvent("signal.style", opts.source, s, { kind: "import", batch, file: opts.file }));
   }
 
