@@ -92,7 +92,7 @@ function clientMayReach(method: string, path: string): boolean {
   switch (method) {
     case "GET":
       return path === "/topics" || path === "/profile" || path === "/voice"
-        || path === "/search" || path === "/stats";
+        || path === "/search" || path === "/stats" || path === "/skills";
     case "POST":
       return path === "/events" || path === "/ask";
     case "DELETE":
@@ -188,6 +188,11 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         }
         const profile = store.getProfile();
         return profile ? json(res, 200, profile) : json(res, 404, { error: "no profile synthesized yet" });
+      }
+      if (req.method === "GET" && url.pathname === "/skills") {
+        // A revoked client reads nothing, consistent with /voice and /stats.
+        if (auth.kind === "client" && isRevoked(auth.client)) return json(res, 200, []);
+        return json(res, 200, store.skills(num(url, "limit", 25)));
       }
       if (req.method === "GET" && url.pathname === "/voice") {
         // Stylistic, not topical — a scoped client still gets it (it's how you
