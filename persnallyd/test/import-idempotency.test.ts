@@ -20,7 +20,7 @@ const extract: LlmExtract = async () => {
   return { topics: [{ topic: "t", weight: 0.5, intent: "building", sentiment: "neutral", depth: "moderate", category: "technology", entities: [] }] };
 };
 const convo = (uuid: string): ParsedConversation => ({ uuid, name: uuid, summary: "", created_at: "2026-06-01T10:00:00Z", userMessages: ["a real prompt about something"] });
-const repo = (name: string): RepoSummary => ({ repo: name, path: `/x/${name}`, commits: 12, firstCommit: "2026-01-01T00:00:00Z", lastCommit: "2026-06-01T00:00:00Z", frameworks: ["react"] });
+const repo = (name: string): RepoSummary => ({ repo: name, path: `/x/${name}`, commits: 12, firstCommit: "2026-01-01T00:00:00Z", lastCommit: "2026-06-01T00:00:00Z", frameworks: ["react"], themes: [], languages: [] });
 
 test("freshConversations keeps everything (and the one-time memory) on the first import", () => {
   const parsed: ParsedExport = { conversations: [convo("a"), convo("b")], memoryText: "remember me", projects: [{ name: "p", description: "d" }] };
