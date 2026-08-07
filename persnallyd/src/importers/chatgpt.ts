@@ -32,18 +32,19 @@ export function parseChatGPTExport(path: string): ParsedExport {
 
   const raw = JSON.parse(readImportFile(file)) as ChatGPTConversation[];
   const conversations: ParsedConversation[] = raw.map((c) => {
-    const nodes = Object.values(c.mapping ?? {})
-      .filter((n) => n.message?.author?.role === "user")
-      .sort((a, b) => (a.message?.create_time ?? 0) - (b.message?.create_time ?? 0));
-    const userMessages = nodes
+    const byRole = (role: string) => Object.values(c.mapping ?? {})
+      .filter((n) => n.message?.author?.role === role)
+      .sort((a, b) => (a.message?.create_time ?? 0) - (b.message?.create_time ?? 0))
       .flatMap((n) => n.message?.content?.parts ?? [])
       .filter((p): p is string => typeof p === "string" && p.trim().length > 0);
+    const userMessages = byRole("user");
     return {
       uuid: String(c.conversation_id ?? c.id ?? ""),
       name: String(c.title ?? ""),
       summary: "",
       created_at: safeIso(c.create_time ? c.create_time * 1000 : undefined),
       userMessages,
+      assistantMessages: byRole("assistant"),
     };
   });
 

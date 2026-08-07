@@ -62,6 +62,7 @@ function parseSession(path: string): SessionConversation | null {
   let firstTs = "";
   let sessionId = "";
   const userMessages: string[] = [];
+  const assistantMessages: string[] = [];
   const messageIds: string[] = [];
   const messageTimestamps: string[] = [];
 
@@ -72,13 +73,20 @@ function parseSession(path: string): SessionConversation | null {
     try { entry = JSON.parse(line) as Record<string, unknown>; } catch { continue; }
 
     if (entry.type === "ai-title" && typeof entry.aiTitle === "string") { title = entry.aiTitle; continue; }
+    // Assistant prose only: the text blocks, never the tool_use blocks beside
+    // them (those are #120's territory and would be noise here).
+    if (entry.type === "assistant" && !entry.isSidechain) {
+      const reply = textBlocks((entry.message as Record<string, unknown> | undefined)?.content);
+      if (reply) assistantMessages.push(reply);
+      continue;
+    }
     if (entry.type !== "user" || entry.isMeta || entry.isSidechain || "toolUseResult" in entry) continue;
 
     if (!firstTs && typeof entry.timestamp === "string") firstTs = entry.timestamp;
     if (!cwd && typeof entry.cwd === "string") cwd = entry.cwd;
     if (!sessionId && typeof entry.sessionId === "string") sessionId = entry.sessionId;
 
-    const text = humanText((entry.message as Record<string, unknown> | undefined)?.content);
+    const text = textBlocks((entry.message as Record<string, unknown> | undefined)?.content);
     if (text) {
       userMessages.push(text);
       messageIds.push(typeof entry.uuid === "string" ? entry.uuid : "");
@@ -94,6 +102,7 @@ function parseSession(path: string): SessionConversation | null {
     summary: "",
     created_at: firstTs || new Date().toISOString(),
     userMessages,
+    assistantMessages,
     messageIds,
     messageTimestamps,
     // No per-message ids (older transcript shapes) ⇒ no watermark ⇒ the session
@@ -102,8 +111,9 @@ function parseSession(path: string): SessionConversation | null {
   };
 }
 
-/** Human prompt text only — drop slash-command palettes, interrupts, and injected reminders. */
-function humanText(content: unknown): string {
+/** The text blocks of a message — used for both roles. Drops slash-command
+    palettes, interrupts, and injected reminders. */
+function textBlocks(content: unknown): string {
   const parts = typeof content === "string"
     ? [content]
     : Array.isArray(content)
