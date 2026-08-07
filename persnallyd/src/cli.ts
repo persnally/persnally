@@ -14,7 +14,10 @@ import { runConsolidation } from "./consolidate.js";
 import { buildBundle, renderMarkdown } from "./export.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL, type ChosenExtractor } from "./llm.js";
 import { CATEGORIES, clearScope, dashboardKey, loadScopes, rotateDashboardKey, setScope, type Category } from "./permissions.js";
-import { alreadyImported, DENSITY_QUESTIONS, eventsFromAnswers, importAllSources, isThin, markImported } from "./setup.js";
+import {
+  alreadyImported, DENSITY_QUESTIONS, eventsFromAnswers, importAllSources, importedMemoryHashes,
+  isThin, markImported, markMemoryImported,
+} from "./setup.js";
 import { autoImportNewSessions, DEFAULT_PORT, startDaemon, VERSION } from "./daemon.js";
 import { extractChatGPTEvents, parseChatGPTExport } from "./importers/chatgpt.js";
 import { extractClaudeEvents, parseClaudeExport } from "./importers/claude.js";
@@ -22,7 +25,7 @@ import {
   DEFAULT_TRANSCRIPTS_DIR, extractClaudeCodeEvents, parseClaudeCodeTranscripts,
 } from "./importers/claude-code.js";
 import { gitEvents, scanRepos } from "./importers/git.js";
-import { EXTRACTOR_VERSION, freshConversations, type ParsedExport } from "./importers/extract.js";
+import { EXTRACTOR_VERSION, freshConversations, memorySnapshotHash, type ParsedExport } from "./importers/extract.js";
 import {
   autostartInstalled, installAutostart, LOG_FILE, reloadAutostart, removeAutostart,
   removePidFile, runningPid, startDetached, stopDaemon, writePidFile,
@@ -350,9 +353,9 @@ async function main(): Promise<void> {
       // extracted again with the current pipeline, and the prior events for
       // those conversations are dropped just before the new ones land, so a
       // re-run replaces rather than doubles.
-      const { parsed: toExtract, skipped, firstImport } = reextract
-        ? { parsed, skipped: 0, firstImport: true }
-        : freshConversations(parsed, seen);
+      const { parsed: toExtract, skipped, firstImport, memoryHash } = reextract
+        ? { parsed, skipped: 0, firstImport: true, memoryHash: memorySnapshotHash(parsed) }
+        : freshConversations(parsed, seen, importedMemoryHashes());
       if (!toExtract.conversations.length && !firstImport) {
         store.close();
         console.log(`Already up to date — all ${parsed.conversations.length} conversation(s) imported. Nothing new.`);
@@ -380,6 +383,7 @@ async function main(): Promise<void> {
       store.append(events);
       store.rebuild();
       store.close();
+      markMemoryImported(memoryHash); // only after the extraction that consumed it succeeded
       console.log(
         `Imported ${events.length} events from ${toExtract.conversations.length} conversation(s) (batch ${batch}).` +
         (reextract ? ` Replaced ${replaced} event(s) from earlier extractions.` : ""),

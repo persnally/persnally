@@ -3,6 +3,7 @@
  * Parsers produce a ParsedExport; this turns it into provenance-linked events.
  */
 
+import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { z } from "zod";
 import { newEvent, safeIso, uuidv7, PAYLOAD_SCHEMAS, type PersnallyEvent } from "../events.js";
@@ -133,23 +134,39 @@ export interface ImportResult {
   extractionsFailed: number;
 }
 
+/** Content fingerprint of the memory/projects snapshot — the unit of "have I
+    already extracted assertions from exactly this?". */
+export function memorySnapshotHash(parsed: Pick<ParsedExport, "memoryText" | "projects">): string {
+  const body = parsed.memoryText.trim()
+    + parsed.projects.map((p) => `${p.name}\u0000${p.description}`).sort().join("\u0001");
+  return body ? createHash("sha256").update(body).digest("hex").slice(0, 32) : "";
+}
+
 /**
  * Filters a parsed export to the conversations not already imported (matched by
- * uuid), so a re-import only adds new chats instead of doubling the graph. The
- * one-time memory/projects snapshot carries no per-conversation id, so it's kept
- * only on the first import of a source.
+ * uuid), so a re-import only adds new chats instead of doubling the graph.
+ *
+ * The memory/projects snapshot has no per-conversation id, so it used to be
+ * kept only on the *first* import of a source — but Claude's
+ * `conversations_memory` is the densest artifact in an export and grows
+ * continuously, so capturing it once pinned the profile at day-one quality.
+ * It's now keyed by content hash instead: re-imported when it has actually
+ * changed, skipped when it hasn't.
  */
 export function freshConversations(
   parsed: ParsedExport,
   seen: Set<string>,
-): { parsed: ParsedExport; skipped: number; firstImport: boolean } {
+  importedMemoryHashes: Set<string> = new Set(),
+): { parsed: ParsedExport; skipped: number; firstImport: boolean; memoryHash: string } {
   const firstImport = seen.size === 0;
   const conversations = parsed.conversations.filter((c) => !c.uuid || !seen.has(c.uuid));
   const skipped = parsed.conversations.length - conversations.length;
-  const next = firstImport
+  const memoryHash = memorySnapshotHash(parsed);
+  const memoryIsNew = !!memoryHash && !importedMemoryHashes.has(memoryHash);
+  const next = memoryIsNew
     ? { ...parsed, conversations }
     : { ...parsed, conversations, memoryText: "", projects: [] };
-  return { parsed: next, skipped, firstImport };
+  return { parsed: next, skipped, firstImport, memoryHash: memoryIsNew ? memoryHash : "" };
 }
 
 const topicsExtraction = z.object({ topics: z.array(PAYLOAD_SCHEMAS["signal.topic"]) });
