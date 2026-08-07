@@ -125,7 +125,7 @@ one mistake the future model cannot undo.
 ## Current state vs target (2026-08-06)
 
 **Standing, tested, CI-gated** (223 tests + MCP protocol e2e, strict `tsc`, install matrix
-across macOS/Ubuntu/Windows × Node 20/22): event log (UUIDv7, closed 10-type set v1) ·
+across macOS/Ubuntu/Windows × Node 22, the engines.node floor): event log (UUIDv7, closed 10-type set v1) ·
 importers for claude, claude-code, chatgpt and git, each with provenance · decay extraction ·
 deterministic stylometry + voice layer · profile synthesis with evidence citations, plus
 per-scope profiles · re-derivable versioned views · loopback daemon with credentialed access ·
