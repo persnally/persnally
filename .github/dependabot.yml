@@ -17,6 +17,13 @@ updates:
     labels: [dependencies]
     commit-message:
       prefix: "chore(deps)"
+    ignore:
+      # No typescript-eslint release (incl. its newest alpha, checked
+      # 2026-08-07) declares TS7 support yet — every proposed bump fails
+      # npm ci outright on the peer-dependency conflict. Remove once
+      # typescript-eslint ships a compatible release (#157).
+      - dependency-name: "typescript"
+        versions: [">=7"]
 
   - package-ecosystem: npm
     directory: /web
@@ -30,6 +37,16 @@ updates:
     labels: [dependencies]
     commit-message:
       prefix: "chore(deps)"
+    ignore:
+      # Same typescript-eslint gap as persnallyd (#163).
+      - dependency-name: "typescript"
+        versions: [">=7"]
+      # eslint-config-next's bundled eslint-plugin-react@7.37.5 (its own
+      # latest, checked 2026-08-07) calls an ESLint 9-era API ESLint 10
+      # removed. Remove once eslint-config-next/eslint-plugin-react catch
+      # up (#164).
+      - dependency-name: "eslint"
+        versions: [">=10"]
 
   - package-ecosystem: github-actions
     directory: /
