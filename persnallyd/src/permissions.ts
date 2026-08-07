@@ -7,7 +7,7 @@
  * against dishonest clients too.
  */
 
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { loadConfig, saveConfig } from "./config.js";
 
 export const CATEGORIES = [
@@ -113,63 +113,78 @@ export function verifyDashboardKey(given: string): boolean {
   return sameSecret(given, key);
 }
 
-/** New key + every existing browser session dropped. */
+/** New key + every existing browser session dropped: sessions are signed with
+    the key, so replacing it invalidates every outstanding cookie at once. */
 export function rotateDashboardKey(): string {
   const key = randomBytes(24).toString("base64url");
   saveConfig({ dashboard_key: key });
-  sessions.clear();
   return key;
 }
 
 // ── Browser sessions ──────────────────────────────────────────
 
 export const SESSION_COOKIE = "persnally_session";
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const SESSION_TTL_SECONDS = SESSION_TTL_MS / 1000;
-const MAX_SESSIONS = 32;
 
-// sha256(id) → { expiry, key }. In-memory by design: sessions die with the
-// daemon, and the raw id is never held, so a heap dump yields no live session.
-// `key` fingerprints the dashboard key that minted the session, so a rotation
-// from *any* process (the CLI is not the daemon) invalidates it — the check
-// reads the current key from config rather than trusting local state.
-type Session = { expiry: number; key: string };
-const sessions = new Map<string, Session>();
+/**
+ * Sessions are stateless: the cookie is `v1.<expiry>.<HMAC(dashboard key, …)>`,
+ * carrying its own expiry and proving itself by signature. Nothing is stored.
+ *
+ * The previous design kept them in an in-memory Map, which meant every daemon
+ * restart silently logged the user out — launchd/systemd relaunch, an upgrade,
+ * or any uncaught exception (the daemon deliberately exits so the supervisor
+ * restarts it clean). Paired with a 12h hard expiry, the dashboard demanded
+ * `persnally dashboard` again roughly twice a day. That is friction with no
+ * security return: the cookie is HttpOnly, SameSite=Strict, loopback-only, and
+ * derived from a key in a mode-0600 file — anyone who could steal the cookie
+ * could read that key and mint a session anyway.
+ *
+ * Signing with the dashboard key preserves the property that mattered:
+ * rotating the key changes the HMAC secret, so `dashboard --rotate` still
+ * invalidates every outstanding session instantly, from any process.
+ */
+const SESSION_V = "v1";
 
-function keyFingerprint(): string {
+function sign(payload: string): string {
   const key = loadConfig().dashboard_key;
-  return typeof key === "string" ? digest(key).toString("hex") : "";
+  if (typeof key !== "string" || key.length < 32) return "";
+  return createHmac("sha256", key).update(payload).digest("base64url");
 }
 
-/** Exchanges a verified dashboard key for a short-lived browser session. */
+/** Exchanges a verified dashboard key for a durable browser session. */
 export function createSession(now: number = Date.now()): string {
-  for (const [id, s] of sessions) if (s.expiry <= now) sessions.delete(id);
-  // Bound the map: evict the soonest-to-expire rather than grow without limit.
-  while (sessions.size >= MAX_SESSIONS) {
-    let oldest: string | undefined;
-    let oldestExpiry = Infinity;
-    for (const [id, s] of sessions) if (s.expiry < oldestExpiry) { oldest = id; oldestExpiry = s.expiry; }
-    if (oldest === undefined) break;
-    sessions.delete(oldest);
-  }
-  const id = randomBytes(32).toString("base64url");
-  sessions.set(digest(id).toString("hex"), { expiry: now + SESSION_TTL_MS, key: keyFingerprint() });
-  return id;
+  const payload = `${SESSION_V}.${now + SESSION_TTL_MS}`;
+  return `${payload}.${sign(payload)}`;
 }
 
 export function sessionValid(id: string, now: number = Date.now()): boolean {
   if (!id) return false;
-  const hashed = digest(id).toString("hex");
-  const session = sessions.get(hashed);
-  if (session === undefined) return false;
-  if (session.expiry <= now || session.key !== keyFingerprint()) {
-    sessions.delete(hashed);
-    return false;
-  }
-  return true;
+  const cut = id.lastIndexOf(".");
+  if (cut <= 0) return false;
+  const payload = id.slice(0, cut);
+  const given = id.slice(cut + 1);
+  const [version, expiry] = payload.split(".");
+  if (version !== SESSION_V) return false;
+
+  const expiresAt = Number(expiry);
+  if (!Number.isFinite(expiresAt) || expiresAt <= now) return false;
+
+  // No key (or a rotated one) yields a different signature — never a match.
+  const expected = sign(payload);
+  if (!expected || !given) return false;
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Test seam: drop every live session without rotating the key. */
-export function clearSessions(): void {
-  sessions.clear();
+/**
+ * True once a session is past halfway, so callers can re-issue it. Keeps an
+ * active user signed in indefinitely without extending a stolen cookie's life
+ * beyond one full TTL from its last legitimate use.
+ */
+export function sessionNeedsRefresh(id: string, now: number = Date.now()): boolean {
+  const expiry = Number(id.split(".")[1]);
+  if (!Number.isFinite(expiry)) return false;
+  return expiry - now < SESSION_TTL_MS / 2;
 }

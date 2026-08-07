@@ -10,7 +10,7 @@ import { loadConfig, saveConfig } from "./config.js";
 import { runConsolidation, shouldRunNow } from "./consolidate.js";
 import {
   allowedCategories, CATEGORIES, clearScope, clientForToken, createSession, dashboardKey,
-  hasToken, isRevoked, loadScopes, SESSION_COOKIE, SESSION_TTL_SECONDS, sessionValid, setScope,
+  hasToken, isRevoked, loadScopes, SESSION_COOKIE, SESSION_TTL_SECONDS, sessionNeedsRefresh, sessionValid, setScope,
   verifyDashboardKey, type Category,
 } from "./permissions.js";
 import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Provenance } from "./events.js";
@@ -18,6 +18,7 @@ import { importNewClaudeCodeSessions } from "./importers/claude-code.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
 import { refreshScopedProfiles, scopeKey, synthesizeProfile } from "./profile.js";
 import { searchContext } from "./search.js";
+import { importAllSources } from "./setup.js";
 import { refreshVoice } from "./voice.js";
 import type { EventStore } from "./store.js";
 
@@ -74,10 +75,10 @@ function authenticate(req: http.IncomingMessage, claimed: string | null): Auth {
     if (client) return { kind: "client", client };
     // The dashboard key doubles as a bearer so local scripts and curl can use it.
     if (verifyDashboardKey(token)) return { kind: "owner" };
-    return { kind: "none", error: "unrecognized token — reconnect with: persnallyd connect <client>, then restart the client" };
+    return { kind: "none", error: "unrecognized token — reconnect with: persnally connect <client>, then restart the client" };
   }
   if (claimed && hasToken(claimed)) {
-    return { kind: "none", error: `client '${claimed}' has an identity token and must present it — re-run: persnallyd connect ${claimed}, then restart the client` };
+    return { kind: "none", error: `client '${claimed}' has an identity token and must present it — re-run: persnally connect ${claimed}, then restart the client` };
   }
   return { kind: "none", error: NEEDS_AUTH };
 }
@@ -183,7 +184,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         if (allowed !== null) {
           const scoped = store.getScopedProfile(scopeKey(allowed));
           if (scoped) return json(res, 200, scoped);
-          return json(res, 403, { error: "scoped: no profile synthesized for this scope yet — run persnallyd profile or POST /synthesize", scoped: true });
+          return json(res, 403, { error: "scoped: no profile synthesized for this scope yet — run `persnally profile` or POST /synthesize", scoped: true });
         }
         const profile = store.getProfile();
         return profile ? json(res, 200, profile) : json(res, 404, { error: "no profile synthesized yet" });
@@ -227,6 +228,23 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         const client = decodeURIComponent(url.pathname.slice("/scopes/".length));
         if (!client) return json(res, 400, { error: "client required" });
         return json(res, 200, { cleared: clearScope(client) });
+      }
+      // Import whatever setup had to skip. The dashboard calls this right after
+      // an engine is configured (Ollama pull or pasted key) — before this
+      // existed it only re-synthesized, so a user who onboarded their engine
+      // from the dashboard got a portrait built from git alone and was never
+      // told their chat history had been passed over.
+      if (req.method === "POST" && url.pathname === "/import") {
+        if (importing) return json(res, 409, { error: "an import is already running" });
+        const engine = await chooseExtractor("extract").catch(() => null);
+        if (!engine) return json(res, 400, { error: "no extraction engine — set a key or pull a local model first" });
+        importing = true;
+        try {
+          const r = await importAllSources(store, engine);
+          return json(res, 200, r);
+        } finally {
+          importing = false;
+        }
       }
       if (req.method === "POST" && url.pathname === "/synthesize") {
         const engine = await chooseExtractor("profile");
@@ -423,7 +441,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         // what honoring a "delete that" request actually needs.
         if (auth.kind === "client") {
           return json(res, 403, {
-            error: `wiping everything is the owner's action, not '${auth.client}'s — do it from the dashboard, or run: persnallyd forget --all`,
+            error: `wiping everything is the owner's action, not '${auth.client}'s — do it from the dashboard, or run: persnally forget --all`,
           });
         }
         store.forgetAll();
@@ -525,13 +543,13 @@ export async function autoImportNewSessions(store: EventStore, now: number = Dat
       // back every tick. Back off, doubling while it stays broken.
       const minutes = nextImportBackoff();
       saveConfig({ import_backoff_minutes: minutes, import_backoff_until: new Date(now + minutes * 60_000).toISOString() });
-      console.error(`auto-import: extraction engine is failing — pausing imports for ${minutes} min (${r.newSessions} session(s) left unimported)`);
+      console.error(`auto-import: extraction engine is failing — pausing imports for ${minutes} min (${r.newSessions + r.toppedUp} session(s) left unimported)`);
       return;
     }
     if (importBackoffActive()) saveConfig({ import_backoff_minutes: 0, import_backoff_until: "" }); // recovered
     if (r.events) {
       store.rebuild();
-      console.error(`auto-import: ${r.newSessions} new Claude Code session(s) → ${r.events} events`);
+      console.error(`auto-import: ${r.newSessions} new + ${r.toppedUp} resumed Claude Code session(s) → ${r.events} events`);
     }
   } catch (e) {
     console.error("auto-import failed:", e instanceof Error ? e.message : e);
@@ -571,7 +589,14 @@ function serveDashboard(req: http.IncomingMessage, res: http.ServerResponse, url
   }
   const session = cookie(req, SESSION_COOKIE);
   if (session && sessionValid(session)) {
-    res.writeHead(200, DASHBOARD_HEADERS);
+    // Sliding expiry: past halfway, hand back a fresh cookie. Someone who opens
+    // the dashboard even occasionally is never asked to re-authenticate, while
+    // a cookie that stops being used still ages out on its own.
+    const headers: Record<string, string> = { ...DASHBOARD_HEADERS };
+    if (sessionNeedsRefresh(session)) {
+      headers["Set-Cookie"] = `${SESSION_COOKIE}=${createSession()}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict`;
+    }
+    res.writeHead(200, headers);
     res.end(dashboardHtml());
     return;
   }
