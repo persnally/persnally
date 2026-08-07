@@ -10,7 +10,7 @@ import { loadConfig, saveConfig } from "./config.js";
 import { runConsolidation, shouldRunNow } from "./consolidate.js";
 import {
   allowedCategories, CATEGORIES, clearScope, clientForToken, createSession, dashboardKey,
-  hasToken, isRevoked, loadScopes, SESSION_COOKIE, SESSION_TTL_SECONDS, sessionValid, setScope,
+  hasToken, isRevoked, loadScopes, SESSION_COOKIE, SESSION_TTL_SECONDS, sessionNeedsRefresh, sessionValid, setScope,
   verifyDashboardKey, type Category,
 } from "./permissions.js";
 import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Provenance } from "./events.js";
@@ -589,7 +589,14 @@ function serveDashboard(req: http.IncomingMessage, res: http.ServerResponse, url
   }
   const session = cookie(req, SESSION_COOKIE);
   if (session && sessionValid(session)) {
-    res.writeHead(200, DASHBOARD_HEADERS);
+    // Sliding expiry: past halfway, hand back a fresh cookie. Someone who opens
+    // the dashboard even occasionally is never asked to re-authenticate, while
+    // a cookie that stops being used still ages out on its own.
+    const headers: Record<string, string> = { ...DASHBOARD_HEADERS };
+    if (sessionNeedsRefresh(session)) {
+      headers["Set-Cookie"] = `${SESSION_COOKIE}=${createSession()}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict`;
+    }
+    res.writeHead(200, headers);
     res.end(dashboardHtml());
     return;
   }
