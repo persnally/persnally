@@ -11,7 +11,7 @@ import { loadConfig } from "./config.js";
 import { DATA_DIR, ensurePrivateDir, ensurePrivateFile } from "./paths.js";
 import { assemblePack, type StyleSignal } from "./stylometry.js";
 
-const VIEW_SCHEMA_VERSION = 2;
+const VIEW_SCHEMA_VERSION = 3;
 
 // One bind parameter per id, well under SQLite's 32k variable ceiling.
 const MAX_ID_LOOKUP = 500;
@@ -145,6 +145,7 @@ export class EventStore {
         DROP TABLE IF EXISTS view_topics;
         DROP TABLE IF EXISTS view_profile;
         DROP TABLE IF EXISTS view_scoped_profile;
+        DROP TABLE IF EXISTS view_search;
       `);
       this.db.pragma(`user_version = ${VIEW_SCHEMA_VERSION}`);
     }
@@ -175,6 +176,20 @@ export class EventStore {
         sections     TEXT NOT NULL,
         generated_at TEXT NOT NULL,
         model        TEXT NOT NULL
+      );
+      -- Full-text index over what is searchable. Derived state like the other
+      -- views: dropped and re-derived on a schema bump, rebuilt with them.
+      -- porter stemming means "tests" finds "testing"; prefix queries mean
+      -- "postgres" finds "PostgreSQL". primary/secondary are separate columns
+      -- so bm25 can weight a name above the entities beside it.
+      CREATE VIRTUAL TABLE IF NOT EXISTS view_search USING fts5(
+        primary_text,
+        secondary_text,
+        kind UNINDEXED,
+        ref UNINDEXED,
+        category UNINDEXED,
+        strength UNINDEXED,
+        tokenize='porter unicode61'
       );
     `);
     // ver 0 is either a fresh db or a pre-versioning one — rebuild whenever events already exist.
@@ -507,6 +522,7 @@ export class EventStore {
       };
     });
 
+    this.reindexSearch(rows);
     const insert = this.db.prepare(
       `INSERT INTO view_topics VALUES (@topic_key, @topic, @category, @signals, @weight,
         @sentiment_balance, @dominant_intent, @entities, @first_seen, @last_seen, @event_ids)`,
@@ -579,6 +595,68 @@ export class EventStore {
   }
 
   /** The voice/convention profile — style signals deduped by pattern (newest wins), richest first, forgotten patterns excluded. */
+  /**
+   * Re-derives the full-text index from the topics just computed plus every
+   * assertion. Runs inside rebuild() so the index can never drift from the
+   * views it searches — the same reason view_topics is re-derived rather than
+   * incrementally patched.
+   */
+  private reindexSearch(topics: TopicRow[]): void {
+    const insert = this.db.prepare(
+      "INSERT INTO view_search (primary_text, secondary_text, kind, ref, category, strength) VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    const run = this.db.transaction(() => {
+      this.db.exec("DELETE FROM view_search");
+      for (const t of topics) {
+        insert.run(t.topic, t.entities.join(" "), "topic", t.topic_key, t.category, t.weight);
+      }
+      for (const e of this.payloads<{ claim: string; confidence: number; evidence: string }>("signal.assertion")) {
+        insert.run(e.payload.claim, e.payload.evidence ?? "", "assertion", e.id, "", e.payload.confidence ?? 0.5);
+      }
+    });
+    run();
+  }
+
+  /**
+   * Ranked full-text lookup. bm25 supplies IDF for free — a hit on a rare
+   * project name outranks one on a common word — which literal substring
+   * matching could never do. Returns refs; the caller resolves them so the
+   * views stay the single source of truth for rendering.
+   */
+  searchIndex(
+    matchExpr: string,
+    opts: { limit?: number; allowed?: string[] | null; includeAssertions?: boolean } = {},
+  ): { kind: string; ref: string; score: number; strength: number }[] {
+    if (!matchExpr) return [];
+    const where = ["view_search MATCH ?"];
+    const params: unknown[] = [matchExpr];
+    if (!opts.includeAssertions) where.push("kind = 'topic'");
+    if (opts.allowed?.length) {
+      where.push(`(kind = 'assertion' OR category IN (${opts.allowed.map(() => "?").join(",")}))`);
+      params.push(...opts.allowed);
+    }
+    params.push(opts.limit ?? 10);
+    try {
+      // bm25 is negative, more negative = better; flip it so callers sort desc.
+      return (this.db.prepare(
+        `SELECT kind, ref, strength, -bm25(view_search, 3.0, 1.0) score
+         FROM view_search WHERE ${where.join(" AND ")}
+         ORDER BY score DESC LIMIT ?`,
+      ).all(...params) as { kind: string; ref: string; score: number; strength: number }[]);
+    } catch {
+      // A malformed MATCH expression is a bad query, not a broken store —
+      // return nothing rather than taking down the caller.
+      return [];
+    }
+  }
+
+  /** One topic row by its normalized key, for resolving a search hit. */
+  topicByKey(key: string): TopicRow | null {
+    const r = this.db.prepare("SELECT * FROM view_topics WHERE topic_key = ?").get(key) as
+      (Omit<TopicRow, "entities" | "event_ids"> & { entities: string; event_ids: string }) | undefined;
+    return r ? { ...r, entities: JSON.parse(r.entities) as string[], event_ids: JSON.parse(r.event_ids) as string[] } : null;
+  }
+
   /**
    * Demonstrated skills, aggregated across repos. `signal.skill` had no reader
    * anywhere — the git importer's entire skill output (frameworks, and now
@@ -801,9 +879,14 @@ export class EventStore {
   }
 
   forgetAll(): void {
-    // Clear the profiles too — they're prose derived from now-deleted events.
-    // Leaving them would serve a profile after a full wipe ("deletable for real").
-    this.db.exec("DELETE FROM events; DELETE FROM view_topics; DELETE FROM view_profile; DELETE FROM view_scoped_profile;");
+    // Every derived table, including the full-text index — it stores the topic
+    // and claim text verbatim, so leaving it would keep "deleted" content
+    // readable in the database file (the residue guarantee in deletion.test.ts
+    // catches exactly this).
+    this.db.exec(
+      "DELETE FROM events; DELETE FROM view_topics; DELETE FROM view_profile;"
+      + " DELETE FROM view_scoped_profile; DELETE FROM view_search;",
+    );
     this.reclaim();
     // Only on the full wipe: rebuilds the file so even pages freed before
     // secure_delete was enabled (an install that upgraded into it) are gone.
