@@ -105,7 +105,7 @@ describe("daemon enforcement", () => {
         const r = await fetch(`${BASE}${path}`);
         assert.equal(r.status, 401, path);
         const { error } = await r.json() as { error: string };
-        assert.match(error, /persnallyd connect editor-y/, "message says how to fix it");
+        assert.match(error, /persnally connect editor-y/, "message says how to fix it");
       }
     });
 

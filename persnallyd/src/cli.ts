@@ -5,16 +5,16 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { applyApiKey, configPath, loadConfig, saveConfig } from "./config.js";
 import { CLIENTS, connectAll, connectClient, installClaudeCodeHook, type Client } from "./connect.js";
 import { runConsolidation } from "./consolidate.js";
 import { buildBundle, renderMarkdown } from "./export.js";
-import { chooseExtractor } from "./llm.js";
+import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL, type ChosenExtractor } from "./llm.js";
 import { CATEGORIES, clearScope, dashboardKey, loadScopes, rotateDashboardKey, setScope, type Category } from "./permissions.js";
-import { alreadyImported, DENSITY_QUESTIONS, detectExports, eventsFromAnswers, isThin, markImported } from "./setup.js";
+import { alreadyImported, DENSITY_QUESTIONS, eventsFromAnswers, importAllSources, isThin, markImported } from "./setup.js";
 import { autoImportNewSessions, DEFAULT_PORT, startDaemon, VERSION } from "./daemon.js";
 import { extractChatGPTEvents, parseChatGPTExport } from "./importers/chatgpt.js";
 import { extractClaudeEvents, parseClaudeExport } from "./importers/claude.js";
@@ -22,7 +22,7 @@ import {
   DEFAULT_TRANSCRIPTS_DIR, extractClaudeCodeEvents, parseClaudeCodeTranscripts,
 } from "./importers/claude-code.js";
 import { gitEvents, scanRepos } from "./importers/git.js";
-import { freshConversations, type ParsedExport } from "./importers/extract.js";
+import { EXTRACTOR_VERSION, freshConversations, type ParsedExport } from "./importers/extract.js";
 import {
   autostartInstalled, installAutostart, LOG_FILE, reloadAutostart, removeAutostart,
   removePidFile, runningPid, startDetached, stopDaemon, writePidFile,
@@ -34,41 +34,46 @@ import { askUserModel } from "./ask.js";
 import { renderHits, searchContext } from "./search.js";
 import { DEFAULT_DB_PATH, EventStore } from "./store.js";
 
-const USAGE = `persnallyd ${VERSION} — so every AI finally knows you
+/** One spelling in everything the user is told to retype. `persnallyd` is the
+    same file (both bins point at cli.js); mixing them mid-flow reads as two tools. */
+const BIN = "persnally";
+
+const USAGE = `${BIN} ${VERSION} — so every AI finally knows you
 
 Usage:
-  persnallyd setup                  One command: find exports, import, synthesize, connect, open
-  persnallyd connect [client|--all] [--scope cats]  Add Persnally to claude-code | claude-desktop | cursor (optionally scope it inline)
-  persnallyd scope <client> <categories|--clear>   Limit what a client can read (e.g. scope cursor technology,career)
-  persnallyd scope                  Show all client scopes
-  persnallyd init                   Create the local store (~/.persnally/persnally.db)
-  persnallyd import claude <dir>    Import a Claude data export (needs ANTHROPIC_API_KEY)
-  persnallyd import claude-code [dir]  Import Claude Code session transcripts (default ~/.claude/projects)
-  persnallyd import chatgpt <path>  Import a ChatGPT export dir or conversations.json (needs ANTHROPIC_API_KEY)
-  persnallyd import git <path> [--author <email>]   Import repo activity (offline, no LLM); path = repo or folder of repos
-  persnallyd profile                Synthesize your profile from the store
-  persnallyd ask "<question>"       Ask your model a question the way an agent would (answers or defers)
-  persnallyd search "<topic>"       What Persnally knows about a specific subject (offline, no LLM)
-  persnallyd correct "<truth>" [--about <subject>]   Correct something it believes about you (authoritative)
-  persnallyd voice                  Refresh your voice fingerprint from Claude Code transcripts (offline, no LLM)
-  persnallyd consolidate            Reflect now: refresh decay, add behavior patterns, re-synthesize
-  persnallyd show [topics|events|profile]   Show topics (default), recent events, or the profile
-  persnallyd context [--full]       Emit profile + interests for AI injection (records a context read)
-  persnallyd export [--md] [--out <file>]   Take everything with you (JSON by default; --md for a readable portrait)
-  persnallyd forget <topic>         Hard-delete a topic and everything derived from it
-  persnallyd forget --style <dimension> <pattern>   Forget a "how you write" pattern for good
-  persnallyd forget --all           Delete all data
-  persnallyd forget --batch <id>    Undo one import batch
-  persnallyd dashboard [--rotate]   Open the local dashboard (--rotate signs out open browser sessions)
-  persnallyd status                 Store stats and daemon health
-  persnallyd activity [--json]      Context-read engagement over time (retention pulse)
-  persnallyd start [--port N]       Start the daemon in the background
-  persnallyd stop                   Stop the background daemon
-  persnallyd restart                Restart the daemon (correctly handles autostart/launchd)
-  persnallyd serve [--port N]       Run the daemon in the foreground (127.0.0.1:${DEFAULT_PORT})
-  persnallyd autostart [--remove]   Start the daemon at login and keep it alive (macOS launchd · Linux systemd)
-  persnallyd config set-key <key>   Store the Anthropic API key (owner-only file) for the daemon
-  persnallyd config                 Show config (key masked)
+  persnally setup                  One command: find exports, import, synthesize, connect, open
+  persnally connect [client|--all] [--scope cats]  Add Persnally to claude-code | claude-desktop | cursor (optionally scope it inline)
+  persnally scope <client> <categories|--clear>   Limit what a client can read (e.g. scope cursor technology,career)
+  persnally scope                  Show all client scopes
+  persnally init                   Create the local store (~/.persnally/persnally.db)
+  persnally import claude <dir>    Import a Claude data export (needs ANTHROPIC_API_KEY)
+  persnally import claude-code [dir]  Import Claude Code session transcripts (default ~/.claude/projects)
+  persnally import chatgpt <path>  Import a ChatGPT export dir or conversations.json (needs ANTHROPIC_API_KEY)
+  persnally import git <path> [--author <email>]   Import repo activity (offline, no LLM); path = repo or folder of repos
+  persnally import <source> <path> --reextract   Re-extract already-imported conversations with the current extractor
+  persnally profile                Synthesize your profile from the store
+  persnally ask "<question>"       Ask your model a question the way an agent would (answers or defers)
+  persnally search "<topic>"       What Persnally knows about a specific subject (offline, no LLM)
+  persnally correct "<truth>" [--about <subject>]   Correct something it believes about you (authoritative)
+  persnally voice                  Refresh your voice fingerprint from Claude Code transcripts (offline, no LLM)
+  persnally consolidate            Reflect now: refresh decay, add behavior patterns, re-synthesize
+  persnally show [topics|events|profile]   Show topics (default), recent events, or the profile
+  persnally context [--full]       Emit profile + interests for AI injection (records a context read)
+  persnally export [--md] [--out <file>]   Take everything with you (JSON by default; --md for a readable portrait)
+  persnally forget <topic>         Hard-delete a topic and everything derived from it
+  persnally forget --style <dimension> <pattern>   Forget a "how you write" pattern for good
+  persnally forget --all           Delete all data
+  persnally forget --batch <id>    Undo one import batch
+  persnally dashboard [--rotate]   Open the local dashboard (--rotate signs out open browser sessions)
+  persnally status                 Store stats and daemon health
+  persnally activity [--json]      Context-read engagement over time (retention pulse)
+  persnally start [--port N]       Start the daemon in the background
+  persnally stop                   Stop the background daemon
+  persnally restart                Restart the daemon (correctly handles autostart/launchd)
+  persnally serve [--port N]       Run the daemon in the foreground (127.0.0.1:${DEFAULT_PORT})
+  persnally autostart [--remove]   Start the daemon at login and keep it alive (macOS launchd · Linux systemd)
+  persnally config set-key <key>   Store the Anthropic API key (owner-only file) for the daemon
+  persnally config                 Show config (key masked)
 `;
 
 function parsePort(args: string[]): number {
@@ -78,20 +83,21 @@ function parsePort(args: string[]): number {
 
 async function main(): Promise<void> {
   const [cmd, ...args] = process.argv.slice(2);
+  // Asking for the version or the help text is a successful request, not a
+  // usage error — COLD_DEMO.md's pre-flight runs `--version` and a non-zero
+  // exit reads as a broken install.
+  if (cmd === "--version" || cmd === "-v") { console.log(VERSION); return; }
+  if (cmd === "--help" || cmd === "-h") { console.log(USAGE); return; }
   applyApiKey();
   switch (cmd) {
     case "setup": {
       const port = parsePort(args);
       console.log("Persnally setup — so every AI finally knows you.\n");
 
-      // 1. Extraction engine (optional — git-only works without one)
-      let engine = null;
-      try {
-        engine = await chooseExtractor("extract");
-        console.log(`✓ Extraction engine: ${engine.label}`);
-      } catch {
-        console.log("· No extraction engine (no API key, no Ollama) — conversation imports skipped, git still works.");
-      }
+      // 1. Extraction engine. Optional (git works without one) but everything
+      //    that makes the portrait worth reading needs it, so try to get one
+      //    rather than silently degrading to a git-only mirror.
+      const engine = await resolveSetupEngine();
 
       // 2. Daemon
       if (!runningPid()) {
@@ -101,42 +107,23 @@ async function main(): Promise<void> {
         console.log("✓ Daemon already running");
       }
 
-      // 3. Conversation exports from ~/Downloads (zipped or unzipped)
+      // 3. Conversation sources: Claude/ChatGPT exports on disk + Claude Code
+      //    transcripts. Same path the dashboard's POST /import runs, so an
+      //    engine configured later picks up exactly what was skipped here.
       const store = new EventStore();
       let imported = 0;
-      for (const found of detectExports()) {
-        if (alreadyImported(found.origin)) {
-          console.log(`· Skipping ${found.origin} (already imported)`);
-        } else if (engine) {
-          console.log(`→ Importing ${found.kind} export: ${found.origin}`);
-          const parsed = found.kind === "claude" ? parseClaudeExport(found.path) : parseChatGPTExport(found.path);
-          const result = found.kind === "claude"
-            ? await extractClaudeEvents(parsed, engine.extract, engine.model)
-            : await extractChatGPTEvents(parsed, engine.extract, engine.model);
-          store.append(result.events);
-          markImported(found.origin);
-          imported += result.events.length;
-          console.log(`  ✓ ${result.events.length} events`);
-        }
-        if (found.cleanup) rmSync(found.cleanup, { recursive: true, force: true });
-      }
-
-      // 3b. Claude Code transcripts — local, no export wait. Capped at the 50 most
-      // recent sessions so setup stays fast; full history via `import claude-code`.
-      if (engine && existsSync(DEFAULT_TRANSCRIPTS_DIR) && !alreadyImported(DEFAULT_TRANSCRIPTS_DIR)) {
-        const { parsed, sessionsFound, sessionsDropped } = parseClaudeCodeTranscripts(DEFAULT_TRANSCRIPTS_DIR, 50);
-        if (parsed.conversations.length) {
-          console.log(
-            `→ Importing Claude Code transcripts: ${parsed.conversations.length} session(s)` +
-            (sessionsDropped ? ` (most recent of ${sessionsFound} — full history: persnallyd import claude-code)` : ""),
-          );
-          const result = await extractClaudeCodeEvents(parsed, engine.extract, engine.model);
-          store.append(result.events);
-          markImported(DEFAULT_TRANSCRIPTS_DIR);
-          imported += result.events.length;
-          console.log(`  ✓ ${result.events.length} events`);
-        }
-      }
+      const conv = await importAllSources(store, engine, {
+        onProgress: (label) => console.log(`→ ${label}`),
+        onTick: (done, total) => {
+          // \r keeps a multi-minute extraction to one live line; the newline
+          // below closes it so the next log doesn't overwrite the final count.
+          if (process.stdout.isTTY) process.stdout.write(`\r  extracting ${done}/${total}…   `);
+          else if (done === total) console.log(`  extracted ${done}/${total}`);
+        },
+      });
+      if (process.stdout.isTTY && conv.imported.length) process.stdout.write("\n");
+      imported += conv.events;
+      if (conv.imported.length) console.log(`  ✓ ${conv.events} events from ${conv.imported.length} source(s)`);
 
       // 4. Git activity from ~/Projects
       const projects = join(homedir(), "Projects");
@@ -189,7 +176,18 @@ async function main(): Promise<void> {
         catch (e) { console.error(`· Context hook skipped: ${e instanceof Error ? e.message : String(e)}`); }
       }
 
-      console.log(`\nDone${imported ? ` — ${imported} events imported` : ""}.`);
+      // Never report plain success over history we silently passed over: the
+      // user has an export sitting on disk and no way to know it was skipped.
+      if (conv.skipped.length) {
+        console.log(`\n⚠ Set up an AI engine to finish — ${conv.skipped.length} source(s) not imported yet:`);
+        for (const s of conv.skipped) console.log(`    · ${s}`);
+        console.log("  Your portrait is built from git alone until then. To finish:");
+        console.log("    · open the dashboard below and set up local AI in one click (free, private), or");
+        console.log(`    · ${BIN} config set-key <sk-ant-…>`);
+        console.log(`  then re-run: ${BIN} setup`);
+      } else {
+        console.log(`\nDone${imported ? ` — ${imported} events imported` : ""}.`);
+      }
       announceDashboard(port);
       return;
     }
@@ -202,7 +200,7 @@ async function main(): Promise<void> {
         for (const [c, cats] of entries) console.log(`${c}: ${cats.join(", ")}`);
         return;
       }
-      if (!spec) return die("usage: persnallyd scope <client> <cat1,cat2|--clear>");
+      if (!spec) return die("usage: persnally scope <client> <cat1,cat2|--clear>");
       if (spec === "--clear") {
         console.log(clearScope(client) ? `Cleared scope for ${client} — it now sees everything.` : `${client} had no scope.`);
         return;
@@ -276,7 +274,7 @@ async function main(): Promise<void> {
       if (args[0] === "set-key") {
         if (!args[1]?.startsWith("sk-ant-")) return die("expected an Anthropic key (sk-ant-...)");
         saveConfig({ anthropic_api_key: args[1] });
-        console.log(`Key saved to ${configPath()} (mode 600). Restart the daemon to apply: persnallyd stop`);
+        console.log(`Key saved to ${configPath()} (mode 600). Restart the daemon to apply: persnally stop`);
         return;
       }
       const cfg = loadConfig();
@@ -293,8 +291,12 @@ async function main(): Promise<void> {
     }
     case "import": {
       const [kind, path] = args;
-      const usage = "usage: persnallyd import claude|claude-code|chatgpt|git <path>";
+      const usage = "usage: persnally import claude|claude-code|chatgpt|git <path> [--reextract]";
       if (!kind) return die(usage);
+      // Re-run extraction over conversations already on file. The store keeps
+      // no raw text (structured signals only), so this reads the source again —
+      // which is why it takes the same path argument as a first import.
+      const reextract = args.includes("--reextract");
 
       // Git: offline, deterministic. Dedup by repo so a re-run never doubles the graph.
       if (kind === "git") {
@@ -317,7 +319,7 @@ async function main(): Promise<void> {
         store.rebuild();
         store.close();
         console.log(`Imported ${events.length} events from ${fresh.length} repo(s) (batch ${batch}).`);
-        console.log(`Undo with: persnallyd forget --batch ${batch}`);
+        console.log(`Undo with: persnally forget --batch ${batch}`);
         return;
       }
 
@@ -344,7 +346,13 @@ async function main(): Promise<void> {
 
       const store = new EventStore();
       const seen = store.importedConversationUuids(`import:${kind}`);
-      const { parsed: toExtract, skipped, firstImport } = freshConversations(parsed, seen);
+      // --reextract deliberately bypasses the uuid dedup: every conversation is
+      // extracted again with the current pipeline, and the prior events for
+      // those conversations are dropped just before the new ones land, so a
+      // re-run replaces rather than doubles.
+      const { parsed: toExtract, skipped, firstImport } = reextract
+        ? { parsed, skipped: 0, firstImport: true }
+        : freshConversations(parsed, seen);
       if (!toExtract.conversations.length && !firstImport) {
         store.close();
         console.log(`Already up to date — all ${parsed.conversations.length} conversation(s) imported. Nothing new.`);
@@ -361,11 +369,22 @@ async function main(): Promise<void> {
         : kind === "claude" ? extractClaudeEvents(toExtract, engine.extract, engine.model)
         : extractChatGPTEvents(toExtract, engine.extract, engine.model)
       );
+      // Replace, don't accumulate — and only after extraction succeeded, so a
+      // failed re-run leaves the existing signals intact rather than deleting
+      // them and having nothing to put back.
+      let replaced = 0;
+      if (reextract) {
+        replaced = store.forgetConversations(`import:${kind}`,
+          new Set(toExtract.conversations.map((c) => c.uuid).filter(Boolean)));
+      }
       store.append(events);
       store.rebuild();
       store.close();
-      console.log(`Imported ${events.length} events from ${toExtract.conversations.length} conversation(s) (batch ${batch}).`);
-      console.log(`Undo with: persnallyd forget --batch ${batch}`);
+      console.log(
+        `Imported ${events.length} events from ${toExtract.conversations.length} conversation(s) (batch ${batch}).` +
+        (reextract ? ` Replaced ${replaced} event(s) from earlier extractions.` : ""),
+      );
+      console.log(`Undo with: persnally forget --batch ${batch}`);
       return;
     }
     case "consolidate": {
@@ -389,7 +408,7 @@ async function main(): Promise<void> {
     }
     case "ask": {
       const question = args.join(" ").trim();
-      if (!question) return die('Usage: persnallyd ask "<question about the user>"');
+      if (!question) return die('Usage: persnally ask "<question about the user>"');
       const engine = await chooseExtractor("extract").catch(() => null);
       const store = new EventStore();
       const r = await askUserModel(store, {
@@ -399,7 +418,7 @@ async function main(): Promise<void> {
       if (r.deferred) {
         console.log(`Deferred (${r.reason}): ${r.answer}`);
       } else {
-        console.log(`${r.answer}\n\nconfidence ${r.confidence.toFixed(2)} · ${r.evidence_event_ids.length} evidence event(s) · review at http://127.0.0.1:${DEFAULT_PORT}`);
+        console.log(`${r.answer}\n\nconfidence ${r.confidence.toFixed(2)} · ${r.evidence_event_ids.length} evidence event(s) · review at ${dashboardUrl(DEFAULT_PORT)}`);
       }
       return;
     }
@@ -409,7 +428,7 @@ async function main(): Promise<void> {
       const subject = aboutIdx >= 0 ? (args[aboutIdx + 1] ?? "") : "";
       const rest = aboutIdx >= 0 ? [...args.slice(0, aboutIdx), ...args.slice(aboutIdx + 2)] : args;
       const correction = rest.join(" ").trim();
-      if (!correction) return die('Usage: persnallyd correct "<what\'s actually true>" [--about <subject>]');
+      if (!correction) return die('Usage: persnally correct "<what\'s actually true>" [--about <subject>]');
       const store = new EventStore();
       store.append([newEvent(
         "user.correction",
@@ -423,7 +442,7 @@ async function main(): Promise<void> {
     }
     case "search": {
       const query = args.join(" ").trim();
-      if (!query) return die('Usage: persnallyd search "<topic>"');
+      if (!query) return die('Usage: persnally search "<topic>"');
       const store = new EventStore();
       const hits = searchContext(store, query);
       store.close();
@@ -444,7 +463,7 @@ async function main(): Promise<void> {
       const store = new EventStore();
       if (args[0] === "profile") {
         const p = store.getProfile();
-        console.log(p ? renderProfile(p) : "No profile yet. Run: persnallyd profile");
+        console.log(p ? renderProfile(p) : "No profile yet. Run: persnally profile");
       } else if (args[0] === "events") {
         for (const e of store.query({ limit: 20 })) {
           console.log(`${e.ts}  ${e.type.padEnd(18)} ${e.source.padEnd(16)} ${summarize(e.payload)}`);
@@ -529,21 +548,37 @@ async function main(): Promise<void> {
       } else if (args[0]) {
         console.log(`Deleted ${store.forgetTopic(args[0])} events for "${args[0]}".`);
       } else {
-        die("usage: persnallyd forget <topic> | --all | --batch <id> | --style <dimension> <pattern>");
+        die("usage: persnally forget <topic> | --all | --batch <id> | --style <dimension> <pattern>");
       }
       store.close();
       return;
     }
     case "status": {
-      const store = new EventStore();
-      const s = store.stats();
-      store.close();
+      const store2 = new EventStore();
+      const s = store2.stats();
       console.log(`Store: ${DEFAULT_DB_PATH}`);
       console.log(`Events: ${s.total} (${s.first ?? "—"} → ${s.last ?? "—"})`);
       for (const [t, n] of Object.entries(s.byType)) console.log(`  ${t}: ${n}`);
       const pid = runningPid();
       console.log(pid ? `Daemon: running (pid ${pid})` : "Daemon: not running");
       console.log(`Autostart: ${autostartInstalled() ? "installed" : "not installed"}`);
+
+      // Imports made by an older pipeline can be re-run for better signals —
+      // the whole point of stamping a version is that the user gets told.
+      const stale = new Map<string, number>();
+      for (const importer of ["claude", "claude-code", "chatgpt"]) {
+        const old = store2.importBatchVersions(importer)
+          .filter((b) => (b.version ?? 0) < EXTRACTOR_VERSION);
+        if (old.length) stale.set(importer, old.reduce((n, b) => n + b.events, 0));
+      }
+      store2.close();
+      if (stale.size) {
+        console.log(`\nExtractor: v${EXTRACTOR_VERSION} — some imports predate it:`);
+        for (const [importer, events] of stale) {
+          console.log(`  ${importer}: ~${events} event(s) from an older extractor`);
+        }
+        console.log(`  Re-run with the current extractor: ${BIN} import <source> <path> --reextract`);
+      }
       return;
     }
     case "export": {
@@ -583,7 +618,7 @@ async function main(): Promise<void> {
         rotateDashboardKey();
         console.log("New dashboard key issued — open browser sessions were signed out.");
       }
-      if (!runningPid()) console.log("Note: the daemon isn't running — start it with `persnallyd start`.");
+      if (!runningPid()) console.log("Note: the daemon isn't running — start it with `persnally start`.");
       announceDashboard(port);
       return;
     }
@@ -599,7 +634,7 @@ async function main(): Promise<void> {
     }
     case "stop": {
       if (autostartInstalled()) {
-        console.error("Note: autostart is installed — the supervisor will respawn the daemon. To restart cleanly use `persnallyd restart`; to stop it for good use `persnallyd autostart --remove`.");
+        console.error("Note: autostart is installed — the supervisor will respawn the daemon. To restart cleanly use `persnally restart`; to stop it for good use `persnally autostart --remove`.");
       }
       const pid = await stopDaemon();
       console.log(pid ? `Stopped daemon (pid ${pid}).` : "Daemon was not running.");
@@ -616,7 +651,7 @@ async function main(): Promise<void> {
           console.log(`Restarted via ${process.platform === "linux" ? "systemd" : "launchd"} — daemon up on v${health.version}.`);
           announceDashboard(port);
         } else {
-          console.log("Reloaded autostart; daemon is still coming up — check: persnallyd status");
+          console.log("Reloaded autostart; daemon is still coming up — check: persnally status");
         }
       } else {
         await stopDaemon();
@@ -667,7 +702,7 @@ async function main(): Promise<void> {
       process.on("uncaughtException", (e) => { console.error("uncaughtException:", e); process.exit(1); });
       console.error(`persnallyd v${VERSION} listening on 127.0.0.1:${port}`);
       // Deliberately not the keyed URL: this line goes to the daemon log file.
-      console.error("Dashboard: run `persnallyd dashboard` for an authenticated link");
+      console.error(`Dashboard: run \`${BIN} dashboard\` for an authenticated link`);
       // Catch up on chats since the daemon last ran; the timer takes it from here.
       void autoImportNewSessions(store);
       return;
@@ -676,6 +711,66 @@ async function main(): Promise<void> {
       console.log(USAGE);
       process.exitCode = cmd ? 1 : 0;
   }
+}
+
+/**
+ * The engine `setup` runs on. Beyond chooseExtractor's normal resolution: when
+ * Ollama is running with no model pulled, offer the download here instead of
+ * only in the dashboard. Without an engine the entire conversation import is
+ * skipped, and a terminal user shouldn't have to find the dashboard to learn
+ * that — this is the one failure case setup can actually fix in place.
+ */
+async function resolveSetupEngine(): Promise<ChosenExtractor | null> {
+  const found = await chooseExtractor("extract").catch(() => null);
+  if (found) {
+    console.log(`✓ Extraction engine: ${found.label}`);
+    return found;
+  }
+
+  const tags = await ollamaTags();
+  if (tags === null) {
+    console.log("· No extraction engine — no API key, and Ollama isn't running.");
+    console.log(`    Local & free: install from https://ollama.com/download, then re-run \`${BIN} setup\``);
+    console.log(`    Or use a key: ${BIN} config set-key <sk-ant-…>`);
+    return null;
+  }
+
+  const pull = `ollama pull ${RECOMMENDED_LOCAL_MODEL}`;
+  if (!process.stdin.isTTY) {
+    console.log(`· Ollama is running but has no model. Run \`${pull}\`, then re-run \`${BIN} setup\`.`);
+    return null;
+  }
+
+  const { createInterface } = await import("node:readline/promises");
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const reply = (await rl.question(
+    `· Ollama is running but has no model yet.\n  Download ${RECOMMENDED_LOCAL_MODEL} now (~2GB, free, never leaves this machine)? [Y/n] `,
+  )).trim().toLowerCase();
+  rl.close();
+  if (reply && !reply.startsWith("y")) {
+    console.log(`  Skipped — conversation imports need a model. Re-run \`${BIN} setup\` after \`${pull}\`.`);
+    return null;
+  }
+
+  try {
+    let shown = -1;
+    await pullOllamaModel(RECOMMENDED_LOCAL_MODEL, ({ percent }) => {
+      // One redraw per 10%: a multi-GB download would otherwise emit thousands
+      // of lines into a piped log.
+      const decile = Math.floor(percent / 10);
+      if (decile <= shown) return;
+      shown = decile;
+      process.stdout.write(`\r  downloading ${RECOMMENDED_LOCAL_MODEL}… ${percent}%   `);
+    });
+    process.stdout.write("\n");
+  } catch (e) {
+    console.log(`\n  Download failed (${e instanceof Error ? e.message : String(e)}) — continuing without an engine.`);
+    return null;
+  }
+
+  const engine = await chooseExtractor("extract").catch(() => null);
+  if (engine) console.log(`✓ Extraction engine: ${engine.label}`);
+  return engine;
 }
 
 function sparkline(values: number[]): string {
@@ -694,12 +789,20 @@ function summarize(payload: Record<string, unknown>): string {
  * open it. The key rides in the URL exactly once: the daemon swaps it for a
  * session cookie and redirects, so it never persists in the browser.
  */
+function dashboardUrl(port: number): string {
+  return `http://127.0.0.1:${port}/?k=${dashboardKey()}`;
+}
+
 function announceDashboard(port: number, open = true): void {
-  const url = `http://127.0.0.1:${port}/?k=${dashboardKey()}`;
+  const url = dashboardUrl(port);
   console.log(`Dashboard: ${url}`);
-  if (open && process.platform === "darwin" && process.stdout.isTTY) {
-    try { execFileSync("open", [url]); } catch { /* non-fatal — the link is printed above */ }
-  }
+  if (!open || !process.stdout.isTTY) return;
+  // Linux and Windows users had to copy-paste; the opener differs per platform.
+  const [cmd, ...pre] = process.platform === "darwin" ? ["open"]
+    : process.platform === "win32" ? ["cmd", "/c", "start", ""]
+    : ["xdg-open"];
+  try { execFileSync(cmd, [...pre, url], { stdio: "ignore" }); }
+  catch { /* non-fatal — the link is printed above */ }
 }
 
 function die(msg: string): void {

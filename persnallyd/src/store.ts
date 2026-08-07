@@ -597,10 +597,41 @@ export class EventStore {
   }
 
   /** Drops style signals of one basis so a deterministic re-run replaces them (live `observed`/`correction` signals are kept). */
-  clearStyleByBasis(basis: string): number {
+  clearStyleByBasis(basis: string, sources?: string[]): number {
+    // `sources` narrows the wipe to signals a caller can actually re-derive.
+    // refreshVoice re-reads only the Claude Code transcripts still on disk —
+    // deleting stylometry from claude.ai/ChatGPT exports (long gone from disk)
+    // destroyed voice that could never be rebuilt.
+    if (!sources?.length) {
+      return this.db
+        .prepare("DELETE FROM events WHERE type = 'signal.style' AND json_extract(payload, '$.basis') = ?")
+        .run(basis).changes;
+    }
+    const marks = sources.map(() => "?").join(",");
     return this.db
-      .prepare("DELETE FROM events WHERE type = 'signal.style' AND json_extract(payload, '$.basis') = ?")
-      .run(basis).changes;
+      .prepare(`DELETE FROM events WHERE type = 'signal.style'
+                AND json_extract(payload, '$.basis') = ? AND source IN (${marks})`)
+      .run(basis, ...sources).changes;
+  }
+
+  /**
+   * Per-conversation import watermark: the `message_uuid` recorded by the most
+   * recent import of each conversation. Lets the incremental importer top up a
+   * resumed session with only the messages after the last one it consumed.
+   */
+  conversationWatermarks(source: string): Map<string, string> {
+    const rows = this.db.prepare(
+      `SELECT json_extract(provenance, '$.conversation_uuid') cu,
+              json_extract(provenance, '$.message_uuid') mu
+       FROM events
+       WHERE source = ?
+         AND json_extract(provenance, '$.conversation_uuid') IS NOT NULL
+         AND json_extract(provenance, '$.message_uuid') IS NOT NULL
+       ORDER BY recorded_at ASC`,
+    ).all(source) as { cu: string; mu: string }[];
+    const marks = new Map<string, string>();
+    for (const r of rows) marks.set(r.cu, r.mu); // ascending order → the last write per conversation wins
+    return marks;
   }
 
   /**
@@ -637,17 +668,31 @@ export class EventStore {
         .filter((e) => normalizeTopic(e.payload.topic) === key)
         .map((e) => e.id),
     );
-    // Derived events are the only ones that can reference what we're deleting;
-    // this used to read every event of every type to find them.
+    this.addDerivedDescendants(ids);
+    const del = this.db.prepare("DELETE FROM events WHERE id = ?");
+    const run = this.db.transaction((toDelete: string[]) => {
+      for (const id of toDelete) del.run(id);
+    });
+    run([...ids]);
+    this.rebuild();
+    this.reclaim();
+    return ids.size;
+  }
+
+  /**
+   * Grows `ids` to include every derived event whose `from` chain reaches one
+   * of them. Derived events are the only kind that can reference another, and a
+   * derived event can itself be derived from (a nightly assertion built on an
+   * earlier one), so this walks to a fixpoint — one pass would leave
+   * grandchildren behind, and which ones would depend on row order.
+   * EVENT_SCHEMA.md promises the whole chain goes.
+   */
+  private addDerivedDescendants(ids: Set<string>): void {
     const derived = (this.db
       .prepare(`SELECT id, json_extract(provenance, '$.from') f FROM events
                 WHERE json_extract(provenance, '$.kind') = 'derived'`)
       .all() as { id: string; f: string | null }[])
       .map((r) => ({ id: r.id, from: r.f ? (JSON.parse(r.f) as string[]) : [] }));
-    // A derived event can itself be derived from — a nightly assertion built on
-    // an earlier one. One pass leaves those grandchildren behind (and which
-    // ones depended on row order), so walk to a fixpoint: EVENT_SCHEMA.md
-    // promises everything whose `from` chain reaches a deleted event.
     for (let grew = true; grew; ) {
       grew = false;
       for (const d of derived) {
@@ -657,14 +702,46 @@ export class EventStore {
         }
       }
     }
+  }
+
+  /**
+   * Drops everything a set of conversations produced, so they can be extracted
+   * again from the source. Used by `import --reextract`: without it a re-run
+   * would double every signal instead of replacing it.
+   */
+  forgetConversations(source: string, uuids: Set<string>): number {
+    if (!uuids.size) return 0;
+    const ids = new Set(
+      (this.db.prepare(
+        `SELECT id, json_extract(provenance, '$.conversation_uuid') cu
+         FROM events WHERE source = ?`,
+      ).all(source) as { id: string; cu: string | null }[])
+        .filter((r) => r.cu !== null && uuids.has(r.cu))
+        .map((r) => r.id),
+    );
+    this.addDerivedDescendants(ids);
     const del = this.db.prepare("DELETE FROM events WHERE id = ?");
-    const run = this.db.transaction((toDelete: string[]) => {
-      for (const id of toDelete) del.run(id);
-    });
-    run([...ids]);
-    this.rebuild();
+    this.db.transaction((toDelete: string[]) => { for (const id of toDelete) del.run(id); })([...ids]);
     this.reclaim();
     return ids.size;
+  }
+
+  /**
+   * Extractor version per import batch for one source, newest batch first.
+   * A batch imported before versioning existed reports null — it predates the
+   * current pipeline by definition, so it is always a re-extraction candidate.
+   */
+  importBatchVersions(source: string): { batch: string; version: number | null; events: number; at: string }[] {
+    return (this.db.prepare(
+      `SELECT json_extract(payload, '$.batch') batch,
+              json_extract(payload, '$.extractor_version') version,
+              json_extract(payload, '$.events') events,
+              recorded_at at
+       FROM events
+       WHERE type = 'system.import' AND json_extract(provenance, '$.file') IS NOT NULL
+         AND json_extract(payload, '$.importer') = ?
+       ORDER BY recorded_at DESC`,
+    ).all(source) as { batch: string; version: number | null; events: number; at: string }[]);
   }
 
   /** Removes every event from one import batch — a bad import is fully reversible. */
