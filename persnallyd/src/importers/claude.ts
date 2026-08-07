@@ -56,6 +56,7 @@ export async function extractClaudeEvents(
   parsed: ParsedExport,
   extract: LlmExtract = anthropicExtract,
   model = DEFAULT_EXTRACT_MODEL,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<ImportResult> {
-  return extractEvents(parsed, { source: "import:claude", importer: "claude", file: "conversations.json" }, extract, model);
+  return extractEvents(parsed, { source: "import:claude", importer: "claude", file: "conversations.json", onProgress }, extract, model);
 }

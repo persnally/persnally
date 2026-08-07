@@ -98,7 +98,7 @@ const assertionsExtraction = z.object({ assertions: z.array(PAYLOAD_SCHEMAS["sig
 
 export async function extractEvents(
   parsed: ParsedExport,
-  opts: { source: string; importer: string; file: string },
+  opts: { source: string; importer: string; file: string; onProgress?: (done: number, total: number) => void },
   extract: LlmExtract = anthropicExtract,
   model = DEFAULT_EXTRACT_MODEL,
   concurrency = importConcurrency(),
@@ -121,11 +121,15 @@ export async function extractEvents(
   // are appended in conversation order below, so output is identical to a serial run.
   let succeeded = 0;
   let failed = 0;
+  let settled = 0;
+  // Extraction is the long pole of an import (minutes on a local model), so
+  // report as each conversation lands rather than leaving a blank terminal.
+  const done = () => opts.onProgress?.(++settled, jobs.length);
   const topicsPerConvo = await mapBounded(jobs, concurrency, async ({ convo, text }) => {
     // Several failures and nothing working yet means the engine is broken — a bad
     // key, no credits, a provider outage — and every remaining call will fail the
     // same way. Stop paying for the rest of the batch.
-    if (succeeded === 0 && failed >= FAILFAST_AFTER) return [];
+    if (succeeded === 0 && failed >= FAILFAST_AFTER) { done(); return []; }
     try {
       const result = await extract({
         model,
@@ -136,6 +140,7 @@ export async function extractEvents(
       });
       const topics = topicsExtraction.parse(result).topics;
       succeeded++;
+      done();
       return topics;
     } catch (e) {
       failed++;
@@ -143,6 +148,7 @@ export async function extractEvents(
       // must not abort a whole multi-conversation import. Skip it — leaving no
       // conversation_uuid marker, so the next pass retries it — and keep the rest.
       console.error(`extract: skipped "${convo.name}" — ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
+      done();
       return [];
     }
   });

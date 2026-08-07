@@ -180,6 +180,8 @@ export async function importAllSources(
   opts: {
     transcriptLimit?: number;
     onProgress?: (label: string) => void;
+    /** Per-conversation ticks during extraction — the long pole of an import. */
+    onTick?: (done: number, total: number) => void;
     /** Overridable so tests don't depend on the real ~/Downloads and ~/.claude. */
     downloadsDir?: string;
     transcriptsDir?: string;
@@ -198,8 +200,8 @@ export async function importAllSources(
       note(`Importing ${label}`);
       const parsed = found.kind === "claude" ? parseClaudeExport(found.path) : parseChatGPTExport(found.path);
       const result = found.kind === "claude"
-        ? await extractClaudeEvents(parsed, engine.extract, engine.model)
-        : await extractChatGPTEvents(parsed, engine.extract, engine.model);
+        ? await extractClaudeEvents(parsed, engine.extract, engine.model, opts.onTick)
+        : await extractChatGPTEvents(parsed, engine.extract, engine.model, opts.onTick);
       store.append(result.events);
       markImported(found.origin);
       out.events += result.events.length;
@@ -220,7 +222,7 @@ export async function importAllSources(
           `Importing Claude Code transcripts: ${parsed.conversations.length} session(s)` +
           (sessionsDropped ? ` (most recent of ${sessionsFound} — full history: persnally import claude-code)` : ""),
         );
-        const result = await extractClaudeCodeEvents(parsed, engine.extract, engine.model);
+        const result = await extractClaudeCodeEvents(parsed, engine.extract, engine.model, transcriptsDir, opts.onTick);
         store.append(result.events);
         markImported(transcriptsDir);
         out.events += result.events.length;

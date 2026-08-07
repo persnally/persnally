@@ -327,10 +327,10 @@
 
   <footer>
     stored at <code>~/.persnally/persnally.db</code> · forgetting a topic hard-deletes its events and everything derived ·
-    <code>persnallyd forget --all</code> erases everything <span id="ver"></span>
+    <code>persnally forget --all</code> erases everything <span id="ver"></span>
   </footer>
 </div>
-<div class="preview-ribbon" id="ribbon">preview data — start <code>persnallyd</code> and reload to see your own</div>
+<div class="preview-ribbon" id="ribbon">preview data — start <code>persnally</code> and reload to see your own</div>
 
 <div class="modal" id="shareModal" aria-hidden="true">
   <div class="modal-inner" role="dialog" aria-label="Share your portrait">
@@ -583,7 +583,7 @@ function renderAccess(reads, scopes) {
       <div class="l2"><span class="acc ${cls}">${esc(state)}</span></div></div>${btn}</div>`;
   }).join("");
   host.querySelectorAll(".del[data-client]").forEach(b => b.addEventListener("click", async () => {
-    if (DEMO) return alert("Preview mode — start persnallyd to change access.");
+    if (DEMO) return alert("Preview mode — start persnally to change access.");
     const client = b.dataset.client;
     if (b.dataset.act === "revoke") {
       if (!confirm(`Revoke ${prettyClient(client)}? It will read nothing until you restore it.`)) return;
@@ -647,7 +647,7 @@ function renderAsks(data) {
       <div class="meta">${conf}<span>${esc(timeAgo(it.ts))}</span>${judge}</div></div>`;
   }).join("");
   document.querySelectorAll(".judge button").forEach(b => b.addEventListener("click", async () => {
-    if (DEMO) return alert("Preview mode — start persnallyd to judge answers for real.");
+    if (DEMO) return alert("Preview mode — start persnally to judge answers for real.");
     await fetch("/feedback", { method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ answer_id: b.dataset.id, verdict: b.dataset.v }) });
     renderAsks(await get("/questions?limit=8"));
@@ -885,7 +885,7 @@ function renderOnboard(engine, profile) {
     <div class="ob-or">— or use your own Anthropic key —</div>
     <div class="ob-row"><input id="obKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"><button class="btn ghost" id="obSaveKey">Save &amp; use</button></div>
     <div class="sub" id="obKeyMsg" style="margin-top:6px"></div>
-    <div class="sub" style="margin-top:14px">No model yet? You can still import code offline — <code>persnallyd import git &lt;path&gt;</code> (no AI needed).</div>
+    <div class="sub" style="margin-top:14px">No model yet? You can still import code offline — <code>persnally import git &lt;path&gt;</code> (no AI needed).</div>
   </div>`;
   if (oll.reachable) $("obPull").onclick = () => startPull(engine.recommended);
   else $("obRecheck").onclick = () => loadAll();
@@ -982,14 +982,14 @@ async function loadAll() {
 }
 
 $("synthesize").onclick = async () => {
-  const b = $("synthesize"); if (DEMO) return alert("Preview mode — start persnallyd to synthesize for real.");
+  const b = $("synthesize"); if (DEMO) return alert("Preview mode — start persnally to synthesize for real.");
   b.disabled = true; b.textContent = "Synthesizing…";
   const r = await fetch("/synthesize", { method:"POST" });
   if (!r.ok) { const e = await r.json().catch(()=>({})); alert(e.error || "Synthesis failed — check the daemon log."); }
   b.disabled = false; b.textContent = "Re-synthesize"; loadAll();
 };
 $("reflect").onclick = async () => {
-  const b = $("reflect"); if (DEMO) return alert("Preview mode — start persnallyd to reflect for real.");
+  const b = $("reflect"); if (DEMO) return alert("Preview mode — start persnally to reflect for real.");
   b.disabled = true; b.textContent = "Reflecting…";
   await fetch("/consolidate", { method:"POST" }); b.disabled = false; b.textContent = "Reflect"; loadAll();
 };

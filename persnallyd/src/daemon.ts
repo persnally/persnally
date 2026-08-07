@@ -75,10 +75,10 @@ function authenticate(req: http.IncomingMessage, claimed: string | null): Auth {
     if (client) return { kind: "client", client };
     // The dashboard key doubles as a bearer so local scripts and curl can use it.
     if (verifyDashboardKey(token)) return { kind: "owner" };
-    return { kind: "none", error: "unrecognized token — reconnect with: persnallyd connect <client>, then restart the client" };
+    return { kind: "none", error: "unrecognized token — reconnect with: persnally connect <client>, then restart the client" };
   }
   if (claimed && hasToken(claimed)) {
-    return { kind: "none", error: `client '${claimed}' has an identity token and must present it — re-run: persnallyd connect ${claimed}, then restart the client` };
+    return { kind: "none", error: `client '${claimed}' has an identity token and must present it — re-run: persnally connect ${claimed}, then restart the client` };
   }
   return { kind: "none", error: NEEDS_AUTH };
 }
@@ -184,7 +184,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         if (allowed !== null) {
           const scoped = store.getScopedProfile(scopeKey(allowed));
           if (scoped) return json(res, 200, scoped);
-          return json(res, 403, { error: "scoped: no profile synthesized for this scope yet — run persnallyd profile or POST /synthesize", scoped: true });
+          return json(res, 403, { error: "scoped: no profile synthesized for this scope yet — run `persnally profile` or POST /synthesize", scoped: true });
         }
         const profile = store.getProfile();
         return profile ? json(res, 200, profile) : json(res, 404, { error: "no profile synthesized yet" });
@@ -441,7 +441,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         // what honoring a "delete that" request actually needs.
         if (auth.kind === "client") {
           return json(res, 403, {
-            error: `wiping everything is the owner's action, not '${auth.client}'s — do it from the dashboard, or run: persnallyd forget --all`,
+            error: `wiping everything is the owner's action, not '${auth.client}'s — do it from the dashboard, or run: persnally forget --all`,
           });
         }
         store.forgetAll();

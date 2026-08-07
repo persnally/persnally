@@ -54,6 +54,7 @@ export async function extractChatGPTEvents(
   parsed: ParsedExport,
   extract: LlmExtract = anthropicExtract,
   model = DEFAULT_EXTRACT_MODEL,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<ImportResult> {
-  return extractEvents(parsed, { source: "import:chatgpt", importer: "chatgpt", file: "conversations.json" }, extract, model);
+  return extractEvents(parsed, { source: "import:chatgpt", importer: "chatgpt", file: "conversations.json", onProgress }, extract, model);
 }
