@@ -103,8 +103,9 @@ export async function extractClaudeCodeEvents(
   extract: LlmExtract = anthropicExtract,
   model = DEFAULT_EXTRACT_MODEL,
   file = DEFAULT_TRANSCRIPTS_DIR,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<ImportResult> {
-  return extractEvents(parsed, { source: "import:claude-code", importer: "claude-code", file }, extract, model);
+  return extractEvents(parsed, { source: "import:claude-code", importer: "claude-code", file, onProgress }, extract, model);
 }
 
 export interface IncrementalImport {

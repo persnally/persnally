@@ -245,7 +245,7 @@ describe("every route demands a credential", () => {
   test("a tokened client that omits its token is told exactly what to run", async () => {
     const r = await fetch(BASE + "/topics?client=cursor");
     assert.equal(r.status, 401);
-    assert.match(((await r.json()) as { error: string }).error, /persnallyd connect cursor/);
+    assert.match(((await r.json()) as { error: string }).error, /persnally connect cursor/);
   });
 });
 

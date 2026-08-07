@@ -38,41 +38,41 @@ import { DEFAULT_DB_PATH, EventStore } from "./store.js";
     same file (both bins point at cli.js); mixing them mid-flow reads as two tools. */
 const BIN = "persnally";
 
-const USAGE = `persnallyd ${VERSION} — so every AI finally knows you
+const USAGE = `${BIN} ${VERSION} — so every AI finally knows you
 
 Usage:
-  persnallyd setup                  One command: find exports, import, synthesize, connect, open
-  persnallyd connect [client|--all] [--scope cats]  Add Persnally to claude-code | claude-desktop | cursor (optionally scope it inline)
-  persnallyd scope <client> <categories|--clear>   Limit what a client can read (e.g. scope cursor technology,career)
-  persnallyd scope                  Show all client scopes
-  persnallyd init                   Create the local store (~/.persnally/persnally.db)
-  persnallyd import claude <dir>    Import a Claude data export (needs ANTHROPIC_API_KEY)
-  persnallyd import claude-code [dir]  Import Claude Code session transcripts (default ~/.claude/projects)
-  persnallyd import chatgpt <path>  Import a ChatGPT export dir or conversations.json (needs ANTHROPIC_API_KEY)
-  persnallyd import git <path> [--author <email>]   Import repo activity (offline, no LLM); path = repo or folder of repos
-  persnallyd profile                Synthesize your profile from the store
-  persnallyd ask "<question>"       Ask your model a question the way an agent would (answers or defers)
-  persnallyd search "<topic>"       What Persnally knows about a specific subject (offline, no LLM)
-  persnallyd correct "<truth>" [--about <subject>]   Correct something it believes about you (authoritative)
-  persnallyd voice                  Refresh your voice fingerprint from Claude Code transcripts (offline, no LLM)
-  persnallyd consolidate            Reflect now: refresh decay, add behavior patterns, re-synthesize
-  persnallyd show [topics|events|profile]   Show topics (default), recent events, or the profile
-  persnallyd context [--full]       Emit profile + interests for AI injection (records a context read)
-  persnallyd export [--md] [--out <file>]   Take everything with you (JSON by default; --md for a readable portrait)
-  persnallyd forget <topic>         Hard-delete a topic and everything derived from it
-  persnallyd forget --style <dimension> <pattern>   Forget a "how you write" pattern for good
-  persnallyd forget --all           Delete all data
-  persnallyd forget --batch <id>    Undo one import batch
-  persnallyd dashboard [--rotate]   Open the local dashboard (--rotate signs out open browser sessions)
-  persnallyd status                 Store stats and daemon health
-  persnallyd activity [--json]      Context-read engagement over time (retention pulse)
-  persnallyd start [--port N]       Start the daemon in the background
-  persnallyd stop                   Stop the background daemon
-  persnallyd restart                Restart the daemon (correctly handles autostart/launchd)
-  persnallyd serve [--port N]       Run the daemon in the foreground (127.0.0.1:${DEFAULT_PORT})
-  persnallyd autostart [--remove]   Start the daemon at login and keep it alive (macOS launchd · Linux systemd)
-  persnallyd config set-key <key>   Store the Anthropic API key (owner-only file) for the daemon
-  persnallyd config                 Show config (key masked)
+  persnally setup                  One command: find exports, import, synthesize, connect, open
+  persnally connect [client|--all] [--scope cats]  Add Persnally to claude-code | claude-desktop | cursor (optionally scope it inline)
+  persnally scope <client> <categories|--clear>   Limit what a client can read (e.g. scope cursor technology,career)
+  persnally scope                  Show all client scopes
+  persnally init                   Create the local store (~/.persnally/persnally.db)
+  persnally import claude <dir>    Import a Claude data export (needs ANTHROPIC_API_KEY)
+  persnally import claude-code [dir]  Import Claude Code session transcripts (default ~/.claude/projects)
+  persnally import chatgpt <path>  Import a ChatGPT export dir or conversations.json (needs ANTHROPIC_API_KEY)
+  persnally import git <path> [--author <email>]   Import repo activity (offline, no LLM); path = repo or folder of repos
+  persnally profile                Synthesize your profile from the store
+  persnally ask "<question>"       Ask your model a question the way an agent would (answers or defers)
+  persnally search "<topic>"       What Persnally knows about a specific subject (offline, no LLM)
+  persnally correct "<truth>" [--about <subject>]   Correct something it believes about you (authoritative)
+  persnally voice                  Refresh your voice fingerprint from Claude Code transcripts (offline, no LLM)
+  persnally consolidate            Reflect now: refresh decay, add behavior patterns, re-synthesize
+  persnally show [topics|events|profile]   Show topics (default), recent events, or the profile
+  persnally context [--full]       Emit profile + interests for AI injection (records a context read)
+  persnally export [--md] [--out <file>]   Take everything with you (JSON by default; --md for a readable portrait)
+  persnally forget <topic>         Hard-delete a topic and everything derived from it
+  persnally forget --style <dimension> <pattern>   Forget a "how you write" pattern for good
+  persnally forget --all           Delete all data
+  persnally forget --batch <id>    Undo one import batch
+  persnally dashboard [--rotate]   Open the local dashboard (--rotate signs out open browser sessions)
+  persnally status                 Store stats and daemon health
+  persnally activity [--json]      Context-read engagement over time (retention pulse)
+  persnally start [--port N]       Start the daemon in the background
+  persnally stop                   Stop the background daemon
+  persnally restart                Restart the daemon (correctly handles autostart/launchd)
+  persnally serve [--port N]       Run the daemon in the foreground (127.0.0.1:${DEFAULT_PORT})
+  persnally autostart [--remove]   Start the daemon at login and keep it alive (macOS launchd · Linux systemd)
+  persnally config set-key <key>   Store the Anthropic API key (owner-only file) for the daemon
+  persnally config                 Show config (key masked)
 `;
 
 function parsePort(args: string[]): number {
@@ -82,6 +82,11 @@ function parsePort(args: string[]): number {
 
 async function main(): Promise<void> {
   const [cmd, ...args] = process.argv.slice(2);
+  // Asking for the version or the help text is a successful request, not a
+  // usage error — COLD_DEMO.md's pre-flight runs `--version` and a non-zero
+  // exit reads as a broken install.
+  if (cmd === "--version" || cmd === "-v") { console.log(VERSION); return; }
+  if (cmd === "--help" || cmd === "-h") { console.log(USAGE); return; }
   applyApiKey();
   switch (cmd) {
     case "setup": {
@@ -108,7 +113,14 @@ async function main(): Promise<void> {
       let imported = 0;
       const conv = await importAllSources(store, engine, {
         onProgress: (label) => console.log(`→ ${label}`),
+        onTick: (done, total) => {
+          // \r keeps a multi-minute extraction to one live line; the newline
+          // below closes it so the next log doesn't overwrite the final count.
+          if (process.stdout.isTTY) process.stdout.write(`\r  extracting ${done}/${total}…   `);
+          else if (done === total) console.log(`  extracted ${done}/${total}`);
+        },
       });
+      if (process.stdout.isTTY && conv.imported.length) process.stdout.write("\n");
       imported += conv.events;
       if (conv.imported.length) console.log(`  ✓ ${conv.events} events from ${conv.imported.length} source(s)`);
 
@@ -187,7 +199,7 @@ async function main(): Promise<void> {
         for (const [c, cats] of entries) console.log(`${c}: ${cats.join(", ")}`);
         return;
       }
-      if (!spec) return die("usage: persnallyd scope <client> <cat1,cat2|--clear>");
+      if (!spec) return die("usage: persnally scope <client> <cat1,cat2|--clear>");
       if (spec === "--clear") {
         console.log(clearScope(client) ? `Cleared scope for ${client} — it now sees everything.` : `${client} had no scope.`);
         return;
@@ -261,7 +273,7 @@ async function main(): Promise<void> {
       if (args[0] === "set-key") {
         if (!args[1]?.startsWith("sk-ant-")) return die("expected an Anthropic key (sk-ant-...)");
         saveConfig({ anthropic_api_key: args[1] });
-        console.log(`Key saved to ${configPath()} (mode 600). Restart the daemon to apply: persnallyd stop`);
+        console.log(`Key saved to ${configPath()} (mode 600). Restart the daemon to apply: persnally stop`);
         return;
       }
       const cfg = loadConfig();
@@ -278,7 +290,7 @@ async function main(): Promise<void> {
     }
     case "import": {
       const [kind, path] = args;
-      const usage = "usage: persnallyd import claude|claude-code|chatgpt|git <path>";
+      const usage = "usage: persnally import claude|claude-code|chatgpt|git <path>";
       if (!kind) return die(usage);
 
       // Git: offline, deterministic. Dedup by repo so a re-run never doubles the graph.
@@ -302,7 +314,7 @@ async function main(): Promise<void> {
         store.rebuild();
         store.close();
         console.log(`Imported ${events.length} events from ${fresh.length} repo(s) (batch ${batch}).`);
-        console.log(`Undo with: persnallyd forget --batch ${batch}`);
+        console.log(`Undo with: persnally forget --batch ${batch}`);
         return;
       }
 
@@ -350,7 +362,7 @@ async function main(): Promise<void> {
       store.rebuild();
       store.close();
       console.log(`Imported ${events.length} events from ${toExtract.conversations.length} conversation(s) (batch ${batch}).`);
-      console.log(`Undo with: persnallyd forget --batch ${batch}`);
+      console.log(`Undo with: persnally forget --batch ${batch}`);
       return;
     }
     case "consolidate": {
@@ -374,7 +386,7 @@ async function main(): Promise<void> {
     }
     case "ask": {
       const question = args.join(" ").trim();
-      if (!question) return die('Usage: persnallyd ask "<question about the user>"');
+      if (!question) return die('Usage: persnally ask "<question about the user>"');
       const engine = await chooseExtractor("extract").catch(() => null);
       const store = new EventStore();
       const r = await askUserModel(store, {
@@ -384,7 +396,7 @@ async function main(): Promise<void> {
       if (r.deferred) {
         console.log(`Deferred (${r.reason}): ${r.answer}`);
       } else {
-        console.log(`${r.answer}\n\nconfidence ${r.confidence.toFixed(2)} · ${r.evidence_event_ids.length} evidence event(s) · review at http://127.0.0.1:${DEFAULT_PORT}`);
+        console.log(`${r.answer}\n\nconfidence ${r.confidence.toFixed(2)} · ${r.evidence_event_ids.length} evidence event(s) · review at ${dashboardUrl(DEFAULT_PORT)}`);
       }
       return;
     }
@@ -394,7 +406,7 @@ async function main(): Promise<void> {
       const subject = aboutIdx >= 0 ? (args[aboutIdx + 1] ?? "") : "";
       const rest = aboutIdx >= 0 ? [...args.slice(0, aboutIdx), ...args.slice(aboutIdx + 2)] : args;
       const correction = rest.join(" ").trim();
-      if (!correction) return die('Usage: persnallyd correct "<what\'s actually true>" [--about <subject>]');
+      if (!correction) return die('Usage: persnally correct "<what\'s actually true>" [--about <subject>]');
       const store = new EventStore();
       store.append([newEvent(
         "user.correction",
@@ -408,7 +420,7 @@ async function main(): Promise<void> {
     }
     case "search": {
       const query = args.join(" ").trim();
-      if (!query) return die('Usage: persnallyd search "<topic>"');
+      if (!query) return die('Usage: persnally search "<topic>"');
       const store = new EventStore();
       const hits = searchContext(store, query);
       store.close();
@@ -429,7 +441,7 @@ async function main(): Promise<void> {
       const store = new EventStore();
       if (args[0] === "profile") {
         const p = store.getProfile();
-        console.log(p ? renderProfile(p) : "No profile yet. Run: persnallyd profile");
+        console.log(p ? renderProfile(p) : "No profile yet. Run: persnally profile");
       } else if (args[0] === "events") {
         for (const e of store.query({ limit: 20 })) {
           console.log(`${e.ts}  ${e.type.padEnd(18)} ${e.source.padEnd(16)} ${summarize(e.payload)}`);
@@ -514,7 +526,7 @@ async function main(): Promise<void> {
       } else if (args[0]) {
         console.log(`Deleted ${store.forgetTopic(args[0])} events for "${args[0]}".`);
       } else {
-        die("usage: persnallyd forget <topic> | --all | --batch <id> | --style <dimension> <pattern>");
+        die("usage: persnally forget <topic> | --all | --batch <id> | --style <dimension> <pattern>");
       }
       store.close();
       return;
@@ -568,7 +580,7 @@ async function main(): Promise<void> {
         rotateDashboardKey();
         console.log("New dashboard key issued — open browser sessions were signed out.");
       }
-      if (!runningPid()) console.log("Note: the daemon isn't running — start it with `persnallyd start`.");
+      if (!runningPid()) console.log("Note: the daemon isn't running — start it with `persnally start`.");
       announceDashboard(port);
       return;
     }
@@ -584,7 +596,7 @@ async function main(): Promise<void> {
     }
     case "stop": {
       if (autostartInstalled()) {
-        console.error("Note: autostart is installed — the supervisor will respawn the daemon. To restart cleanly use `persnallyd restart`; to stop it for good use `persnallyd autostart --remove`.");
+        console.error("Note: autostart is installed — the supervisor will respawn the daemon. To restart cleanly use `persnally restart`; to stop it for good use `persnally autostart --remove`.");
       }
       const pid = await stopDaemon();
       console.log(pid ? `Stopped daemon (pid ${pid}).` : "Daemon was not running.");
@@ -601,7 +613,7 @@ async function main(): Promise<void> {
           console.log(`Restarted via ${process.platform === "linux" ? "systemd" : "launchd"} — daemon up on v${health.version}.`);
           announceDashboard(port);
         } else {
-          console.log("Reloaded autostart; daemon is still coming up — check: persnallyd status");
+          console.log("Reloaded autostart; daemon is still coming up — check: persnally status");
         }
       } else {
         await stopDaemon();
@@ -652,7 +664,7 @@ async function main(): Promise<void> {
       process.on("uncaughtException", (e) => { console.error("uncaughtException:", e); process.exit(1); });
       console.error(`persnallyd v${VERSION} listening on 127.0.0.1:${port}`);
       // Deliberately not the keyed URL: this line goes to the daemon log file.
-      console.error("Dashboard: run `persnallyd dashboard` for an authenticated link");
+      console.error(`Dashboard: run \`${BIN} dashboard\` for an authenticated link`);
       // Catch up on chats since the daemon last ran; the timer takes it from here.
       void autoImportNewSessions(store);
       return;
@@ -739,12 +751,20 @@ function summarize(payload: Record<string, unknown>): string {
  * open it. The key rides in the URL exactly once: the daemon swaps it for a
  * session cookie and redirects, so it never persists in the browser.
  */
+function dashboardUrl(port: number): string {
+  return `http://127.0.0.1:${port}/?k=${dashboardKey()}`;
+}
+
 function announceDashboard(port: number, open = true): void {
-  const url = `http://127.0.0.1:${port}/?k=${dashboardKey()}`;
+  const url = dashboardUrl(port);
   console.log(`Dashboard: ${url}`);
-  if (open && process.platform === "darwin" && process.stdout.isTTY) {
-    try { execFileSync("open", [url]); } catch { /* non-fatal — the link is printed above */ }
-  }
+  if (!open || !process.stdout.isTTY) return;
+  // Linux and Windows users had to copy-paste; the opener differs per platform.
+  const [cmd, ...pre] = process.platform === "darwin" ? ["open"]
+    : process.platform === "win32" ? ["cmd", "/c", "start", ""]
+    : ["xdg-open"];
+  try { execFileSync(cmd, [...pre, url], { stdio: "ignore" }); }
+  catch { /* non-fatal — the link is printed above */ }
 }
 
 function die(msg: string): void {
