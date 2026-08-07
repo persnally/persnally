@@ -597,10 +597,41 @@ export class EventStore {
   }
 
   /** Drops style signals of one basis so a deterministic re-run replaces them (live `observed`/`correction` signals are kept). */
-  clearStyleByBasis(basis: string): number {
+  clearStyleByBasis(basis: string, sources?: string[]): number {
+    // `sources` narrows the wipe to signals a caller can actually re-derive.
+    // refreshVoice re-reads only the Claude Code transcripts still on disk —
+    // deleting stylometry from claude.ai/ChatGPT exports (long gone from disk)
+    // destroyed voice that could never be rebuilt.
+    if (!sources?.length) {
+      return this.db
+        .prepare("DELETE FROM events WHERE type = 'signal.style' AND json_extract(payload, '$.basis') = ?")
+        .run(basis).changes;
+    }
+    const marks = sources.map(() => "?").join(",");
     return this.db
-      .prepare("DELETE FROM events WHERE type = 'signal.style' AND json_extract(payload, '$.basis') = ?")
-      .run(basis).changes;
+      .prepare(`DELETE FROM events WHERE type = 'signal.style'
+                AND json_extract(payload, '$.basis') = ? AND source IN (${marks})`)
+      .run(basis, ...sources).changes;
+  }
+
+  /**
+   * Per-conversation import watermark: the `message_uuid` recorded by the most
+   * recent import of each conversation. Lets the incremental importer top up a
+   * resumed session with only the messages after the last one it consumed.
+   */
+  conversationWatermarks(source: string): Map<string, string> {
+    const rows = this.db.prepare(
+      `SELECT json_extract(provenance, '$.conversation_uuid') cu,
+              json_extract(provenance, '$.message_uuid') mu
+       FROM events
+       WHERE source = ?
+         AND json_extract(provenance, '$.conversation_uuid') IS NOT NULL
+         AND json_extract(provenance, '$.message_uuid') IS NOT NULL
+       ORDER BY recorded_at ASC`,
+    ).all(source) as { cu: string; mu: string }[];
+    const marks = new Map<string, string>();
+    for (const r of rows) marks.set(r.cu, r.mu); // ascending order → the last write per conversation wins
+    return marks;
   }
 
   /**
