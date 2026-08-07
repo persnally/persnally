@@ -55,6 +55,9 @@ export interface ParsedConversation {
   summary: string;
   created_at: string;
   userMessages: string[];
+  /** Id of the last message consumed, recorded as the provenance watermark so a
+      resumed session can be topped up with only what came after it. */
+  lastMessageId?: string;
 }
 
 export interface ParsedExport {
@@ -156,7 +159,10 @@ export async function extractEvents(
   jobs.forEach(({ convo }, i) => {
     for (const t of topicsPerConvo[i]!) {
       events.push(newEvent("signal.topic", opts.source, t,
-        { kind: "import", batch, file: opts.file, conversation_uuid: convo.uuid },
+        {
+          kind: "import", batch, file: opts.file, conversation_uuid: convo.uuid,
+          ...(convo.lastMessageId ? { message_uuid: convo.lastMessageId } : {}),
+        },
         safeIso(convo.created_at),
       ));
     }
