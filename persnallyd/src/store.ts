@@ -7,6 +7,7 @@ import Database from "better-sqlite3";
 import { dirname, join } from "node:path";
 import { topicWeight, type WeightSignal } from "./decay.js";
 import { newEvent, normalizeTopic, validateEvent, type PersnallyEvent } from "./events.js";
+import { loadConfig } from "./config.js";
 import { DATA_DIR, ensurePrivateDir, ensurePrivateFile } from "./paths.js";
 import { assemblePack, type StyleSignal } from "./stylometry.js";
 
@@ -16,6 +17,19 @@ const VIEW_SCHEMA_VERSION = 2;
 const MAX_ID_LOOKUP = 500;
 
 export const DEFAULT_DB_PATH = join(DATA_DIR, "persnally.db");
+
+/** Optional per-category half-life overrides from config, e.g.
+    `{"decay_half_life_days": {"technology": 45}}`. Unset categories keep the
+    defaults; anything malformed is ignored rather than corrupting the graph. */
+function decayOverrides(): Record<string, number> {
+  const raw = loadConfig().decay_half_life_days;
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) out[k] = v;
+  }
+  return out;
+}
 
 export interface QueryOpts {
   type?: string;
@@ -471,12 +485,15 @@ export class EventStore {
       a.ids.push(e.id);
     }
 
+    // Decay rate depends on the category, so resolve it before weighting.
+    const overrides = decayOverrides();
     const rows: TopicRow[] = [...acc.entries()].map(([key, a]) => {
-      const w = topicWeight(a.signals, now);
+      const category = [...a.categories.entries()].sort((x, y) => y[1] - x[1])[0]![0];
+      const w = topicWeight(a.signals, now, category, overrides);
       return {
         topic_key: key,
         topic: a.topic,
-        category: [...a.categories.entries()].sort((x, y) => y[1] - x[1])[0]![0],
+        category,
         signals: a.signals.length,
         // Guard the NOT NULL column: a non-finite weight would abort the whole
         // rebuild transaction and wedge the topic view permanently.
