@@ -61,6 +61,7 @@ export async function synthesizeProfile(
     throw new Error("Nothing to synthesize from — run an import first.");
   }
   const corrections = store.corrections(25);
+  const skills = store.skills(20);
 
   const content = [
     "## Weighted interests (decayed)",
@@ -69,6 +70,11 @@ export async function synthesizeProfile(
       `${t.dominant_intent}, ${t.signals} signals${t.entities.length ? `, entities: ${t.entities.slice(0, 5).join(", ")}` : ""})`,
     ),
     "",
+    ...(skills.length ? [
+      "## Demonstrated skills (from repos they actually commit to)",
+      ...skills.map((k) => `- ${k.skill} (${k.domain}, proficiency ${k.proficiency.toFixed(2)}, ${k.sources} source(s))`),
+      "",
+    ] : []),
     "## Extracted assertions",
     ...assertions.map((e) => {
       const p = e.payload as { claim: string; kind: string; confidence: number; evidence: string };

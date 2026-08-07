@@ -579,6 +579,35 @@ export class EventStore {
   }
 
   /** The voice/convention profile — style signals deduped by pattern (newest wins), richest first, forgotten patterns excluded. */
+  /**
+   * Demonstrated skills, aggregated across repos. `signal.skill` had no reader
+   * anywhere — the git importer's entire skill output (frameworks, and now
+   * languages by file count) was written and never surfaced, so the one
+   * key-free import path contributed nothing to the profile or to context.
+   * Proficiency takes the strongest observation; `sources` says how many repos
+   * back it, which is what separates a language someone uses from one they
+   * touched once.
+   */
+  skills(limit = 25): { skill: string; domain: string; proficiency: number; sources: number }[] {
+    interface Acc { skill: string; domain: string; proficiency: number; sources: Set<string> }
+    const acc = new Map<string, Acc>();
+    for (const e of this.payloads<{ skill: string; domain: string; proficiency: number; basis: string }>("signal.skill")) {
+      const p = e.payload;
+      const key = p.skill.toLowerCase().trim();
+      if (!key) continue;
+      const cur = acc.get(key) ?? { skill: p.skill, domain: p.domain, proficiency: 0, sources: new Set<string>() };
+      cur.proficiency = Math.max(cur.proficiency, Number.isFinite(p.proficiency) ? p.proficiency : 0);
+      if (p.domain) cur.domain = p.domain;
+      // `basis` carries the repo it came from (repo-activity:x / files-touched:x).
+      cur.sources.add(p.basis || "unknown");
+      acc.set(key, cur);
+    }
+    return [...acc.values()]
+      .map((a) => ({ skill: a.skill, domain: a.domain, proficiency: a.proficiency, sources: a.sources.size }))
+      .sort((a, b) => b.proficiency - a.proficiency || b.sources - a.sources)
+      .slice(0, limit);
+  }
+
   voice(): { pack: string; items: StyleSignal[] } {
     const forgotten = this.forgottenStyleKeys();
     const byPattern = new Map<string, StyleSignal>();

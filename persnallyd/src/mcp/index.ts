@@ -147,10 +147,11 @@ Call this at the START of a conversation (or when personalization would improve 
     guarded(async () => {
       logEvent("tool_call", { tool: "persnally_context", detail });
       const client = encodeURIComponent(getClient());
-      const [profile, topics, voice] = await Promise.all([
+      const [profile, topics, voice, skills] = await Promise.all([
         daemonGet<Profile>(`/profile?client=${client}`),
         daemonGet<TopicRow[]>(`/topics?limit=${detail === "full" ? 25 : 10}&client=${client}`),
         daemonGet<{ pack: string; items: unknown[] }>("/voice"),
+        daemonGet<{ skill: string; domain: string; proficiency: number; sources: number }[]>("/skills?limit=15"),
       ]);
       if (!profile && !topics?.length && !voice?.pack) {
         return text("No context yet — the user hasn't imported data or tracked any signals.");
@@ -167,6 +168,13 @@ Call this at the START of a conversation (or when personalization would improve 
       if (voice?.pack) {
         out += `${out ? "\n\n" : ""}# How to write for this user\n${voice.pack}`;
         items += voice.items?.length ?? 0;
+      }
+      // Demonstrated skills, from repos they actually commit to — evidence of
+      // what they can do, distinct from what they've been talking about.
+      if (skills?.length) {
+        out += `${out ? "\n\n" : ""}# Demonstrated skills (from their own repos)\n`;
+        out += skills.map((k) => `- ${k.skill}${k.domain && k.domain !== "other" ? ` (${k.domain})` : ""}`).join("\n");
+        items += skills.length;
       }
       if (topics?.length) {
         out += `\n\n# Current interests (decay-weighted)\n`;
