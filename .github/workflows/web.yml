@@ -24,7 +24,7 @@ jobs:
     name: Web — Dashboard preview in sync
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: dashboard-preview.html matches the dashboard it mirrors
         run: |
           if ! diff -q persnallyd/src/dashboard.html web/public/dashboard-preview.html; then
@@ -41,7 +41,7 @@ jobs:
         working-directory: web
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:

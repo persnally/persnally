@@ -26,7 +26,7 @@ jobs:
     env:
       GITLEAKS_VERSION: "8.30.1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # scan full history, not just the PR diff — cheap at this repo's size
 
@@ -54,7 +54,7 @@ jobs:
     name: Internal docs stay untracked
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: PIVOT.md and launch/ must not be committed
         run: |
           tracked=$(git ls-files PIVOT.md launch/ 2>/dev/null)
