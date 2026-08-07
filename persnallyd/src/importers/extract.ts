@@ -14,6 +14,19 @@ import { analyzeVoice } from "../stylometry.js";
 // that a dead engine costs a handful of calls instead of the whole batch.
 const FAILFAST_AFTER = 3;
 
+/**
+ * The extraction pipeline's version. Bump whenever a change would produce
+ * materially better signals from the *same* source — a new prompt, a new model
+ * default, a new signal type, more of each conversation being read.
+ *
+ * Re-importing is otherwise a deliberate no-op (already-imported conversations
+ * are skipped by uuid), which is right for cost but meant the first import's
+ * quality was permanent: a better extractor could never be applied to history
+ * already on file. Stamping the version is what makes `import --reextract`
+ * able to say *which* batches are worth re-running.
+ */
+export const EXTRACTOR_VERSION = 1;
+
 const MAX_CONVO_CHARS = 30_000;
 const MAX_IMPORT_FILE_BYTES = 400 * 1024 * 1024; // ~400 MB — under Node's ~512 MB string cap; larger needs streaming
 const DEFAULT_CONCURRENCY = 4;
@@ -201,6 +214,7 @@ export async function extractEvents(
     importer: opts.importer,
     batch,
     events: events.length,
+    extractor_version: EXTRACTOR_VERSION,
     ...(span.length ? { source_span: [span[0]!, span[span.length - 1]!] } : {}),
   }, { kind: "import", batch, file: opts.file }));
 

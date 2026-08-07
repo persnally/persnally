@@ -22,7 +22,7 @@ import {
   DEFAULT_TRANSCRIPTS_DIR, extractClaudeCodeEvents, parseClaudeCodeTranscripts,
 } from "./importers/claude-code.js";
 import { gitEvents, scanRepos } from "./importers/git.js";
-import { freshConversations, type ParsedExport } from "./importers/extract.js";
+import { EXTRACTOR_VERSION, freshConversations, type ParsedExport } from "./importers/extract.js";
 import {
   autostartInstalled, installAutostart, LOG_FILE, reloadAutostart, removeAutostart,
   removePidFile, runningPid, startDetached, stopDaemon, writePidFile,
@@ -50,6 +50,7 @@ Usage:
   persnally import claude-code [dir]  Import Claude Code session transcripts (default ~/.claude/projects)
   persnally import chatgpt <path>  Import a ChatGPT export dir or conversations.json (needs ANTHROPIC_API_KEY)
   persnally import git <path> [--author <email>]   Import repo activity (offline, no LLM); path = repo or folder of repos
+  persnally import <source> <path> --reextract   Re-extract already-imported conversations with the current extractor
   persnally profile                Synthesize your profile from the store
   persnally ask "<question>"       Ask your model a question the way an agent would (answers or defers)
   persnally search "<topic>"       What Persnally knows about a specific subject (offline, no LLM)
@@ -290,8 +291,12 @@ async function main(): Promise<void> {
     }
     case "import": {
       const [kind, path] = args;
-      const usage = "usage: persnally import claude|claude-code|chatgpt|git <path>";
+      const usage = "usage: persnally import claude|claude-code|chatgpt|git <path> [--reextract]";
       if (!kind) return die(usage);
+      // Re-run extraction over conversations already on file. The store keeps
+      // no raw text (structured signals only), so this reads the source again —
+      // which is why it takes the same path argument as a first import.
+      const reextract = args.includes("--reextract");
 
       // Git: offline, deterministic. Dedup by repo so a re-run never doubles the graph.
       if (kind === "git") {
@@ -341,7 +346,13 @@ async function main(): Promise<void> {
 
       const store = new EventStore();
       const seen = store.importedConversationUuids(`import:${kind}`);
-      const { parsed: toExtract, skipped, firstImport } = freshConversations(parsed, seen);
+      // --reextract deliberately bypasses the uuid dedup: every conversation is
+      // extracted again with the current pipeline, and the prior events for
+      // those conversations are dropped just before the new ones land, so a
+      // re-run replaces rather than doubles.
+      const { parsed: toExtract, skipped, firstImport } = reextract
+        ? { parsed, skipped: 0, firstImport: true }
+        : freshConversations(parsed, seen);
       if (!toExtract.conversations.length && !firstImport) {
         store.close();
         console.log(`Already up to date — all ${parsed.conversations.length} conversation(s) imported. Nothing new.`);
@@ -358,10 +369,21 @@ async function main(): Promise<void> {
         : kind === "claude" ? extractClaudeEvents(toExtract, engine.extract, engine.model)
         : extractChatGPTEvents(toExtract, engine.extract, engine.model)
       );
+      // Replace, don't accumulate — and only after extraction succeeded, so a
+      // failed re-run leaves the existing signals intact rather than deleting
+      // them and having nothing to put back.
+      let replaced = 0;
+      if (reextract) {
+        replaced = store.forgetConversations(`import:${kind}`,
+          new Set(toExtract.conversations.map((c) => c.uuid).filter(Boolean)));
+      }
       store.append(events);
       store.rebuild();
       store.close();
-      console.log(`Imported ${events.length} events from ${toExtract.conversations.length} conversation(s) (batch ${batch}).`);
+      console.log(
+        `Imported ${events.length} events from ${toExtract.conversations.length} conversation(s) (batch ${batch}).` +
+        (reextract ? ` Replaced ${replaced} event(s) from earlier extractions.` : ""),
+      );
       console.log(`Undo with: persnally forget --batch ${batch}`);
       return;
     }
@@ -532,15 +554,31 @@ async function main(): Promise<void> {
       return;
     }
     case "status": {
-      const store = new EventStore();
-      const s = store.stats();
-      store.close();
+      const store2 = new EventStore();
+      const s = store2.stats();
       console.log(`Store: ${DEFAULT_DB_PATH}`);
       console.log(`Events: ${s.total} (${s.first ?? "—"} → ${s.last ?? "—"})`);
       for (const [t, n] of Object.entries(s.byType)) console.log(`  ${t}: ${n}`);
       const pid = runningPid();
       console.log(pid ? `Daemon: running (pid ${pid})` : "Daemon: not running");
       console.log(`Autostart: ${autostartInstalled() ? "installed" : "not installed"}`);
+
+      // Imports made by an older pipeline can be re-run for better signals —
+      // the whole point of stamping a version is that the user gets told.
+      const stale = new Map<string, number>();
+      for (const importer of ["claude", "claude-code", "chatgpt"]) {
+        const old = store2.importBatchVersions(importer)
+          .filter((b) => (b.version ?? 0) < EXTRACTOR_VERSION);
+        if (old.length) stale.set(importer, old.reduce((n, b) => n + b.events, 0));
+      }
+      store2.close();
+      if (stale.size) {
+        console.log(`\nExtractor: v${EXTRACTOR_VERSION} — some imports predate it:`);
+        for (const [importer, events] of stale) {
+          console.log(`  ${importer}: ~${events} event(s) from an older extractor`);
+        }
+        console.log(`  Re-run with the current extractor: ${BIN} import <source> <path> --reextract`);
+      }
       return;
     }
     case "export": {
