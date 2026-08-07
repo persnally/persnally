@@ -76,6 +76,10 @@ export const PAYLOAD_SCHEMAS = {
     batch: z.string(),
     events: z.number().int().nonnegative(),
     source_span: z.tuple([z.string(), z.string()]).optional(),
+    /** Which extraction pipeline produced this batch. Lets a later, better
+        extractor identify what it can usefully re-run (see `import --reextract`).
+        Optional: batches imported before versioning carry none. */
+    extractor_version: z.number().int().positive().optional(),
   }),
 } as const;
 

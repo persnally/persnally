@@ -15,8 +15,8 @@ import { saveConfig } from "../src/config.js";
 import { startDaemon } from "../src/daemon.js";
 import { newEvent } from "../src/events.js";
 import {
-  clearScope, clearSessions, createSession, dashboardKey, issueToken, rotateDashboardKey,
-  SESSION_COOKIE, sessionValid, setScope, verifyDashboardKey,
+  clearScope, createSession, dashboardKey, issueToken, rotateDashboardKey,
+  SESSION_COOKIE, SESSION_TTL_SECONDS, sessionValid, setScope, verifyDashboardKey,
 } from "../src/permissions.js";
 import { EventStore } from "../src/store.js";
 
@@ -65,19 +65,51 @@ describe("dashboard key and sessions", () => {
   });
 
   test("sessions validate, expire, and are unforgeable", () => {
+    const ttl = SESSION_TTL_SECONDS * 1000;
     const id = createSession(1_000);
     assert.equal(sessionValid(id, 1_000), true);
-    assert.equal(sessionValid(id, 1_000 + 12 * 3600 * 1000 - 1), true);
-    assert.equal(sessionValid(id, 1_000 + 12 * 3600 * 1000), false, "expired at TTL");
+    assert.equal(sessionValid(id, 1_000 + ttl - 1), true);
+    assert.equal(sessionValid(id, 1_000 + ttl), false, "expired at TTL");
     assert.equal(sessionValid("not-a-session"), false);
     assert.equal(sessionValid(""), false);
   });
 
-  test("the session map is bounded, evicting the soonest to expire", () => {
-    clearSessions();
-    const first = createSession(1_000);
-    for (let i = 0; i < 40; i++) createSession(2_000 + i);
-    assert.equal(sessionValid(first, 3_000), false, "oldest evicted past the cap");
+  // The eviction test that used to live here is gone on purpose: sessions are
+  // stateless now, so there is no map to bound and no soonest-expiry eviction —
+  // which was itself a third silent-logout path.
+
+  test("a tampered cookie is refused — expiry can't be extended, signature can't be forged", () => {
+    const id = createSession(1_000);
+    const [v, expiry, sig] = id.split(".");
+
+    // Push the expiry far into the future, keeping the original signature.
+    assert.equal(sessionValid(`${v}.${Number(expiry) + 10 ** 9}.${sig}`, 1_000), false, "expiry is signed");
+    // Keep the payload, forge the signature.
+    assert.equal(sessionValid(`${v}.${expiry}.${"A".repeat(sig!.length)}`, 1_000), false);
+    // Wrong version prefix.
+    assert.equal(sessionValid(`v2.${expiry}.${sig}`, 1_000), false);
+    // Structurally broken values must not throw.
+    for (const junk of ["...", "v1.", "v1.abc.def", ".", "v1"]) {
+      assert.doesNotThrow(() => sessionValid(junk, 1_000));
+      assert.equal(sessionValid(junk, 1_000), false, `"${junk}" must not validate`);
+    }
+  });
+
+  test("a session survives a daemon restart — the bug this design replaces", async () => {
+    const id = createSession();
+    assert.equal(sessionValid(id), true);
+
+    // A genuinely separate process, with no shared memory: the old in-memory
+    // Map made this impossible, so every relaunch logged the user out.
+    const { execFileSync } = await import("node:child_process");
+    const permissions = new URL("../src/permissions.js", import.meta.url).pathname;
+    const out = execFileSync(process.execPath, [
+      "-e",
+      `import(${JSON.stringify(permissions)}).then((m) => console.log(m.sessionValid(process.argv[1])))`,
+      id,
+    ], { encoding: "utf-8", env: { ...process.env, PERSNALLY_DIR: dir } }).trim();
+
+    assert.equal(out, "true", "a fresh process must accept a session minted before it started");
   });
 
   test("rotating the key invalidates the old key and every live session", () => {
@@ -136,6 +168,30 @@ describe("dashboard bootstrap", () => {
     assert.match(r.headers.get("content-type") ?? "", /text\/html/);
     assert.match(await r.text(), /persnally/);
   });
+
+  test("a fresh session is served without re-issuing a cookie", async () => {
+    const r = await fetch(BASE + "/", { headers: asOwner() });
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get("set-cookie"), null, "nothing to refresh yet — don't churn the cookie");
+  });
+
+  test("a session past halfway is silently renewed, so an active user never re-authenticates", async () => {
+    // Minted far enough in the past that it is over halfway to expiry but not
+    // yet expired — exactly the window the old 12h hard TTL had no answer for.
+    const ttl = SESSION_TTL_SECONDS * 1000;
+    const aging = createSession(Date.now() - (ttl * 0.75));
+
+    const r = await fetch(BASE + "/", { headers: { cookie: `${SESSION_COOKIE}=${aging}` } });
+
+    assert.equal(r.status, 200);
+    const setCookie = r.headers.get("set-cookie") ?? "";
+    assert.match(setCookie, new RegExp(`^${SESSION_COOKIE}=`), "a renewed cookie is issued");
+    assert.match(setCookie, /HttpOnly/);
+    assert.match(setCookie, /SameSite=Strict/);
+    const renewed = setCookie.slice(SESSION_COOKIE.length + 1).split(";")[0]!;
+    assert.notEqual(renewed, aging, "and it is genuinely a new session, not the same value echoed back");
+    assert.equal(sessionValid(renewed), true);
+  });
 });
 
 describe("every route demands a credential", () => {
@@ -189,7 +245,7 @@ describe("every route demands a credential", () => {
   test("a tokened client that omits its token is told exactly what to run", async () => {
     const r = await fetch(BASE + "/topics?client=cursor");
     assert.equal(r.status, 401);
-    assert.match(((await r.json()) as { error: string }).error, /persnallyd connect cursor/);
+    assert.match(((await r.json()) as { error: string }).error, /persnally connect cursor/);
   });
 });
 
@@ -238,6 +294,24 @@ describe("client tokens reach only the client surface", () => {
     const still = await (await fetch(BASE + "/scopes", { headers: asOwner() })).json() as Record<string, string[]>;
     assert.deepEqual(still["cursor"], ["technology"], "grant unchanged");
   });
+
+  // /import spends inference and reads ~/Downloads — the owner's surface, not a
+  // connected AI's. It exists so the dashboard can finish onboarding an engine.
+  test("a client token cannot trigger an import", async () => {
+    const r = await fetch(BASE + "/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...asBearer(clientToken) },
+      body: "{}",
+    });
+    assert.equal(r.status, 403);
+    assert.match(((await r.json()) as { error: string }).error, /owner's surface/);
+  });
+
+  // Deliberately not exercising the owner path here: it resolves a real engine
+  // and imports the machine's real ~/Downloads, so the result would depend on
+  // whether the developer happens to have Ollama running (it hung locally for
+  // exactly that reason). The import logic itself is covered deterministically
+  // in import-all-sources.test.ts; this suite covers the boundary.
 
   test("a client token cannot spend inference or read the engine's key state", async () => {
     for (const path of ["/synthesize", "/consolidate"]) {
