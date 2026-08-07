@@ -22,6 +22,10 @@ export function parseClaudeExport(dir: string): ParsedExport {
       .filter((m) => m.sender === "human")
       .map((m) => (m.text ? String(m.text) : textFromContent(m.content)))
       .filter((t) => t.trim()),
+    assistantMessages: ((c.chat_messages as Array<Record<string, unknown>>) ?? [])
+      .filter((m) => m.sender === "assistant")
+      .map((m) => (m.text ? String(m.text) : textFromContent(m.content)))
+      .filter((t) => t.trim()),
   }));
 
   let memoryText = "";
