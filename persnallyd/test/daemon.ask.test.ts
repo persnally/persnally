@@ -5,12 +5,18 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { startDaemon } from "../src/daemon.js";
 import { newEvent } from "../src/events.js";
+import { createSession, SESSION_COOKIE } from "../src/permissions.js";
 import { EventStore } from "../src/store.js";
 
 const PORT = 49861;
 const BASE = `http://127.0.0.1:${PORT}`;
+// Every route needs a credential now. These suites exercise route behavior, so
+// they run as the owner; the auth boundary itself is daemon.auth.test.ts.
+const owner = () => ({ cookie: `${SESSION_COOKIE}=${createSession()}` });
+const authed = (path: string, init: RequestInit = {}) =>
+  fetch(BASE + path, { ...init, headers: { ...owner(), ...(init.headers as Record<string, string> | undefined) } });
 const postJson = (path: string, body: unknown, contentType = "application/json") =>
-  fetch(BASE + path, { method: "POST", headers: { "Content-Type": contentType }, body: JSON.stringify(body) });
+  authed(path, { method: "POST", headers: { "Content-Type": contentType }, body: JSON.stringify(body) });
 
 const dir = mkdtempSync(join(tmpdir(), "daemon-ask-test-"));
 process.env.PERSNALLY_DIR = dir;      // isolate config reads from the real ~/.persnally
@@ -43,7 +49,7 @@ test("POST /ask requires a question", async () => {
 });
 
 test("GET /questions returns history with stats", async () => {
-  const body = await (await fetch(`${BASE}/questions`)).json() as {
+  const body = await (await authed(`/questions`)).json() as {
     items: Array<{ question: string; answer: string; verdict: string | null }>;
     stats: { asked: number; answered: number; precision: number | null };
   };
@@ -65,7 +71,7 @@ test("POST /feedback validates verdict and answer id", async () => {
 test("POST /feedback records the verdict and it lands in /questions", async () => {
   const r = await postJson("/feedback", { answer_id: answer.id, verdict: "approved" });
   assert.equal(r.status, 201);
-  const body = await (await fetch(`${BASE}/questions`)).json() as {
+  const body = await (await authed(`/questions`)).json() as {
     items: Array<{ verdict: string | null }>;
     stats: { approved: number; precision: number | null };
   };

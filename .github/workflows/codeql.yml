@@ -1,0 +1,39 @@
+name: CodeQL
+
+# Static analysis for the two JS/TS surfaces (persnallyd's daemon/MCP server and
+# the web marketing site) — injection, path traversal, SSRF, prototype
+# pollution, and the rest of CodeQL's default JS/TS query pack. A weekly cron
+# catches issues surfaced by new advisories against code that hasn't changed.
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    - cron: "17 3 * * 1" # Monday, off-peak — arbitrary minute avoids the top-of-hour stampede
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write # required to upload SARIF results to the Security tab
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+
+      # No build step: CodeQL's JS/TS extractor works from source directly, and
+      # this repo is two independent packages (persnallyd, web) with no shared
+      # build — running one wouldn't cover more than the extractor already does.
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:javascript-typescript"

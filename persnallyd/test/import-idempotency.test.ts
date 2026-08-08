@@ -20,7 +20,7 @@ const extract: LlmExtract = async () => {
   return { topics: [{ topic: "t", weight: 0.5, intent: "building", sentiment: "neutral", depth: "moderate", category: "technology", entities: [] }] };
 };
 const convo = (uuid: string): ParsedConversation => ({ uuid, name: uuid, summary: "", created_at: "2026-06-01T10:00:00Z", userMessages: ["a real prompt about something"] });
-const repo = (name: string): RepoSummary => ({ repo: name, path: `/x/${name}`, commits: 12, firstCommit: "2026-01-01T00:00:00Z", lastCommit: "2026-06-01T00:00:00Z", frameworks: ["react"] });
+const repo = (name: string): RepoSummary => ({ repo: name, path: `/x/${name}`, commits: 12, firstCommit: "2026-01-01T00:00:00Z", lastCommit: "2026-06-01T00:00:00Z", frameworks: ["react"], themes: [], languages: [] });
 
 test("freshConversations keeps everything (and the one-time memory) on the first import", () => {
   const parsed: ParsedExport = { conversations: [convo("a"), convo("b")], memoryText: "remember me", projects: [{ name: "p", description: "d" }] };
@@ -31,14 +31,30 @@ test("freshConversations keeps everything (and the one-time memory) on the first
   assert.equal(r.parsed.memoryText, "remember me", "memory kept on first import");
 });
 
-test("freshConversations drops already-seen conversations and the re-snapshotted memory", () => {
+// Memory used to be gated on "is this the first import", which meant a memory
+// that grows for months only ever contributed once. It is keyed by content
+// hash now: re-read when it changed, skipped when it didn't. Both halves are
+// asserted here rather than only the skip.
+test("freshConversations drops already-seen conversations but re-reads memory that changed", () => {
   const parsed: ParsedExport = { conversations: [convo("a"), convo("b"), convo("c")], memoryText: "remember me", projects: [{ name: "p", description: "d" }] };
   const r = freshConversations(parsed, new Set(["a", "b"]));
   assert.equal(r.firstImport, false);
   assert.equal(r.skipped, 2);
   assert.deepEqual(r.parsed.conversations.map((c) => c.uuid), ["c"]);
-  assert.equal(r.parsed.memoryText, "", "memory not re-snapshotted on re-import");
+  assert.equal(r.parsed.memoryText, "remember me", "this snapshot has not been extracted from before");
+  assert.deepEqual(r.parsed.projects, [{ name: "p", description: "d" }]);
+});
+
+test("freshConversations skips memory it has already extracted from", () => {
+  const parsed: ParsedExport = { conversations: [convo("a"), convo("c")], memoryText: "remember me", projects: [{ name: "p", description: "d" }] };
+  const seenHash = freshConversations(parsed, new Set()).memoryHash;
+  assert.ok(seenHash, "the first pass reports a hash to record");
+
+  const r = freshConversations(parsed, new Set(["a"]), new Set([seenHash]));
+
+  assert.equal(r.parsed.memoryText, "", "identical memory is not paid for twice");
   assert.deepEqual(r.parsed.projects, []);
+  assert.equal(r.memoryHash, "");
 });
 
 test("a conversation with no uuid can't be deduped, so it's always treated as fresh", () => {

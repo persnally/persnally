@@ -39,7 +39,11 @@ export function refreshVoice(
   }
   const v = analyzeVoice(corpus);
   if (!v.signals.length) return empty;
-  store.clearStyleByBasis("stylometry"); // replace, don't accumulate, across refreshes
+  // Replace only what this refresh can re-derive: prior refresh output and the
+  // import-time fingerprint of these same transcripts. Stylometry from
+  // claude.ai/ChatGPT exports must survive — those corpora are no longer on
+  // disk, so a wipe there is permanent voice loss, not a refresh.
+  store.clearStyleByBasis("stylometry", ["cli", "dashboard", "import:claude-code"]);
   store.append(v.signals.map((s) => newEvent("signal.style", surface, s, { kind: "local", surface })));
   return { signals: v.signals.length, prompts: v.prompts, pack: v.pack };
 }

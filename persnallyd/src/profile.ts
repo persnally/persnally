@@ -30,6 +30,26 @@ Rules:
 - Every section must list the event ids (given in [brackets]) of the signals it rests on.
 - The test: the person reads it and thinks "how did it know that?"`;
 
+/**
+ * The model is told to cite the ids given in brackets; nothing forces it to.
+ * An invented id resolves to no event, and the dashboard renders that as
+ * "evidence not found (deleted?)" — blaming the user's own deletion for our
+ * fabrication, on the one surface whose entire job is being checkable. Unknown
+ * ids are dropped before a profile is ever stored.
+ */
+export function pruneEvidence<T extends z.infer<typeof profileSchema>>(parsed: T, offered: Set<string>): T {
+  let dropped = 0;
+  const sections = parsed.sections.map((s) => {
+    const kept = s.evidence_event_ids.filter((id) => offered.has(id));
+    dropped += s.evidence_event_ids.length - kept.length;
+    return { ...s, evidence_event_ids: kept };
+  });
+  if (dropped) {
+    console.error(`persnally: dropped ${dropped} evidence id(s) the profile cited but the store does not have`);
+  }
+  return { ...parsed, sections };
+}
+
 export async function synthesizeProfile(
   store: EventStore,
   extract: LlmExtract = anthropicExtract,
@@ -41,6 +61,7 @@ export async function synthesizeProfile(
     throw new Error("Nothing to synthesize from — run an import first.");
   }
   const corrections = store.corrections(25);
+  const skills = store.skills(20);
 
   const content = [
     "## Weighted interests (decayed)",
@@ -49,6 +70,11 @@ export async function synthesizeProfile(
       `${t.dominant_intent}, ${t.signals} signals${t.entities.length ? `, entities: ${t.entities.slice(0, 5).join(", ")}` : ""})`,
     ),
     "",
+    ...(skills.length ? [
+      "## Demonstrated skills (from repos they actually commit to)",
+      ...skills.map((k) => `- ${k.skill} (${k.domain}, proficiency ${k.proficiency.toFixed(2)}, ${k.sources} source(s))`),
+      "",
+    ] : []),
     "## Extracted assertions",
     ...assertions.map((e) => {
       const p = e.payload as { claim: string; kind: string; confidence: number; evidence: string };
@@ -69,7 +95,12 @@ export async function synthesizeProfile(
     content,
     maxTokens: 8000,
   });
-  const parsed = profileSchema.parse(raw);
+  const offered = new Set([
+    ...topics.map((t) => t.event_ids[0] ?? ""),
+    ...assertions.map((e) => e.id),
+    ...corrections.map((c) => c.id),
+  ]);
+  const parsed = pruneEvidence(profileSchema.parse(raw), offered);
   const profile: Profile = { ...parsed, generated_at: new Date().toISOString(), model };
   store.saveProfile(profile);
   return profile;
@@ -110,7 +141,9 @@ export async function synthesizeScopedProfile(
   ].join("\n");
 
   const raw = await extract({ model, instruction: SCOPED_INSTRUCTION, schema: profileSchema, content, maxTokens: 4000 });
-  const profile: Profile = { ...profileSchema.parse(raw), generated_at: new Date().toISOString(), model };
+  const offered = new Set(topics.map((t) => t.event_ids[0] ?? ""));
+  const parsed = pruneEvidence(profileSchema.parse(raw), offered);
+  const profile: Profile = { ...parsed, generated_at: new Date().toISOString(), model };
   store.saveScopedProfile(scopeKey(allowed), profile);
   return profile;
 }

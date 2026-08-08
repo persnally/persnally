@@ -1,0 +1,58 @@
+version: 2
+
+# Weekly, grouped, and capped: this is a solo-maintained repo, so the goal is
+# a small number of reviewable PRs, not a PR per package. Security updates for
+# any severity open immediately regardless of this schedule — that behavior is
+# Dependabot's default and isn't configurable here.
+updates:
+  - package-ecosystem: npm
+    directory: /persnallyd
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies]
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      # No typescript-eslint release (incl. its newest alpha, checked
+      # 2026-08-07) declares TS7 support yet — every proposed bump fails
+      # npm ci outright on the peer-dependency conflict. Remove once
+      # typescript-eslint ships a compatible release (#157).
+      - dependency-name: "typescript"
+        versions: [">=7"]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies]
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      # Same typescript-eslint gap as persnallyd (#163).
+      - dependency-name: "typescript"
+        versions: [">=7"]
+      # eslint-config-next's bundled eslint-plugin-react@7.37.5 (its own
+      # latest, checked 2026-08-07) calls an ESLint 9-era API ESLint 10
+      # removed. Remove once eslint-config-next/eslint-plugin-react catch
+      # up (#164).
+      - dependency-name: "eslint"
+        versions: [">=10"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: "ci(deps)"

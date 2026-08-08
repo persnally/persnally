@@ -27,7 +27,7 @@ test("synthesizes, persists, and round-trips a profile with evidence ids", async
   store.rebuild();
 
   let seenContent = "";
-  const profile = await synthesizeProfile(store, async ({ content }) => {
+  await synthesizeProfile(store, async ({ content }) => {
     seenContent = content;
     return {
       headline: "A builder",
@@ -47,4 +47,51 @@ test("synthesizes, persists, and round-trips a profile with evidence ids", async
 test("malformed LLM output is rejected, leaving the stored profile intact", async () => {
   await assert.rejects(() => synthesizeProfile(store, async () => ({ headline: "", sections: [] })));
   assert.equal(store.getProfile()?.headline, "A builder");
+});
+
+/**
+ * "Every claim cites its evidence" is the dashboard's central trust claim, and
+ * an id that resolves to nothing is rendered there as "evidence not found
+ * (deleted?)" — which blames the user's deletion for a citation the model may
+ * simply have invented. A fabricated citation must never reach the store.
+ */
+test("an invented evidence id is dropped rather than stored", async () => {
+  const real = store.query({ type: "signal.assertion" })[0]!;
+
+  const profile = await synthesizeProfile(store, async () => ({
+    headline: "A builder",
+    sections: [{
+      title: "Work",
+      body: "Builds things.",
+      evidence_event_ids: [real.id, "01890000-0000-7000-8000-nosuchevent"],
+    }],
+  }));
+
+  assert.deepEqual(profile.sections[0]?.evidence_event_ids, [real.id], "the invented id is gone");
+  assert.deepEqual(store.getProfile()?.sections[0]?.evidence_event_ids, [real.id], "and never reached the store");
+});
+
+test("a section citing only invented ids keeps its prose but loses the citations", async () => {
+  const profile = await synthesizeProfile(store, async () => ({
+    headline: "A builder",
+    sections: [{ title: "Guesswork", body: "Unsupported claim.", evidence_event_ids: ["totally-made-up"] }],
+  }));
+
+  assert.equal(profile.sections[0]?.body, "Unsupported claim.", "the section survives");
+  assert.deepEqual(profile.sections[0]?.evidence_event_ids, [], "with nothing to click through to");
+});
+
+test("legitimate ids offered in the prompt are all preserved", async () => {
+  const topicHeadId = store.topics(30)[0]!.event_ids[0]!;
+  const assertionId = store.query({ type: "signal.assertion" })[0]!.id;
+
+  const profile = await synthesizeProfile(store, async () => ({
+    headline: "A builder",
+    sections: [{ title: "Work", body: "Builds things.", evidence_event_ids: [topicHeadId, assertionId] }],
+  }));
+
+  assert.deepEqual(
+    profile.sections[0]?.evidence_event_ids.sort(), [topicHeadId, assertionId].sort(),
+    "pruning must not eat real citations",
+  );
 });

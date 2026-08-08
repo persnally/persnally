@@ -8,12 +8,17 @@ import { readFileSync } from "node:fs";
 import { askUserModel } from "./ask.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { runConsolidation, shouldRunNow } from "./consolidate.js";
-import { allowedCategories, CATEGORIES, clearScope, clientForToken, hasToken, loadScopes, setScope, type Category } from "./permissions.js";
+import {
+  allowedCategories, CATEGORIES, clearScope, clientForToken, createSession, dashboardKey,
+  hasToken, isRevoked, loadScopes, SESSION_COOKIE, SESSION_TTL_SECONDS, sessionNeedsRefresh, sessionValid, setScope,
+  verifyDashboardKey, type Category,
+} from "./permissions.js";
 import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Provenance } from "./events.js";
 import { importNewClaudeCodeSessions } from "./importers/claude-code.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
 import { refreshScopedProfiles, scopeKey, synthesizeProfile } from "./profile.js";
 import { searchContext } from "./search.js";
+import { importAllSources } from "./setup.js";
 import { refreshVoice } from "./voice.js";
 import type { EventStore } from "./store.js";
 
@@ -43,27 +48,86 @@ function askAllowed(now: number): boolean {
 }
 
 /**
- * Token-verified client identity. A name with an issued token can only be used
- * by presenting that token, so scopes and revocations hold against clients
- * that misreport who they are. Names never issued a token (or no name at all)
- * pass through unchanged — the pre-token default-open behavior.
+ * Who is calling. Every route except /health and the dashboard bootstrap needs
+ * one of these two identities — loopback binding is not a credential, since the
+ * port is reachable by every process and every user on the machine.
+ *
+ * `owner`  — the user's own surface: a browser session minted from the
+ *            mode-0600 dashboard key, or that key presented as a bearer.
+ * `client` — a connected AI client, identified by the token issued at connect.
  */
-function resolveClient(req: http.IncomingMessage, claimed: string | null): { client: string | null; error?: string } {
-  const auth = req.headers.authorization ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+type Auth =
+  | { kind: "owner" }
+  | { kind: "client"; client: string }
+  | { kind: "none"; error: string };
+
+const NEEDS_AUTH =
+  "authentication required — open the dashboard with `persnally dashboard`, or connect an AI client with `persnally connect <client>`";
+
+function authenticate(req: http.IncomingMessage, claimed: string | null): Auth {
+  const session = cookie(req, SESSION_COOKIE);
+  if (session && sessionValid(session)) return { kind: "owner" };
+
+  const header = req.headers.authorization ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
   if (token) {
-    const owner = clientForToken(token);
-    if (!owner) return { client: null, error: "unrecognized client token — reconnect with: persnallyd connect <client>, then restart the client" };
-    if (claimed && claimed !== owner) return { client: null, error: `token identifies '${owner}' but the request claims '${claimed}'` };
-    return { client: owner };
+    const client = clientForToken(token);
+    if (client) return { kind: "client", client };
+    // The dashboard key doubles as a bearer so local scripts and curl can use it.
+    if (verifyDashboardKey(token)) return { kind: "owner" };
+    return { kind: "none", error: "unrecognized token — reconnect with: persnally connect <client>, then restart the client" };
   }
   if (claimed && hasToken(claimed)) {
-    return { client: null, error: `client '${claimed}' has an identity token and must present it — re-run: persnallyd connect ${claimed}, then restart the client` };
+    return { kind: "none", error: `client '${claimed}' has an identity token and must present it — re-run: persnally connect ${claimed}, then restart the client` };
   }
-  return { client: claimed };
+  return { kind: "none", error: NEEDS_AUTH };
+}
+
+/**
+ * Routes a connected AI client legitimately needs. Everything else is the
+ * owner's own surface, so a client token cannot read the raw event log via
+ * /events, widen its own grant via /scopes, or spend inference on /synthesize.
+ */
+function clientMayReach(method: string, path: string): boolean {
+  switch (method) {
+    case "GET":
+      return path === "/topics" || path === "/profile" || path === "/voice"
+        || path === "/search" || path === "/stats" || path === "/skills";
+    case "POST":
+      return path === "/events" || path === "/ask";
+    case "DELETE":
+      return path === "/events" || path.startsWith("/topics/") || path.startsWith("/voice/");
+    default:
+      return false;
+  }
+}
+
+/**
+ * The scope a request reads under. It comes from the verified token, never from
+ * a self-reported `?client=` — but a name claimed alongside a token still has
+ * to match it, so a client can't act under another's identity. The owner reads
+ * unscoped.
+ */
+function scopeFor(auth: Auth, claimed: string | null): { client: string | null; error?: string } {
+  if (auth.kind !== "client") return { client: null };
+  if (claimed && claimed !== auth.client) {
+    return { client: null, error: `token identifies '${auth.client}' but the request claims '${claimed}'` };
+  }
+  return { client: auth.client };
+}
+
+function cookie(req: http.IncomingMessage, name: string): string {
+  const raw = req.headers.cookie;
+  if (!raw) return "";
+  for (const part of raw.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq > 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim();
+  }
+  return "";
 }
 
 export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server {
+  dashboardKey(); // mint on first run so `persnally dashboard` always has a link to print
   const localHosts = [`127.0.0.1:${port}`, `localhost:${port}`];
   const server = http.createServer(async (req, res) => {
     // Loopback binding alone doesn't stop browsers: webpages can fire
@@ -77,21 +141,34 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
     }
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
     try {
-      if (req.method === "GET" && url.pathname === "/") {
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        return res.end(dashboardHtml());
-      }
+      // Liveness only (no store data) — lifecycle probes it before any
+      // credential exists, so it stays open.
       if (req.method === "GET" && url.pathname === "/health") {
         return json(res, 200, { ok: true, version: VERSION });
       }
+      if (req.method === "GET" && url.pathname === "/") {
+        return serveDashboard(req, res, url);
+      }
+
+      const auth = authenticate(req, url.searchParams.get("client"));
+      if (auth.kind === "none") return json(res, 401, { error: auth.error });
+      if (auth.kind === "client" && !clientMayReach(req.method ?? "", url.pathname)) {
+        return json(res, 403, { error: "the owner's surface — not reachable with a client token" });
+      }
+
       if (req.method === "GET" && url.pathname === "/stats") {
-        return json(res, 200, store.stats());
+        const stats = store.stats();
+        if (auth.kind !== "client") return json(res, 200, stats);
+        // `bySource` enumerates every other connected client — the owner's
+        // view, not a peer's. A revoked client gets no counts at all.
+        if (isRevoked(auth.client)) return json(res, 200, { total: 0, byType: {}, bySource: {}, first: null, last: null });
+        return json(res, 200, { ...stats, bySource: {} });
       }
       if (req.method === "GET" && url.pathname === "/activity") {
         return json(res, 200, store.activity());
       }
       if (req.method === "GET" && url.pathname === "/topics") {
-        const id = resolveClient(req, url.searchParams.get("client"));
+        const id = scopeFor(auth, url.searchParams.get("client"));
         if (id.error) return json(res, 401, { error: id.error });
         const allowed = id.client ? allowedCategories(id.client) : null;
         let topics = store.topics(num(url, "limit", 50));
@@ -101,24 +178,35 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       if (req.method === "GET" && url.pathname === "/profile") {
         // The holistic profile is cross-category prose — a scoped client gets
         // its scope's own synthesized narrative instead, never the full one.
-        const id = resolveClient(req, url.searchParams.get("client"));
+        const id = scopeFor(auth, url.searchParams.get("client"));
         if (id.error) return json(res, 401, { error: id.error });
         const allowed = id.client ? allowedCategories(id.client) : null;
         if (allowed !== null) {
           const scoped = store.getScopedProfile(scopeKey(allowed));
           if (scoped) return json(res, 200, scoped);
-          return json(res, 403, { error: "scoped: no profile synthesized for this scope yet — run persnallyd profile or POST /synthesize", scoped: true });
+          return json(res, 403, { error: "scoped: no profile synthesized for this scope yet — run `persnally profile` or POST /synthesize", scoped: true });
         }
         const profile = store.getProfile();
         return profile ? json(res, 200, profile) : json(res, 404, { error: "no profile synthesized yet" });
       }
+      if (req.method === "GET" && url.pathname === "/skills") {
+        // A revoked client reads nothing, consistent with /voice and /stats.
+        if (auth.kind === "client" && isRevoked(auth.client)) return json(res, 200, []);
+        return json(res, 200, store.skills(num(url, "limit", 25)));
+      }
       if (req.method === "GET" && url.pathname === "/voice") {
-        // Stylistic, not topical — served to every client (it's how you write, not what about).
+        // Stylistic, not topical — a scoped client still gets it (it's how you
+        // write, not what about). A revoked one does not: "reads nothing" is
+        // stated without qualification in the dashboard, so it has to be true.
+        if (auth.kind === "client" && isRevoked(auth.client)) return json(res, 200, { pack: "", items: [] });
         return json(res, 200, store.voice());
       }
       if (req.method === "DELETE" && url.pathname.startsWith("/voice/")) {
         const [, , dimension, pattern] = url.pathname.split("/");
         if (!dimension || !pattern) return json(res, 400, { error: "dimension and pattern required" });
+        // A client that can't read a pattern can't tombstone it either, and the
+        // answer doesn't reveal whether it existed — same rule as /topics/.
+        if (auth.kind === "client" && isRevoked(auth.client)) return json(res, 200, { deleted: 0 });
         return json(res, 200, { deleted: store.forgetStyle(dimension, decodeURIComponent(pattern)) });
       }
       if (req.method === "GET" && url.pathname === "/scopes") {
@@ -145,6 +233,23 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         const client = decodeURIComponent(url.pathname.slice("/scopes/".length));
         if (!client) return json(res, 400, { error: "client required" });
         return json(res, 200, { cleared: clearScope(client) });
+      }
+      // Import whatever setup had to skip. The dashboard calls this right after
+      // an engine is configured (Ollama pull or pasted key) — before this
+      // existed it only re-synthesized, so a user who onboarded their engine
+      // from the dashboard got a portrait built from git alone and was never
+      // told their chat history had been passed over.
+      if (req.method === "POST" && url.pathname === "/import") {
+        if (importing) return json(res, 409, { error: "an import is already running" });
+        const engine = await chooseExtractor("extract").catch(() => null);
+        if (!engine) return json(res, 400, { error: "no extraction engine — set a key or pull a local model first" });
+        importing = true;
+        try {
+          const r = await importAllSources(store, engine);
+          return json(res, 200, r);
+        } finally {
+          importing = false;
+        }
       }
       if (req.method === "POST" && url.pathname === "/synthesize") {
         const engine = await chooseExtractor("profile");
@@ -219,7 +324,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         const claimed = typeof body.client === "string" && body.client
           ? body.client.toLowerCase().replace(/[^a-z0-9._-]/g, "-")
           : null;
-        const id = resolveClient(req, claimed);
+        const id = scopeFor(auth, claimed);
         if (id.error) return json(res, 401, { error: id.error });
         const client = id.client;
         const asker = typeof body.asker === "string" && body.asker ? body.asker : (client ?? "dashboard");
@@ -243,7 +348,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       if (req.method === "GET" && url.pathname === "/search") {
         const q = (url.searchParams.get("q") ?? "").trim();
         if (!q || q.length > 200) return json(res, 400, { error: "q required (1–200 chars)" });
-        const id = resolveClient(req, url.searchParams.get("client"));
+        const id = scopeFor(auth, url.searchParams.get("client"));
         if (id.error) return json(res, 401, { error: id.error });
         return json(res, 200, searchContext(store, q, {
           limit: num(url, "limit", 10),
@@ -302,17 +407,27 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
                 typeof r.ts === "string" ? r.ts : undefined,
               );
         });
-        // Writes claiming an MCP client identity are held to the same token
-        // binding as reads — otherwise a client could poison provenance by
-        // writing events under another client's name.
-        const claimedClients = new Set<string>();
-        for (const e of events) {
-          if (e.provenance.kind === "mcp") claimedClients.add(e.provenance.client);
-          if (e.source.startsWith("mcp:")) claimedClients.add(e.source.slice(4));
-        }
-        for (const c of claimedClients) {
-          const id = resolveClient(req, c);
-          if (id.error) return json(res, 401, { error: id.error });
+        // A client token may only write events attributed to itself. Claiming
+        // another client's name poisons provenance; claiming a non-MCP one
+        // (`cli`, `dashboard`, `import`, `derived`) forges the owner's own
+        // surfaces — and a `user.correction` forged that way is treated as
+        // authoritative by synthesis and /ask, outranking everything the
+        // engine inferred. Rejected whole-batch, before any write.
+        if (auth.kind === "client") {
+          const expected = `mcp:${auth.client}`;
+          for (const e of events) {
+            const claimed = e.provenance.kind === "mcp" ? e.provenance.client
+              : e.source.startsWith("mcp:") ? e.source.slice(4)
+              : null;
+            if (claimed !== null && claimed !== auth.client) {
+              return json(res, 401, { error: `token identifies '${auth.client}' but the request claims '${claimed}'` });
+            }
+            if (e.provenance.kind !== "mcp" || e.source !== expected) {
+              return json(res, 403, {
+                error: `'${auth.client}' may only write events attributed to itself — expected source '${expected}' with 'mcp' provenance, got '${e.source}' with '${e.provenance.kind}'`,
+              });
+            }
+          }
         }
         store.append(events);
         // Views derive only from signal.* events — skip the O(all-events) rebuild
@@ -324,12 +439,33 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         if (url.searchParams.get("confirm") !== "all") {
           return json(res, 400, { error: "destructive: requires ?confirm=all" });
         }
+        // The wipe is the owner's alone. Connect is default-open, so allowing
+        // it here handed every freshly connected AI the power to irreversibly
+        // destroy the user's accumulated model — one prompt injection away,
+        // with no undo. Clients keep per-topic and per-style forget, which is
+        // what honoring a "delete that" request actually needs.
+        if (auth.kind === "client") {
+          return json(res, 403, {
+            error: `wiping everything is the owner's action, not '${auth.client}'s — do it from the dashboard, or run: persnally forget --all`,
+          });
+        }
         store.forgetAll();
         return json(res, 200, { deleted: "all" });
       }
       if (req.method === "DELETE" && url.pathname.startsWith("/topics/")) {
         const topic = decodeURIComponent(url.pathname.slice("/topics/".length));
         if (!topic) return json(res, 400, { error: "topic required" });
+        // Same rule one route down: a scoped client could otherwise delete a
+        // topic in a category it isn't allowed to read. Out-of-scope topics
+        // report the same "nothing deleted" as topics that don't exist —
+        // answering differently would confirm what the scope exists to hide.
+        if (auth.kind === "client") {
+          const allowed = allowedCategories(auth.client);
+          const category = store.topicCategory(topic);
+          if (allowed !== null && (category === null || !allowed.includes(category as Category))) {
+            return json(res, 200, { deleted: 0 });
+          }
+        }
         return json(res, 200, { deleted: store.forgetTopic(topic) });
       }
       return json(res, 404, { error: "not found" });
@@ -342,15 +478,17 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
   // Every 30 min: pick up new Claude Code chats, then run the once-a-day reflection.
   const timer = setInterval(async () => {
     await autoImportNewSessions(store);
-    const lastRun = loadConfig().last_consolidation;
-    if (!shouldRunNow(typeof lastRun === "string" ? lastRun : undefined, new Date())) return;
+    // The attempt timestamp, not the success one: a failing run must back off to
+    // daily instead of retrying on every tick.
+    const lastAttempt = loadConfig().last_consolidation_attempt;
+    if (!shouldRunNow(typeof lastAttempt === "string" ? lastAttempt : undefined, new Date())) return;
     try {
       const engine = await chooseExtractor("extract").catch(() => null);
       const r = await runConsolidation(store, engine);
       safeRefreshVoice(store, "cli"); // nightly: keep the voice fingerprint fresh + clean
       console.error(`consolidation: ${r.newSignals} new signals, ${r.assertions} assertions, profile ${r.profileRefreshed ? "refreshed" : "kept"}, ${r.stylePruned} style signals pruned`);
     } catch (e) {
-      console.error("consolidation failed:", e instanceof Error ? e.message : e);
+      console.error(`consolidation failed (retrying tomorrow, not this hour): ${e instanceof Error ? e.message : String(e)}`);
     }
   }, 30 * 60 * 1000);
   timer.unref();
@@ -359,23 +497,71 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
   return server;
 }
 
+// A pass slower than the 30-minute timer would otherwise overlap the next one:
+// duplicate extraction spend, and two writers racing the same source.
+let importing = false;
+
+// Import backoff, persisted so it survives the restarts launchd performs freely.
+// Doubles from half an hour to a day: a transient outage clears within one cycle,
+// a revoked key settles at a couple of attempts a day instead of forty-eight.
+const IMPORT_BACKOFF_START_MIN = 30;
+const IMPORT_BACKOFF_MAX_MIN = 24 * 60;
+
+function importCooldownUntil(now: number): number {
+  const until = loadConfig().import_backoff_until;
+  const ms = typeof until === "string" && until ? Date.parse(until) : NaN;
+  // An unparseable value must not pause imports forever.
+  return Number.isNaN(ms) ? now : ms;
+}
+
+function importBackoffActive(): boolean {
+  const cfg = loadConfig();
+  return !!cfg.import_backoff_until || !!cfg.import_backoff_minutes;
+}
+
+function nextImportBackoff(): number {
+  const prev = loadConfig().import_backoff_minutes;
+  const last = typeof prev === "number" && prev > 0 ? prev : 0;
+  return Math.min(last ? last * 2 : IMPORT_BACKOFF_START_MIN, IMPORT_BACKOFF_MAX_MIN);
+}
+
 /**
  * Ingest Claude Code sessions created since the last pass — the daemon's
  * automatic capture of new chats (no user action, no per-session hook). A
  * key-less, Ollama-less machine has no extractor: skip rather than block.
  * Never throws — capture must not take the daemon down.
  */
-export async function autoImportNewSessions(store: EventStore): Promise<void> {
+export async function autoImportNewSessions(store: EventStore, now: number = Date.now()): Promise<void> {
+  if (importing) {
+    console.error("auto-import: previous pass still running — skipping this tick");
+    return;
+  }
+  if (now < importCooldownUntil(now)) return; // engine known-bad; the cooldown was logged when set
+  importing = true;
   try {
     const engine = await chooseExtractor("extract").catch(() => null);
     if (!engine) return;
     const r = await importNewClaudeCodeSessions(store, engine.extract, engine.model);
+    if (r.engineFailed) {
+      // A failed extraction leaves the session unmarked so it retries — right for
+      // one bad response, ruinous when the engine is down: the same sessions come
+      // back every tick. Back off, doubling while it stays broken.
+      const minutes = nextImportBackoff();
+      saveConfig({ import_backoff_minutes: minutes, import_backoff_until: new Date(now + minutes * 60_000).toISOString() });
+      console.error(`auto-import: extraction engine is failing — pausing imports for ${minutes} min (${r.newSessions + r.toppedUp} session(s) left unimported)`);
+      return;
+    }
+    if (importBackoffActive()) saveConfig({ import_backoff_minutes: 0, import_backoff_until: "" }); // recovered
     if (r.events) {
       store.rebuild();
-      console.error(`auto-import: ${r.newSessions} new Claude Code session(s) → ${r.events} events`);
+      console.error(`auto-import: ${r.newSessions} new + ${r.toppedUp} resumed Claude Code session(s) → ${r.events} events`);
     }
   } catch (e) {
     console.error("auto-import failed:", e instanceof Error ? e.message : e);
+  } finally {
+    // finally, not the end of try: the engine-less path returns early, and a
+    // stuck flag would silence auto-import until the next daemon restart.
+    importing = false;
   }
 }
 
@@ -384,6 +570,63 @@ function dashboardHtml(): string {
   cachedHtml ??= readFileSync(new URL("./dashboard.html", import.meta.url), "utf-8");
   return cachedHtml;
 }
+
+// The page itself never carries the credential — the key arrives once as ?k=,
+// is exchanged for an HttpOnly cookie, and the redirect drops it from the
+// address bar so it can't leak through history or a Referer on an outbound link.
+const DASHBOARD_HEADERS = {
+  "Content-Type": "text/html; charset=utf-8",
+  "Cache-Control": "no-store",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+};
+
+function serveDashboard(req: http.IncomingMessage, res: http.ServerResponse, url: URL): void {
+  const key = url.searchParams.get("k");
+  if (key && verifyDashboardKey(key)) {
+    res.writeHead(302, {
+      ...DASHBOARD_HEADERS,
+      "Location": "/",
+      "Set-Cookie": `${SESSION_COOKIE}=${createSession()}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict`,
+    });
+    res.end();
+    return;
+  }
+  const session = cookie(req, SESSION_COOKIE);
+  if (session && sessionValid(session)) {
+    // Sliding expiry: past halfway, hand back a fresh cookie. Someone who opens
+    // the dashboard even occasionally is never asked to re-authenticate, while
+    // a cookie that stops being used still ages out on its own.
+    const headers: Record<string, string> = { ...DASHBOARD_HEADERS };
+    if (sessionNeedsRefresh(session)) {
+      headers["Set-Cookie"] = `${SESSION_COOKIE}=${createSession()}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict`;
+    }
+    res.writeHead(200, headers);
+    res.end(dashboardHtml());
+    return;
+  }
+  res.writeHead(401, DASHBOARD_HEADERS);
+  res.end(LOCKED_PAGE);
+}
+
+// Static, self-contained: a bookmark that outlives its session lands here.
+const LOCKED_PAGE = `<!doctype html><meta charset="utf-8"><title>Persnally — locked</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{color-scheme:dark}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0a0b;color:#e7e7e9;
+  font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+main{max-width:31rem;padding:2rem;text-align:center}
+h1{margin:0 0 .75rem;font-size:1.25rem;font-weight:600;letter-spacing:-.01em}
+p{margin:0 0 1.25rem;color:#9a9aa2}
+code{display:inline-block;padding:.6rem 1rem;border:1px solid #26262b;border-radius:.5rem;background:#131316;
+  color:#e7e7e9;font:14px/1 ui-monospace,SFMono-Regular,Menlo,monospace}
+</style>
+<main>
+  <h1>Your dashboard is locked</h1>
+  <p>This page needs a session from your own machine. Open it from the terminal:</p>
+  <code>persnally dashboard</code>
+</main>`;
 
 // Re-derive the voice fingerprint alongside synthesize/reflect so "how you write"
 // stays current and clean. Deterministic + offline; must never break the caller.

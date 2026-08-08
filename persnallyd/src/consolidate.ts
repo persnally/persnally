@@ -27,11 +27,19 @@ export interface ConsolidationResult {
   stylePruned: number;
 }
 
-/** Run once per local day, at or after the consolidation hour. */
-export function shouldRunNow(lastRun: string | undefined, now: Date): boolean {
+/**
+ * Run once per local day, at or after the consolidation hour.
+ *
+ * Gated on the last *attempt*, not the last success. A run that throws — an
+ * expired key, an empty credit balance, a provider outage — is very unlikely to
+ * have fixed itself 30 minutes later, and gating on success turned the daily job
+ * into 48 paid attempts a day for as long as the condition lasted.
+ */
+export function shouldRunNow(lastAttempt: string | undefined, now: Date): boolean {
   if (now.getHours() < CONSOLIDATION_HOUR) return false;
-  if (!lastRun) return true;
-  const last = new Date(lastRun);
+  if (!lastAttempt) return true;
+  const last = new Date(lastAttempt);
+  if (Number.isNaN(last.getTime())) return true; // unreadable state: try, then record a good one
   return last.toDateString() !== now.toDateString();
 }
 
@@ -46,6 +54,12 @@ export async function runConsolidation(
 ): Promise<ConsolidationResult> {
   const lastRun = loadConfig().last_consolidation;
   const since = typeof lastRun === "string" ? lastRun : new Date(0).toISOString();
+
+  // Recorded before any work, so a throw still counts as today's attempt and the
+  // caller backs off to daily. Deliberately a separate key from
+  // `last_consolidation`: that one is the watermark this run reads `since` from,
+  // and advancing it on failure would skip signals that were never consolidated.
+  saveConfig({ last_consolidation_attempt: now.toISOString() });
 
   // recorded_at, not ts: imports carry historical ts but are new to the store.
   const newSignals = store
@@ -63,9 +77,9 @@ export async function runConsolidation(
   if (engine && newSignals.length >= ASSERTION_MIN_SIGNALS) {
     const summary = newSignals
       .map((e) => {
-        const p = e.payload as Record<string, unknown>;
+        const p = e.payload;
         return e.type === "signal.topic"
-          ? `- topic: ${p.topic} (${p.intent}, ${p.sentiment}, weight ${p.weight})`
+          ? `- topic: ${String(p.topic)} (${String(p.intent)}, ${String(p.sentiment)}, weight ${String(p.weight)})`
           : `- ${e.type}: ${JSON.stringify(p).slice(0, 140)}`;
       })
       .join("\n");

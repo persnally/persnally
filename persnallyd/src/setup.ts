@@ -5,7 +5,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, openSync, readSync, closeSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, openSync, readSync, closeSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, saveConfig } from "./config.js";
@@ -44,7 +44,7 @@ function zipHasConversations(zipPath: string): boolean {
     // permission denied) — an ordinary non-matching zip never throws here, so
     // this can't spam on unrelated Downloads clutter. Surface it: a real export
     // failing silently is the worst onboarding failure mode there is.
-    console.error(`persnally: couldn't read ${zipPath} (${e instanceof Error ? e.message : e}) — skipping`);
+    console.error(`persnally: couldn't read ${zipPath} (${e instanceof Error ? e.message : String(e)}) — skipping`);
     return false;
   }
 }
@@ -142,4 +142,110 @@ export function markImported(origin: string): void {
   const sources = loadConfig().imported_sources;
   const list = Array.isArray(sources) ? (sources as string[]) : [];
   if (!list.includes(origin)) saveConfig({ imported_sources: [...list, origin] });
+}
+
+/** Content hashes of memory/projects snapshots already extracted from, so a
+    re-import re-reads memory only when it has actually grown. */
+export function importedMemoryHashes(): Set<string> {
+  const h = loadConfig().imported_memory_hashes;
+  return new Set(Array.isArray(h) ? (h as string[]) : []);
+}
+
+export function markMemoryImported(hash: string): void {
+  if (!hash) return;
+  const list = [...importedMemoryHashes()];
+  if (list.includes(hash)) return;
+  // Bounded: only the most recent snapshots matter for "has this changed?".
+  saveConfig({ imported_memory_hashes: [...list, hash].slice(-20) });
+}
+
+// ── Conversation import, shared by `setup` and POST /import ──
+
+import { extractChatGPTEvents, parseChatGPTExport } from "./importers/chatgpt.js";
+import { extractClaudeEvents, parseClaudeExport } from "./importers/claude.js";
+import {
+  DEFAULT_TRANSCRIPTS_DIR, extractClaudeCodeEvents, parseClaudeCodeTranscripts,
+} from "./importers/claude-code.js";
+import type { EventStore } from "./store.js";
+
+/** Setup caps transcripts so onboarding stays fast; `import claude-code` takes the rest. */
+export const SETUP_TRANSCRIPT_LIMIT = 50;
+
+export interface ImportAllResult {
+  events: number;
+  imported: string[]; // human labels of sources actually imported
+  skipped: string[];  // sources present but skipped for want of an engine
+}
+
+/**
+ * Imports every conversation source not already recorded in config: Claude and
+ * ChatGPT exports found on disk, plus local Claude Code transcripts.
+ *
+ * Shared deliberately. Setup used to be the only caller and simply skipped this
+ * work when no engine existed, so a user who configured one afterwards (the
+ * dashboard's Ollama one-click, or pasting a key) got a profile synthesized
+ * from git alone and was never told their chat history had been passed over.
+ * Returning `skipped` lets both callers say what's still missing instead of
+ * reporting success — and a skipped source is deliberately NOT marked
+ * imported, so the later run actually picks it up.
+ */
+export async function importAllSources(
+  store: EventStore,
+  engine: ChosenExtractor | null,
+  opts: {
+    transcriptLimit?: number;
+    onProgress?: (label: string) => void;
+    /** Per-conversation ticks during extraction — the long pole of an import. */
+    onTick?: (done: number, total: number) => void;
+    /** Overridable so tests don't depend on the real ~/Downloads and ~/.claude. */
+    downloadsDir?: string;
+    transcriptsDir?: string;
+  } = {},
+): Promise<ImportAllResult> {
+  const limit = opts.transcriptLimit ?? SETUP_TRANSCRIPT_LIMIT;
+  const note = opts.onProgress ?? (() => {});
+  const transcriptsDir = opts.transcriptsDir ?? DEFAULT_TRANSCRIPTS_DIR;
+  const out: ImportAllResult = { events: 0, imported: [], skipped: [] };
+
+  for (const found of detectExports(opts.downloadsDir)) {
+    const label = `${found.kind} export (${found.origin})`;
+    try {
+      if (alreadyImported(found.origin)) continue;
+      if (!engine) { out.skipped.push(label); continue; }
+      note(`Importing ${label}`);
+      const parsed = found.kind === "claude" ? parseClaudeExport(found.path) : parseChatGPTExport(found.path);
+      const result = found.kind === "claude"
+        ? await extractClaudeEvents(parsed, engine.extract, engine.model, opts.onTick)
+        : await extractChatGPTEvents(parsed, engine.extract, engine.model, opts.onTick);
+      store.append(result.events);
+      markImported(found.origin);
+      out.events += result.events.length;
+      out.imported.push(label);
+    } finally {
+      // Unzipped exports land in a temp dir — remove it even if extraction threw.
+      if (found.cleanup) rmSync(found.cleanup, { recursive: true, force: true });
+    }
+  }
+
+  if (existsSync(transcriptsDir) && !alreadyImported(transcriptsDir)) {
+    if (!engine) {
+      out.skipped.push("Claude Code transcripts");
+    } else {
+      const { parsed, sessionsFound, sessionsDropped } = parseClaudeCodeTranscripts(transcriptsDir, limit);
+      if (parsed.conversations.length) {
+        note(
+          `Importing Claude Code transcripts: ${parsed.conversations.length} session(s)` +
+          (sessionsDropped ? ` (most recent of ${sessionsFound} — full history: persnally import claude-code)` : ""),
+        );
+        const result = await extractClaudeCodeEvents(parsed, engine.extract, engine.model, transcriptsDir, opts.onTick);
+        store.append(result.events);
+        markImported(transcriptsDir);
+        out.events += result.events.length;
+        out.imported.push("Claude Code transcripts");
+      }
+    }
+  }
+
+  if (out.events) store.rebuild();
+  return out;
 }

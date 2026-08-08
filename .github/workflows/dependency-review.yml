@@ -1,0 +1,29 @@
+name: Dependency Review
+
+# Blocks a PR from introducing a known-vulnerable or disallowed-license
+# dependency — reviews exactly the diff, so it's fast and has zero false
+# positives from pre-existing debt. Pairs with Dependabot (catches drift in
+# already-merged deps) and `npm audit` in ci.yml (catches drift without a PR).
+on:
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+  pull-requests: write # to post the summary comment on the PR
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: moderate
+          # FSL-1.1-MIT (the engine's own license) isn't an SPDX identifier
+          # dependency-review recognizes on *this* repo — it only classifies
+          # third-party deps being added, so this denies known-bad licenses
+          # for those without needing an allow-list of every OSI license.
+          deny-licenses: GPL-1.0-or-later, AGPL-3.0-or-later, SSPL-1.0
+          comment-summary-in-pr: always

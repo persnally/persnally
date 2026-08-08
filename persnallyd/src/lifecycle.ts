@@ -8,7 +8,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { DATA_DIR } from "./paths.js";
+import { DATA_DIR, ensurePrivateDir, ensurePrivateFile } from "./paths.js";
 
 const PID_FILE = join(DATA_DIR, "daemon.pid");
 export const LOG_FILE = join(DATA_DIR, "daemon.log");
@@ -35,7 +35,7 @@ export function runningPid(): number | null {
 }
 
 export function writePidFile(): void {
-  mkdirSync(DATA_DIR, { recursive: true });
+  ensurePrivateDir(DATA_DIR);
   writeFileSync(PID_FILE, String(process.pid));
 }
 
@@ -46,8 +46,10 @@ export function removePidFile(): void {
 }
 
 export async function startDetached(cliPath: string, port: number): Promise<number> {
-  mkdirSync(DATA_DIR, { recursive: true });
-  const log = openSync(LOG_FILE, "a");
+  ensurePrivateDir(DATA_DIR);
+  // stdout/stderr of the daemon: import paths, topic names on error.
+  const log = openSync(LOG_FILE, "a", 0o600);
+  ensurePrivateFile(LOG_FILE);
   const child = spawn(process.execPath, [cliPath, "serve", "--port", String(port)], {
     detached: true,
     stdio: ["ignore", log, log],
@@ -151,8 +153,9 @@ function installSystemd(cliPath: string, port: number): string {
     // Don't leave a half-installed unit that autostartInstalled() would report as live.
     rmSync(path, { force: true });
     throw new Error(
-      `systemd user service could not be enabled (${e instanceof Error ? e.message : e}) — ` +
+      `systemd user service could not be enabled (${e instanceof Error ? e.message : String(e)}) — ` +
       "is this a systemd distro with a user session? Fallback: `persnallyd start`.",
+      { cause: e },
     );
   }
   return path;

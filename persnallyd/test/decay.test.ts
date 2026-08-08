@@ -1,22 +1,40 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { topicWeight } from "../src/decay.js";
+import { halfLifeFor, topicWeight } from "../src/decay.js";
 
 const NOW = Date.parse("2026-06-11T00:00:00Z");
 const daysAgo = (n: number) => new Date(NOW - n * 86_400_000).toISOString();
 const sig = (ts: string, weight = 1, depth = "deep", sentiment = "neutral", intent = "building") =>
   ({ ts, weight, depth, sentiment, intent });
 
-test("a signal halves in weight after one half-life (7 days)", () => {
-  const fresh = topicWeight([sig(daysAgo(0))], NOW).weight;
-  const week = topicWeight([sig(daysAgo(7))], NOW).weight;
-  assert.ok(Math.abs(week - fresh / 2) < 1e-9);
+// The half-life is per-category now, so this asserts the curve rather than one
+// hardcoded number: whatever a category's half-life is, one of them halves it.
+test("a signal halves in weight after exactly one half-life, in every category", () => {
+  for (const category of ["technology", "career", "news", "other"]) {
+    const h = halfLifeFor(category);
+    const fresh = topicWeight([sig(daysAgo(0))], NOW, category).weight;
+    const aged = topicWeight([sig(daysAgo(h))], NOW, category).weight;
+    assert.ok(Math.abs(aged - fresh / 2) < 1e-9, `${category} (half-life ${h}d) should halve`);
+  }
 });
 
-test("frequency is not double-counted: N old signals never outweigh N fresh ones", () => {
-  const old = topicWeight(Array.from({ length: 10 }, () => sig(daysAgo(30))), NOW).weight;
-  const fresh = topicWeight([sig(daysAgo(0)), sig(daysAgo(1))], NOW).weight;
-  assert.ok(old < fresh, `10 month-old signals (${old}) must decay below 2 fresh ones (${fresh})`);
+// This used to assert "10 signals from 30 days ago weigh less than 2 fresh
+// ones", which was a *calibration* claim that only held under the old uniform
+// 7-day decay. Under a 30-day half-life those ten genuinely should win —
+// someone who discussed a topic ten times last month is more invested than
+// someone who mentioned it twice today. The structural property the v1 bug
+// broke is that frequency gets no multiplicative bonus on top of decay, so
+// that is what's asserted now.
+test("frequency is additive, never multiplied on top of decay", () => {
+  const one = topicWeight([sig(daysAgo(5))], NOW, "technology").weight;
+  const five = topicWeight(Array.from({ length: 5 }, () => sig(daysAgo(5))), NOW, "technology").weight;
+  assert.ok(Math.abs(five - one * 5) < 1e-9, `5 identical signals must be exactly 5x one, got ${five} vs ${one * 5}`);
+});
+
+test("recency still beats volume at the same decay rate", () => {
+  const old = topicWeight(Array.from({ length: 3 }, () => sig(daysAgo(180))), NOW, "technology").weight;
+  const fresh = topicWeight([sig(daysAgo(0))], NOW, "technology").weight;
+  assert.ok(fresh > old, `one fresh signal (${fresh}) should beat three six-month-old ones (${old})`);
 });
 
 test("an unparseable timestamp is skipped, never turning the weight into NaN", () => {

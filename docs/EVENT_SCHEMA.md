@@ -173,7 +173,7 @@ Every event answers "where did this come from?" without copying content:
   "conversation_uuid": "...", "message_uuid": "..." }
 
 // Git
-{ "kind": "git", "repo": "github.com/sidpan2011/persnally", "ref": "commit|file" }
+{ "kind": "git", "repo": "github.com/persnally/persnally", "ref": "commit|file" }
 
 // Derived (synthesis over other events)
 { "kind": "derived", "from": ["<event id>", "<event id>"] }

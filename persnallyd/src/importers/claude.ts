@@ -22,6 +22,10 @@ export function parseClaudeExport(dir: string): ParsedExport {
       .filter((m) => m.sender === "human")
       .map((m) => (m.text ? String(m.text) : textFromContent(m.content)))
       .filter((t) => t.trim()),
+    assistantMessages: ((c.chat_messages as Array<Record<string, unknown>>) ?? [])
+      .filter((m) => m.sender === "assistant")
+      .map((m) => (m.text ? String(m.text) : textFromContent(m.content)))
+      .filter((t) => t.trim()),
   }));
 
   let memoryText = "";
@@ -56,6 +60,7 @@ export async function extractClaudeEvents(
   parsed: ParsedExport,
   extract: LlmExtract = anthropicExtract,
   model = DEFAULT_EXTRACT_MODEL,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<ImportResult> {
-  return extractEvents(parsed, { source: "import:claude", importer: "claude", file: "conversations.json" }, extract, model);
+  return extractEvents(parsed, { source: "import:claude", importer: "claude", file: "conversations.json", onProgress }, extract, model);
 }

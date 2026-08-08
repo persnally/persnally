@@ -1,20 +1,40 @@
 name: Web
 
 # Marketing site. Vercel already builds + deploys every PR, so CI only adds
-# the lint gate Vercel doesn't run. Triggers only on web changes.
+# the lint gate Vercel doesn't run. Unconditional on main/dev: these jobs are
+# required branch checks, and a required check tied to a path filter never
+# reports (so never unblocks a merge) on any PR that happens not to touch
+# web/**. Cheap enough (~30s combined) that always running is the simpler,
+# more robust choice over conditional-skip-but-report machinery.
 on:
+  # Manual trigger: on 2026-08-06 pushes stopped producing runs entirely and
+  # there was no way to force one.
+  workflow_dispatch:
   push:
     branches: [main, dev]
-    paths: ["web/**", ".github/workflows/web.yml"]
   pull_request:
     branches: [main, dev]
-    paths: ["web/**", ".github/workflows/web.yml"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # The landing page shows the real dashboard in an iframe. If the copy drifts,
+  # the site advertises a product that no longer looks like the one you install.
+  preview-sync:
+    name: Web — Dashboard preview in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: dashboard-preview.html matches the dashboard it mirrors
+        run: |
+          if ! diff -q persnallyd/src/dashboard.html web/public/dashboard-preview.html; then
+            echo "::error file=web/public/dashboard-preview.html::Drifted from persnallyd/src/dashboard.html. Re-sync with: cp persnallyd/src/dashboard.html web/public/dashboard-preview.html"
+            diff persnallyd/src/dashboard.html web/public/dashboard-preview.html | head -40
+            exit 1
+          fi
+
   web:
     name: Web — Lint
     runs-on: ubuntu-latest
@@ -23,9 +43,9 @@ jobs:
         working-directory: web
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -35,3 +55,8 @@ jobs:
 
       - name: ESLint
         run: npm run lint
+
+      # Same reasoning as persnallyd's ci.yml: catches a vulnerability landing
+      # via a transitive shift with no diff to review.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate

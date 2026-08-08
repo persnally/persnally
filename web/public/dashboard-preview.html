@@ -327,10 +327,10 @@
 
   <footer>
     stored at <code>~/.persnally/persnally.db</code> · forgetting a topic hard-deletes its events and everything derived ·
-    <code>persnallyd forget --all</code> erases everything <span id="ver"></span>
+    <code>persnally forget --all</code> erases everything <span id="ver"></span>
   </footer>
 </div>
-<div class="preview-ribbon" id="ribbon">preview data — start <code>persnallyd</code> and reload to see your own</div>
+<div class="preview-ribbon" id="ribbon">preview data — start <code>persnally</code> and reload to see your own</div>
 
 <div class="modal" id="shareModal" aria-hidden="true">
   <div class="modal-inner" role="dialog" aria-label="Share your portrait">
@@ -363,10 +363,45 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<"
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const FONT = '-apple-system, system-ui, "Segoe UI", Roboto, sans-serif';
 
+let SIGNED_OUT = false;
+// Sample data renders only when explicitly asked for: the marketing preview
+// iframe links /dashboard-preview.html?demo=1. A real user whose daemon is
+// simply not running gets told that, never someone else's portrait.
+const PREVIEW = new URLSearchParams(location.search).has("demo");
+let DAEMON_DOWN = false;
 async function get(path) {
   const r = await fetch(path, { headers: { "accept": "application/json" } });
+  // An expired session must never fall through to preview data — showing
+  // sample data as if it were yours would be a lie about your own store.
+  if (r.status === 401) { SIGNED_OUT = true; renderSignedOut(); return null; }
   if (!r.ok) return null;
   return r.json();
+}
+function renderSignedOut() {
+  if ($("signedOut")) return;
+  const el = document.createElement("div");
+  el.id = "signedOut";
+  el.style.cssText = "position:fixed;inset:0;z-index:99;display:grid;place-items:center;text-align:center;"
+    + "padding:2rem;background:rgba(10,10,11,.92);backdrop-filter:blur(6px)";
+  el.innerHTML = '<div style="max-width:30rem"><div style="font-size:1.2rem;font-weight:600;margin-bottom:.6rem">'
+    + 'Your session expired</div><div style="color:#9a9aa2;margin-bottom:1.1rem">Reopen the dashboard from your '
+    + 'terminal to keep going.</div><code style="display:inline-block;padding:.6rem 1rem;border:1px solid #26262b;'
+    + 'border-radius:.5rem;background:#131316">persnally dashboard</code></div>';
+  document.body.appendChild(el);
+}
+function renderNoDaemon() {
+  DAEMON_DOWN = true;
+  if ($("noDaemon")) return;
+  const el = document.createElement("div");
+  el.id = "noDaemon";
+  el.style.cssText = "position:fixed;inset:0;z-index:99;display:grid;place-items:center;text-align:center;"
+    + "padding:2rem;background:rgba(10,10,11,.92);backdrop-filter:blur(6px)";
+  el.innerHTML = '<div style="max-width:30rem"><div style="font-size:1.2rem;font-weight:600;margin-bottom:.6rem">'
+    + 'Persnally isn\'t running</div><div style="color:#9a9aa2;margin-bottom:1.1rem">Your data is still on this '
+    + 'machine — the daemon that serves it just isn\'t up. Start it, then reload.</div>'
+    + '<code style="display:inline-block;padding:.6rem 1rem;border:1px solid #26262b;'
+    + 'border-radius:.5rem;background:#131316">persnally start</code></div>';
+  document.body.appendChild(el);
 }
 const fmtN = (n) => n.toLocaleString("en-US");
 function timeAgo(iso) {
@@ -536,7 +571,9 @@ function renderAccess(reads, scopes) {
     let state, cls;
     if (s === undefined) { state = "reads everything"; cls = "full"; }
     else if (!s.length) { state = "revoked — reads nothing"; cls = "revoked"; }
-    else { state = "limited: " + s.join(", "); cls = "limited"; }
+    // Style is served to limited clients by design (how you write, not what
+    // about) — say so, or "limited" reads as narrower than it is.
+    else { state = "limited: " + s.join(", ") + ", and how you write"; cls = "limited"; }
     const revoked = Array.isArray(s) && !s.length;
     const btn = revoked
       ? `<button class="del" data-client="${esc(c)}" data-act="restore">restore</button>`
@@ -546,7 +583,7 @@ function renderAccess(reads, scopes) {
       <div class="l2"><span class="acc ${cls}">${esc(state)}</span></div></div>${btn}</div>`;
   }).join("");
   host.querySelectorAll(".del[data-client]").forEach(b => b.addEventListener("click", async () => {
-    if (DEMO) return alert("Preview mode — start persnallyd to change access.");
+    if (DEMO) return alert("Preview mode — start persnally to change access.");
     const client = b.dataset.client;
     if (b.dataset.act === "revoke") {
       if (!confirm(`Revoke ${prettyClient(client)}? It will read nothing until you restore it.`)) return;
@@ -610,7 +647,7 @@ function renderAsks(data) {
       <div class="meta">${conf}<span>${esc(timeAgo(it.ts))}</span>${judge}</div></div>`;
   }).join("");
   document.querySelectorAll(".judge button").forEach(b => b.addEventListener("click", async () => {
-    if (DEMO) return alert("Preview mode — start persnallyd to judge answers for real.");
+    if (DEMO) return alert("Preview mode — start persnally to judge answers for real.");
     await fetch("/feedback", { method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ answer_id: b.dataset.id, verdict: b.dataset.v }) });
     renderAsks(await get("/questions?limit=8"));
@@ -848,7 +885,7 @@ function renderOnboard(engine, profile) {
     <div class="ob-or">— or use your own Anthropic key —</div>
     <div class="ob-row"><input id="obKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"><button class="btn ghost" id="obSaveKey">Save &amp; use</button></div>
     <div class="sub" id="obKeyMsg" style="margin-top:6px"></div>
-    <div class="sub" style="margin-top:14px">No model yet? You can still import code offline — <code>persnallyd import git &lt;path&gt;</code> (no AI needed).</div>
+    <div class="sub" style="margin-top:14px">No model yet? You can still import code offline — <code>persnally import git &lt;path&gt;</code> (no AI needed).</div>
   </div>`;
   if (oll.reachable) $("obPull").onclick = () => startPull(engine.recommended);
   else $("obRecheck").onclick = () => loadAll();
@@ -867,9 +904,27 @@ async function startPull(model) {
     $("obFill").style.width = (p.percent||0) + "%";
     if (p.state === "pulling") { $("obStat").textContent = (p.status||"downloading") + " · " + (p.percent||0) + "%"; return void setTimeout(poll, 1500); }
     if (p.state === "error") { $("obStat").textContent = "Failed: " + (p.error||"unknown"); $("obPull").disabled=false; return; }
-    if (p.state === "done") { $("obStat").textContent = "Model ready — writing your portrait…"; await fetch("/synthesize", { method:"POST" }); return void loadAll(); }
+    if (p.state === "done") { await buildPortrait((m) => { $("obStat").textContent = m; }); return void loadAll(); }
     setTimeout(poll, 1500);
   })();
+}
+
+// Import first, then synthesize. Setup skips every conversation source when no
+// engine exists, so an engine configured here is the first chance to read that
+// history — synthesizing alone would portray the user from git commits only.
+async function buildPortrait(say) {
+  say("Reading your history…");
+  const r = await fetch("/import", { method:"POST", headers:{ "content-type":"application/json" }, body:"{}" });
+  if (r.ok) {
+    const imp = await r.json().catch(() => null);
+    if (imp && imp.events) say("Imported " + imp.events + " signals — writing your portrait…");
+    else say("Writing your portrait…");
+  } else {
+    // A failed import must not cost the user their portrait: whatever is
+    // already in the store still deserves synthesis.
+    say("Writing your portrait…");
+  }
+  await fetch("/synthesize", { method:"POST" });
 }
 
 async function saveKey() {
@@ -878,8 +933,8 @@ async function saveKey() {
   $("obSaveKey").disabled = true; $("obKeyMsg").textContent = "Saving…";
   const r = await fetch("/engine/key", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ key }) });
   if (!r.ok) { const e = await r.json().catch(()=>({})); $("obKeyMsg").textContent = e.error || ("Failed (" + r.status + ")"); $("obSaveKey").disabled=false; return; }
-  $("obKeyMsg").textContent = "Saved — writing your portrait…";
-  await fetch("/synthesize", { method:"POST" }); loadAll();
+  await buildPortrait((m) => { $("obKeyMsg").textContent = m; });
+  loadAll();
 }
 
 /* ── load ── */
@@ -893,6 +948,12 @@ async function loadAll() {
     ]);
     if (!stats) throw new Error("no daemon");
   } catch (e) {
+    if (SIGNED_OUT) return;   // authenticated-but-expired, not daemon-less
+    // Sample data is a portrait of someone who does not exist. Showing it
+    // because the daemon happens to be down means a screenshot of a fabricated
+    // person is indistinguishable from a real one — so it is opt-in, and only
+    // the marketing preview (which links with ?demo=1) ever asks for it.
+    if (!PREVIEW) return renderNoDaemon();
     DEMO = true; $("ribbon").classList.add("show");
     ({ stats, profile, topics, reads, assertions, voice, activity, asks } = DEMO_DATA());
   }
@@ -921,19 +982,19 @@ async function loadAll() {
 }
 
 $("synthesize").onclick = async () => {
-  const b = $("synthesize"); if (DEMO) return alert("Preview mode — start persnallyd to synthesize for real.");
+  const b = $("synthesize"); if (DEMO) return alert("Preview mode — start persnally to synthesize for real.");
   b.disabled = true; b.textContent = "Synthesizing…";
   const r = await fetch("/synthesize", { method:"POST" });
   if (!r.ok) { const e = await r.json().catch(()=>({})); alert(e.error || "Synthesis failed — check the daemon log."); }
   b.disabled = false; b.textContent = "Re-synthesize"; loadAll();
 };
 $("reflect").onclick = async () => {
-  const b = $("reflect"); if (DEMO) return alert("Preview mode — start persnallyd to reflect for real.");
+  const b = $("reflect"); if (DEMO) return alert("Preview mode — start persnally to reflect for real.");
   b.disabled = true; b.textContent = "Reflecting…";
   await fetch("/consolidate", { method:"POST" }); b.disabled = false; b.textContent = "Reflect"; loadAll();
 };
 setInterval(async () => {
-  if (DEMO) return;
+  if (DEMO || SIGNED_OUT || DAEMON_DOWN) return;
   const [reads, stats, voice, activity, asks] = await Promise.all([get("/events?type=context.read&limit=60"), get("/stats"), get("/voice"), get("/activity"), get("/questions?limit=8")]);
   if (reads && stats) renderReads(reads, (stats.byType && stats.byType["context.read"]) || reads.length);
   if (voice) renderVoice(voice); // live: voice signals captured mid-session show up without a reload

@@ -4,16 +4,32 @@
  */
 
 import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { topicWeight, type WeightSignal } from "./decay.js";
 import { newEvent, normalizeTopic, validateEvent, type PersnallyEvent } from "./events.js";
-import { DATA_DIR } from "./paths.js";
+import { loadConfig } from "./config.js";
+import { DATA_DIR, ensurePrivateDir, ensurePrivateFile } from "./paths.js";
 import { assemblePack, type StyleSignal } from "./stylometry.js";
 
-const VIEW_SCHEMA_VERSION = 2;
+const VIEW_SCHEMA_VERSION = 3;
+
+// One bind parameter per id, well under SQLite's 32k variable ceiling.
+const MAX_ID_LOOKUP = 500;
 
 export const DEFAULT_DB_PATH = join(DATA_DIR, "persnally.db");
+
+/** Optional per-category half-life overrides from config, e.g.
+    `{"decay_half_life_days": {"technology": 45}}`. Unset categories keep the
+    defaults; anything malformed is ignored rather than corrupting the graph. */
+function decayOverrides(): Record<string, number> {
+  const raw = loadConfig().decay_half_life_days;
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) out[k] = v;
+  }
+  return out;
+}
 
 export interface QueryOpts {
   type?: string;
@@ -85,13 +101,19 @@ export class EventStore {
   private db: Database.Database;
 
   constructor(path: string = DEFAULT_DB_PATH) {
-    mkdirSync(dirname(path), { recursive: true });
+    ensurePrivateDir(dirname(path));
     this.db = new Database(path);
     this.db.pragma("journal_mode = WAL");
+    // WAL brings up -wal and -shm alongside the db; all three hold event data.
+    for (const f of [path, `${path}-wal`, `${path}-shm`]) ensurePrivateFile(f);
     // The CLI and the daemon each open their own connection; a blocked writer
     // waits instead of failing fast with SQLITE_BUSY (better-sqlite3 defaults
     // to 5s — set explicitly with headroom for large rebuilds).
     this.db.pragma("busy_timeout = 10000");
+    // Deletion is a product promise, not just a DML statement: without this,
+    // freed pages keep their bytes and `strings persnally.db` still finds a
+    // topic the user forgot. Overwrites freed content on every delete.
+    this.db.pragma("secure_delete = ON");
     this.migrate();
   }
 
@@ -110,11 +132,21 @@ export class EventStore {
       CREATE INDEX IF NOT EXISTS idx_events_ts   ON events (ts);
       CREATE INDEX IF NOT EXISTS idx_events_type ON events (type, ts);
       CREATE INDEX IF NOT EXISTS idx_events_src  ON events (source, ts);
+      -- Consolidation selects by recorded_at (ingest time, not event time).
+      CREATE INDEX IF NOT EXISTS idx_events_recorded ON events (recorded_at);
     `);
     // Views are derived state: on schema change, drop and re-derive rather than ALTER.
     const ver = (this.db.pragma("user_version", { simple: true }) as number) ?? 0;
     if (ver < VIEW_SCHEMA_VERSION) {
-      this.db.exec("DROP TABLE IF EXISTS view_topics; DROP TABLE IF EXISTS view_profile;");
+      // Every derived table, or a future bump silently keeps stale rows in the
+      // one it forgot. They all re-derive: topics on rebuild(), profiles on
+      // the next synthesis.
+      this.db.exec(`
+        DROP TABLE IF EXISTS view_topics;
+        DROP TABLE IF EXISTS view_profile;
+        DROP TABLE IF EXISTS view_scoped_profile;
+        DROP TABLE IF EXISTS view_search;
+      `);
       this.db.pragma(`user_version = ${VIEW_SCHEMA_VERSION}`);
     }
     this.db.exec(`
@@ -144,6 +176,20 @@ export class EventStore {
         sections     TEXT NOT NULL,
         generated_at TEXT NOT NULL,
         model        TEXT NOT NULL
+      );
+      -- Full-text index over what is searchable. Derived state like the other
+      -- views: dropped and re-derived on a schema bump, rebuilt with them.
+      -- porter stemming means "tests" finds "testing"; prefix queries mean
+      -- "postgres" finds "PostgreSQL". primary/secondary are separate columns
+      -- so bm25 can weight a name above the entities beside it.
+      CREATE VIRTUAL TABLE IF NOT EXISTS view_search USING fts5(
+        primary_text,
+        secondary_text,
+        kind UNINDEXED,
+        ref UNINDEXED,
+        category UNINDEXED,
+        strength UNINDEXED,
+        tokenize='porter unicode61'
       );
     `);
     // ver 0 is either a fresh db or a pre-versioning one — rebuild whenever events already exist.
@@ -187,31 +233,49 @@ export class EventStore {
 
   getEvents(ids: string[]): PersnallyEvent[] {
     if (!ids.length) return [];
-    const placeholders = ids.map(() => "?").join(",");
+    // One bind parameter per id, so an unbounded list would hit
+    // SQLITE_MAX_VARIABLE_NUMBER. Provenance walks ask for a handful.
+    const wanted = ids.slice(0, MAX_ID_LOOKUP);
+    const placeholders = wanted.map(() => "?").join(",");
     return this.db
       .prepare(`SELECT * FROM events WHERE id IN (${placeholders})`)
-      .all(...ids)
+      .all(...wanted)
       .map(rowToEvent);
+  }
+
+  /**
+   * Reads one JSON field out of a type or source's events without materializing
+   * the events themselves — the derived reads only ever want a field or two, and
+   * rowToEvent costs two JSON.parse per row.
+   */
+  private pluck(column: "payload" | "provenance", field: string, where: { type?: string; source?: string }): string[] {
+    const clause = where.type ? "type = @type" : "source = @source";
+    return this.db
+      .prepare(`SELECT DISTINCT json_extract(${column}, '$.${field}') v FROM events
+                WHERE ${clause} AND v IS NOT NULL`)
+      .all(where)
+      .map((r) => (r as { v: string }).v);
+  }
+
+  /** Payload-only rows for a type, newest first. Skips parsing provenance, which the derived reads don't use. */
+  private payloads<T>(type: string, limit = -1): Array<{ id: string; ts: string; payload: T }> {
+    return this.db
+      .prepare(`SELECT id, ts, payload FROM events WHERE type = ? ORDER BY ts DESC LIMIT ?`)
+      .all(type, limit)
+      .map((r) => {
+        const row = r as { id: string; ts: string; payload: string };
+        return { id: row.id, ts: row.ts, payload: JSON.parse(row.payload) as T };
+      });
   }
 
   /** conversation_uuids already imported from a source — lets a re-import top up only new chats, never double. */
   importedConversationUuids(source: string): Set<string> {
-    const uuids = new Set<string>();
-    for (const e of this.query({ source, limit: 1_000_000 })) {
-      const uuid = (e.provenance as { conversation_uuid?: string }).conversation_uuid;
-      if (uuid) uuids.add(uuid);
-    }
-    return uuids;
+    return new Set(this.pluck("provenance", "conversation_uuid", { source }));
   }
 
   /** repo names already imported via `import git` — lets a re-import skip repos already on file. */
   importedGitRepos(): Set<string> {
-    const repos = new Set<string>();
-    for (const e of this.query({ source: "import:git", limit: 1_000_000 })) {
-      const repo = (e.provenance as { repo?: string }).repo;
-      if (repo) repos.add(repo);
-    }
-    return repos;
+    return new Set(this.pluck("provenance", "repo", { source: "import:git" }));
   }
 
   stats(): { total: number; byType: Record<string, number>; bySource: Record<string, number>; first: string | null; last: string | null } {
@@ -233,38 +297,54 @@ export class EventStore {
   activity(now: number = Date.now()): Activity {
     const DAY = 86_400_000;
     const dayKey = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-    const reads = this.query({ type: "context.read", limit: 1_000_000 }); // ts DESC
+
+    // context.read is the fastest-growing type and this runs on a dashboard
+    // poll, so the totals come from the index and only the windows that feed
+    // the buckets are read back. The date math stays in JS: SQLite's second
+    // resolution would drift against a ms boundary.
+    const totals = this.db
+      .prepare("SELECT COUNT(*) n, MIN(ts) first, MAX(ts) last FROM events WHERE type = 'context.read'")
+      .get() as { n: number; first: string | null; last: string | null };
     const firstEventAt = (this.db.prepare("SELECT MIN(ts) m FROM events").get() as { m: string | null }).m;
     const firstMs = firstEventAt ? new Date(firstEventAt).getTime() : null;
     // Retention is anchored to when serving actually began (the first read), not
     // onboarding — so a gap between setup and the first read can't read as a
     // false "not retained". For a fresh install the two are minutes apart.
-    const firstReadAt = reads.length ? reads[reads.length - 1]!.ts : null;
+    const firstReadAt = totals.first;
     const firstReadMs = firstReadAt ? new Date(firstReadAt).getTime() : null;
 
     const daily = new Map<string, number>();
     for (let i = 13; i >= 0; i--) daily.set(dayKey(now - i * DAY), 0);
 
-    let reads7d = 0, reads30d = 0, week2Read = false;
+    let reads7d = 0, reads30d = 0;
     const days7 = new Set<string>(), days14 = new Set<string>();
-    for (const e of reads) {
-      const t = new Date(e.ts).getTime();
+    for (const ts of this.readTimestampsAround(now - 30 * DAY, now)) {
+      const t = new Date(ts).getTime();
       if (!Number.isFinite(t)) continue;
       const age = now - t, k = dayKey(t);
       if (age <= 7 * DAY) { reads7d++; days7.add(k); }
       if (age <= 14 * DAY) days14.add(k);
       if (age <= 30 * DAY) reads30d++;
       if (daily.has(k)) daily.set(k, (daily.get(k) ?? 0) + 1);
-      if (firstReadMs !== null && t >= firstReadMs + 7 * DAY && t < firstReadMs + 14 * DAY) week2Read = true;
+    }
+
+    // Week 2 sits outside the 30-day window on an older install, so ask for
+    // exactly that stretch instead of widening the scan above.
+    let week2Read = false;
+    if (firstReadMs !== null) {
+      for (const ts of this.readTimestampsAround(firstReadMs + 7 * DAY, firstReadMs + 14 * DAY)) {
+        const t = new Date(ts).getTime();
+        if (t >= firstReadMs + 7 * DAY && t < firstReadMs + 14 * DAY) { week2Read = true; break; }
+      }
     }
 
     return {
       firstEventAt,
       firstReadAt,
-      lastReadAt: reads.length ? reads[0]!.ts : null,
+      lastReadAt: totals.last,
       daysSinceFirst: firstMs !== null ? Math.max(0, Math.floor((now - firstMs) / DAY)) : 0,
       daysSinceFirstRead: firstReadMs !== null ? Math.max(0, Math.floor((now - firstReadMs) / DAY)) : 0,
-      totalReads: reads.length,
+      totalReads: totals.n,
       reads7d,
       reads30d,
       activeDays7d: days7.size,
@@ -274,39 +354,82 @@ export class EventStore {
     };
   }
 
+  /**
+   * context.read timestamps around a window, as an over-selection the caller
+   * filters exactly.
+   *
+   * The bounds are plain string comparisons so idx_events_type(type, ts) does
+   * the work — a function on the column (strftime) would force a scan. A stored
+   * UTC offset can put the string up to 14h ahead of, or 12h behind, the instant
+   * it denotes, so the range is padded a full day on each side: it can only ever
+   * return too much, never too little.
+   */
+  private readTimestampsAround(fromMs: number, toMs: number): string[] {
+    const DAY = 86_400_000;
+    return this.db
+      .prepare(`SELECT ts FROM events
+                WHERE type = 'context.read' AND ts >= @from AND ts < @to
+                ORDER BY ts DESC`)
+      .all({ from: new Date(fromMs - DAY).toISOString(), to: new Date(toMs + DAY).toISOString() })
+      .map((r) => (r as { ts: string }).ts);
+  }
+
   /** Corrections the user stated (action edit/contradict — deletes are
       tombstones, not statements). Newest first; the authoritative layer that
       ask and profile synthesis must weight above derived signals. */
   corrections(limit = 50): { id: string; ts: string; subject: string; correction: string }[] {
-    return this.query({ type: "user.correction", limit: 1_000_000 })
-      .filter((e) => {
-        const p = e.payload as { action: string; reason: string };
-        return p.action !== "delete" && p.reason.trim().length > 0;
-      })
-      .slice(0, limit)
-      .map((e) => {
-        const p = e.payload as { target_id: string; reason: string };
-        return { id: e.id, ts: e.ts, subject: p.target_id, correction: p.reason };
-      });
+    // Filtered and limited in SQL: this runs on every ask and every synthesis,
+    // and corrections accrue for the life of the install.
+    return this.db
+      .prepare(`SELECT id, ts,
+                       json_extract(payload, '$.target_id') subject,
+                       json_extract(payload, '$.reason')    correction
+                FROM events
+                WHERE type = 'user.correction'
+                  AND json_extract(payload, '$.action') != 'delete'
+                  AND trim(COALESCE(json_extract(payload, '$.reason'), '')) != ''
+                ORDER BY ts DESC LIMIT ?`)
+      .all(limit) as { id: string; ts: string; subject: string; correction: string }[];
   }
 
   /** agent.question/agent.answer exchanges joined with the user's feedback —
       the precision surface of the ask_user_model loop. */
   askHistory(limit = 50): { items: AskRow[]; stats: AskStats } {
-    const questions = new Map(this.query({ type: "agent.question", limit: 1_000_000 }).map((e) => [e.id, e]));
-    // query() returns ts DESC, so the first verdict seen per answer is the latest one.
+    // The stats are counts over every answer, so they are counted in SQL. Only
+    // the rows actually rendered are read back, and only the questions those
+    // rows cite — this used to pull three whole event types into memory.
+    const counts = this.db
+      .prepare(`SELECT COUNT(*) asked,
+                       SUM(CASE WHEN json_extract(payload, '$.deferred') IN (1, 'true') THEN 1 ELSE 0 END) deferred
+                FROM events WHERE type = 'agent.answer'`)
+      .get() as { asked: number; deferred: number | null };
+
+    // Latest verdict per answer, resolved in one descending pass. A correlated
+    // "max ts per subject" subquery reads far worse here: json_extract can't use
+    // an index, so it degrades to a scan per feedback row.
+    const answerIds = new Set(
+      (this.db.prepare("SELECT id FROM events WHERE type = 'agent.answer'").all() as { id: string }[])
+        .map((r) => r.id),
+    );
     const verdicts = new Map<string, AskRow["verdict"]>();
-    for (const e of this.query({ type: "feedback.signal", limit: 1_000_000 })) {
-      const p = e.payload as { subject_id: string; verdict: AskRow["verdict"] };
-      if (!verdicts.has(p.subject_id)) verdicts.set(p.subject_id, p.verdict);
+    for (const r of this.db
+      .prepare(`SELECT json_extract(payload, '$.subject_id') subject,
+                       json_extract(payload, '$.verdict')    verdict
+                FROM events WHERE type = 'feedback.signal' ORDER BY ts DESC`)
+      .all() as { subject: string; verdict: AskRow["verdict"] }[]) {
+      // First seen wins (ts DESC = newest), and only if its answer still
+      // exists — a deleted answer must not leave a vote in the precision stat.
+      if (!verdicts.has(r.subject) && answerIds.has(r.subject)) verdicts.set(r.subject, r.verdict);
     }
 
-    const all = this.query({ type: "agent.answer", limit: 1_000_000 });
-    const stats: AskStats = { asked: all.length, answered: 0, deferred: 0, approved: 0, edited: 0, vetoed: 0, precision: null };
-    for (const a of all) {
-      if ((a.payload as { deferred: boolean }).deferred) stats.deferred++;
-      else stats.answered++;
-      const v = verdicts.get(a.id);
+    const stats: AskStats = {
+      asked: counts.asked,
+      answered: counts.asked - (counts.deferred ?? 0),
+      deferred: counts.deferred ?? 0,
+      approved: 0, edited: 0, vetoed: 0, precision: null,
+    };
+    // Count each judged answer once, under its latest verdict only.
+    for (const v of verdicts.values()) {
       if (v === "approved") stats.approved++;
       else if (v === "edited") stats.edited++;
       else if (v === "vetoed") stats.vetoed++;
@@ -314,8 +437,12 @@ export class EventStore {
     const labeled = stats.approved + stats.edited + stats.vetoed;
     if (labeled) stats.precision = stats.approved / labeled;
 
-    const items = all.slice(0, limit).map((a): AskRow => {
-      const p = a.payload as { question_id: string; answer: string; confidence: number; deferred: boolean };
+    const recent = this.payloads<{ question_id: string; answer: string; confidence: number; deferred: boolean }>("agent.answer", limit);
+    const questions = new Map(
+      this.getEvents([...new Set(recent.map((a) => a.payload.question_id).filter(Boolean))]).map((e) => [e.id, e]),
+    );
+    const items = recent.map((a): AskRow => {
+      const p = a.payload;
       const qp = questions.get(p.question_id)?.payload as { question?: string; asker?: string } | undefined;
       return {
         question_id: p.question_id,
@@ -332,6 +459,15 @@ export class EventStore {
     return { items, stats };
   }
 
+  /** A topic's category, or null if it isn't in the graph — lets the daemon hold
+      a destructive request to the same categories the client is allowed to read. */
+  topicCategory(topic: string): string | null {
+    const key = normalizeTopic(topic);
+    if (!key) return null;
+    const row = this.db.prepare("SELECT category FROM view_topics WHERE topic_key = ?").get(key) as { category: string } | undefined;
+    return row?.category ?? null;
+  }
+
   topics(limit = 50): TopicRow[] {
     const rows = this.db
       .prepare("SELECT * FROM view_topics ORDER BY weight DESC LIMIT ?")
@@ -345,8 +481,10 @@ export class EventStore {
 
     interface Acc { topic: string; categories: Map<string, number>; signals: WeightSignal[]; entities: Set<string>; first: string; last: string; ids: string[] }
     const acc = new Map<string, Acc>();
-    for (const e of this.query({ type: "signal.topic", limit: 1_000_000 })) {
-      const p = e.payload as { topic: string; weight: number; category: string; depth: string; sentiment: string; intent: string; entities: string[] };
+    // Decay is per-signal and time-dependent, so every topic signal is genuinely
+    // needed here — but provenance isn't, and this runs on every tracked write.
+    for (const e of this.payloads<{ topic: string; weight: number; category: string; depth: string; sentiment: string; intent: string; entities: string[] }>("signal.topic")) {
+      const p = e.payload;
       const key = normalizeTopic(p.topic);
       if (!key) continue;
       let a = acc.get(key);
@@ -362,12 +500,15 @@ export class EventStore {
       a.ids.push(e.id);
     }
 
+    // Decay rate depends on the category, so resolve it before weighting.
+    const overrides = decayOverrides();
     const rows: TopicRow[] = [...acc.entries()].map(([key, a]) => {
-      const w = topicWeight(a.signals, now);
+      const category = [...a.categories.entries()].sort((x, y) => y[1] - x[1])[0]![0];
+      const w = topicWeight(a.signals, now, category, overrides);
       return {
         topic_key: key,
         topic: a.topic,
-        category: [...a.categories.entries()].sort((x, y) => y[1] - x[1])[0]![0],
+        category,
         signals: a.signals.length,
         // Guard the NOT NULL column: a non-finite weight would abort the whole
         // rebuild transaction and wedge the topic view permanently.
@@ -381,6 +522,7 @@ export class EventStore {
       };
     });
 
+    this.reindexSearch(rows);
     const insert = this.db.prepare(
       `INSERT INTO view_topics VALUES (@topic_key, @topic, @category, @signals, @weight,
         @sentiment_balance, @dominant_intent, @entities, @first_seen, @last_seen, @event_ids)`,
@@ -441,21 +583,114 @@ export class EventStore {
 
   /** Patterns the user has explicitly forgotten — a delete correction tombstones the key permanently. */
   private forgottenStyleKeys(): Set<string> {
-    const forgotten = new Set<string>();
-    for (const e of this.query({ type: "user.correction", limit: 1_000_000 })) {
-      const p = e.payload as { target_id: string; action: string };
-      if (p.action === "delete" && p.target_id.startsWith("style:")) forgotten.add(p.target_id);
-    }
-    return forgotten;
+    return new Set(
+      this.db
+        .prepare(`SELECT DISTINCT json_extract(payload, '$.target_id') k FROM events
+                  WHERE type = 'user.correction'
+                    AND json_extract(payload, '$.action') = 'delete'
+                    AND k LIKE 'style:%'`)
+        .all()
+        .map((r) => (r as { k: string }).k),
+    );
   }
 
   /** The voice/convention profile — style signals deduped by pattern (newest wins), richest first, forgotten patterns excluded. */
+  /**
+   * Re-derives the full-text index from the topics just computed plus every
+   * assertion. Runs inside rebuild() so the index can never drift from the
+   * views it searches — the same reason view_topics is re-derived rather than
+   * incrementally patched.
+   */
+  private reindexSearch(topics: TopicRow[]): void {
+    const insert = this.db.prepare(
+      "INSERT INTO view_search (primary_text, secondary_text, kind, ref, category, strength) VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    const run = this.db.transaction(() => {
+      this.db.exec("DELETE FROM view_search");
+      for (const t of topics) {
+        insert.run(t.topic, t.entities.join(" "), "topic", t.topic_key, t.category, t.weight);
+      }
+      for (const e of this.payloads<{ claim: string; confidence: number; evidence: string }>("signal.assertion")) {
+        insert.run(e.payload.claim, e.payload.evidence ?? "", "assertion", e.id, "", e.payload.confidence ?? 0.5);
+      }
+    });
+    run();
+  }
+
+  /**
+   * Ranked full-text lookup. bm25 supplies IDF for free — a hit on a rare
+   * project name outranks one on a common word — which literal substring
+   * matching could never do. Returns refs; the caller resolves them so the
+   * views stay the single source of truth for rendering.
+   */
+  searchIndex(
+    matchExpr: string,
+    opts: { limit?: number; allowed?: string[] | null; includeAssertions?: boolean } = {},
+  ): { kind: string; ref: string; score: number; strength: number }[] {
+    if (!matchExpr) return [];
+    const where = ["view_search MATCH ?"];
+    const params: unknown[] = [matchExpr];
+    if (!opts.includeAssertions) where.push("kind = 'topic'");
+    if (opts.allowed?.length) {
+      where.push(`(kind = 'assertion' OR category IN (${opts.allowed.map(() => "?").join(",")}))`);
+      params.push(...opts.allowed);
+    }
+    params.push(opts.limit ?? 10);
+    try {
+      // bm25 is negative, more negative = better; flip it so callers sort desc.
+      return (this.db.prepare(
+        `SELECT kind, ref, strength, -bm25(view_search, 3.0, 1.0) score
+         FROM view_search WHERE ${where.join(" AND ")}
+         ORDER BY score DESC LIMIT ?`,
+      ).all(...params) as { kind: string; ref: string; score: number; strength: number }[]);
+    } catch {
+      // A malformed MATCH expression is a bad query, not a broken store —
+      // return nothing rather than taking down the caller.
+      return [];
+    }
+  }
+
+  /** One topic row by its normalized key, for resolving a search hit. */
+  topicByKey(key: string): TopicRow | null {
+    const r = this.db.prepare("SELECT * FROM view_topics WHERE topic_key = ?").get(key) as
+      (Omit<TopicRow, "entities" | "event_ids"> & { entities: string; event_ids: string }) | undefined;
+    return r ? { ...r, entities: JSON.parse(r.entities) as string[], event_ids: JSON.parse(r.event_ids) as string[] } : null;
+  }
+
+  /**
+   * Demonstrated skills, aggregated across repos. `signal.skill` had no reader
+   * anywhere — the git importer's entire skill output (frameworks, and now
+   * languages by file count) was written and never surfaced, so the one
+   * key-free import path contributed nothing to the profile or to context.
+   * Proficiency takes the strongest observation; `sources` says how many repos
+   * back it, which is what separates a language someone uses from one they
+   * touched once.
+   */
+  skills(limit = 25): { skill: string; domain: string; proficiency: number; sources: number }[] {
+    interface Acc { skill: string; domain: string; proficiency: number; sources: Set<string> }
+    const acc = new Map<string, Acc>();
+    for (const e of this.payloads<{ skill: string; domain: string; proficiency: number; basis: string }>("signal.skill")) {
+      const p = e.payload;
+      const key = p.skill.toLowerCase().trim();
+      if (!key) continue;
+      const cur = acc.get(key) ?? { skill: p.skill, domain: p.domain, proficiency: 0, sources: new Set<string>() };
+      cur.proficiency = Math.max(cur.proficiency, Number.isFinite(p.proficiency) ? p.proficiency : 0);
+      if (p.domain) cur.domain = p.domain;
+      // `basis` carries the repo it came from (repo-activity:x / files-touched:x).
+      cur.sources.add(p.basis || "unknown");
+      acc.set(key, cur);
+    }
+    return [...acc.values()]
+      .map((a) => ({ skill: a.skill, domain: a.domain, proficiency: a.proficiency, sources: a.sources.size }))
+      .sort((a, b) => b.proficiency - a.proficiency || b.sources - a.sources)
+      .slice(0, limit);
+  }
+
   voice(): { pack: string; items: StyleSignal[] } {
     const forgotten = this.forgottenStyleKeys();
     const byPattern = new Map<string, StyleSignal>();
-    // query() returns ts DESC, so the first occurrence of a pattern is the most recent.
-    for (const e of this.query({ type: "signal.style", limit: 1_000_000 })) {
-      const p = e.payload as StyleSignal;
+    // Newest first, so the first occurrence of a pattern is the most recent.
+    for (const { payload: p } of this.payloads<StyleSignal>("signal.style")) {
       const key = this.styleKey(p.dimension, p.pattern);
       if (forgotten.has(key) || byPattern.has(key)) continue;
       byPattern.set(key, p);
@@ -473,21 +708,54 @@ export class EventStore {
    */
   forgetStyle(dimension: string, pattern: string): number {
     const key = this.styleKey(dimension, pattern);
-    const candidates = this.query({ type: "signal.style", limit: 1_000_000 }).filter(
-      (e) => this.styleKey((e.payload as StyleSignal).dimension, (e.payload as StyleSignal).pattern) === key,
-    );
-    const del = this.db.prepare("DELETE FROM events WHERE id = ?");
-    const run = this.db.transaction((toDelete: string[]) => { for (const id of toDelete) del.run(id); });
-    run(candidates.map((e) => e.id));
+    // Matched in SQL on the same lowercased key the styleKey() helper builds.
+    const deleted = this.db
+      .prepare(`DELETE FROM events
+                WHERE type = 'signal.style'
+                  AND 'style:' || json_extract(payload, '$.dimension') || '|'
+                      || lower(json_extract(payload, '$.pattern')) = ?`)
+      .run(key).changes;
     this.append([newEvent("user.correction", "dashboard", { target_id: key, action: "delete", reason: "" }, { kind: "local", surface: "dashboard" })]);
-    return candidates.length;
+    this.reclaim();
+    return deleted;
   }
 
   /** Drops style signals of one basis so a deterministic re-run replaces them (live `observed`/`correction` signals are kept). */
-  clearStyleByBasis(basis: string): number {
+  clearStyleByBasis(basis: string, sources?: string[]): number {
+    // `sources` narrows the wipe to signals a caller can actually re-derive.
+    // refreshVoice re-reads only the Claude Code transcripts still on disk —
+    // deleting stylometry from claude.ai/ChatGPT exports (long gone from disk)
+    // destroyed voice that could never be rebuilt.
+    if (!sources?.length) {
+      return this.db
+        .prepare("DELETE FROM events WHERE type = 'signal.style' AND json_extract(payload, '$.basis') = ?")
+        .run(basis).changes;
+    }
+    const marks = sources.map(() => "?").join(",");
     return this.db
-      .prepare("DELETE FROM events WHERE type = 'signal.style' AND json_extract(payload, '$.basis') = ?")
-      .run(basis).changes;
+      .prepare(`DELETE FROM events WHERE type = 'signal.style'
+                AND json_extract(payload, '$.basis') = ? AND source IN (${marks})`)
+      .run(basis, ...sources).changes;
+  }
+
+  /**
+   * Per-conversation import watermark: the `message_uuid` recorded by the most
+   * recent import of each conversation. Lets the incremental importer top up a
+   * resumed session with only the messages after the last one it consumed.
+   */
+  conversationWatermarks(source: string): Map<string, string> {
+    const rows = this.db.prepare(
+      `SELECT json_extract(provenance, '$.conversation_uuid') cu,
+              json_extract(provenance, '$.message_uuid') mu
+       FROM events
+       WHERE source = ?
+         AND json_extract(provenance, '$.conversation_uuid') IS NOT NULL
+         AND json_extract(provenance, '$.message_uuid') IS NOT NULL
+       ORDER BY recorded_at ASC`,
+    ).all(source) as { cu: string; mu: string }[];
+    const marks = new Map<string, string>();
+    for (const r of rows) marks.set(r.cu, r.mu); // ascending order → the last write per conversation wins
+    return marks;
   }
 
   /**
@@ -495,16 +763,18 @@ export class EventStore {
    * never grows unbounded. Keeps the richest signal per pattern, capped overall.
    */
   pruneStyle(maxTotal = 80): number {
-    const byPattern = new Map<string, PersnallyEvent>();
-    for (const e of this.query({ type: "signal.style", limit: 1_000_000 })) {
-      const p = e.payload as StyleSignal;
-      const key = this.styleKey(p.dimension, p.pattern);
+    const all = this.payloads<StyleSignal>("signal.style");
+    const byPattern = new Map<string, { id: string; confidence: number }>();
+    for (const e of all) {
+      const key = this.styleKey(e.payload.dimension, e.payload.pattern);
       const existing = byPattern.get(key);
-      if (!existing || (existing.payload as StyleSignal).confidence < p.confidence) byPattern.set(key, e);
+      if (!existing || existing.confidence < e.payload.confidence) {
+        byPattern.set(key, { id: e.id, confidence: e.payload.confidence });
+      }
     }
-    const ranked = [...byPattern.entries()].sort((a, b) => (b[1].payload as StyleSignal).confidence - (a[1].payload as StyleSignal).confidence);
-    const keepIds = new Set(ranked.slice(0, maxTotal).map(([, e]) => e.id));
-    const all = this.query({ type: "signal.style", limit: 1_000_000 });
+    const keepIds = new Set(
+      [...byPattern.values()].sort((a, b) => b.confidence - a.confidence).slice(0, maxTotal).map((s) => s.id),
+    );
     const toDelete = all.filter((e) => !keepIds.has(e.id)).map((e) => e.id); // drop weaker duplicates + overflow
     const del = this.db.prepare("DELETE FROM events WHERE id = ?");
     const run = this.db.transaction((ids: string[]) => { for (const id of ids) del.run(id); });
@@ -515,21 +785,87 @@ export class EventStore {
   /** Hard-deletes matching topic events plus derived events referencing them, then rebuilds. */
   forgetTopic(topic: string): number {
     const key = normalizeTopic(topic);
-    const candidates = this.query({ type: "signal.topic", limit: 1_000_000 }).filter(
-      (e) => normalizeTopic((e.payload as { topic: string }).topic) === key,
+    // normalizeTopic isn't expressible in SQL, so topic payloads are still read
+    // to match — but only the payload, and only that one type.
+    const ids = new Set(
+      this.payloads<{ topic: string }>("signal.topic")
+        .filter((e) => normalizeTopic(e.payload.topic) === key)
+        .map((e) => e.id),
     );
-    const ids = new Set(candidates.map((e) => e.id));
-    for (const e of this.query({ limit: 1_000_000 })) {
-      const prov = e.provenance as { kind: string; from?: string[] };
-      if (prov.kind === "derived" && prov.from?.some((id) => ids.has(id))) ids.add(e.id);
-    }
+    this.addDerivedDescendants(ids);
     const del = this.db.prepare("DELETE FROM events WHERE id = ?");
     const run = this.db.transaction((toDelete: string[]) => {
       for (const id of toDelete) del.run(id);
     });
     run([...ids]);
     this.rebuild();
+    this.reclaim();
     return ids.size;
+  }
+
+  /**
+   * Grows `ids` to include every derived event whose `from` chain reaches one
+   * of them. Derived events are the only kind that can reference another, and a
+   * derived event can itself be derived from (a nightly assertion built on an
+   * earlier one), so this walks to a fixpoint — one pass would leave
+   * grandchildren behind, and which ones would depend on row order.
+   * EVENT_SCHEMA.md promises the whole chain goes.
+   */
+  private addDerivedDescendants(ids: Set<string>): void {
+    const derived = (this.db
+      .prepare(`SELECT id, json_extract(provenance, '$.from') f FROM events
+                WHERE json_extract(provenance, '$.kind') = 'derived'`)
+      .all() as { id: string; f: string | null }[])
+      .map((r) => ({ id: r.id, from: r.f ? (JSON.parse(r.f) as string[]) : [] }));
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const d of derived) {
+        if (!ids.has(d.id) && d.from.some((id) => ids.has(id))) {
+          ids.add(d.id);
+          grew = true;
+        }
+      }
+    }
+  }
+
+  /**
+   * Drops everything a set of conversations produced, so they can be extracted
+   * again from the source. Used by `import --reextract`: without it a re-run
+   * would double every signal instead of replacing it.
+   */
+  forgetConversations(source: string, uuids: Set<string>): number {
+    if (!uuids.size) return 0;
+    const ids = new Set(
+      (this.db.prepare(
+        `SELECT id, json_extract(provenance, '$.conversation_uuid') cu
+         FROM events WHERE source = ?`,
+      ).all(source) as { id: string; cu: string | null }[])
+        .filter((r) => r.cu !== null && uuids.has(r.cu))
+        .map((r) => r.id),
+    );
+    this.addDerivedDescendants(ids);
+    const del = this.db.prepare("DELETE FROM events WHERE id = ?");
+    this.db.transaction((toDelete: string[]) => { for (const id of toDelete) del.run(id); })([...ids]);
+    this.reclaim();
+    return ids.size;
+  }
+
+  /**
+   * Extractor version per import batch for one source, newest batch first.
+   * A batch imported before versioning existed reports null — it predates the
+   * current pipeline by definition, so it is always a re-extraction candidate.
+   */
+  importBatchVersions(source: string): { batch: string; version: number | null; events: number; at: string }[] {
+    return (this.db.prepare(
+      `SELECT json_extract(payload, '$.batch') batch,
+              json_extract(payload, '$.extractor_version') version,
+              json_extract(payload, '$.events') events,
+              recorded_at at
+       FROM events
+       WHERE type = 'system.import' AND json_extract(provenance, '$.file') IS NOT NULL
+         AND json_extract(payload, '$.importer') = ?
+       ORDER BY recorded_at DESC`,
+    ).all(source) as { batch: string; version: number | null; events: number; at: string }[]);
   }
 
   /** Removes every event from one import batch — a bad import is fully reversible. */
@@ -538,13 +874,33 @@ export class EventStore {
       .prepare("DELETE FROM events WHERE json_extract(provenance, '$.batch') = ?")
       .run(batch);
     this.rebuild();
+    this.reclaim();
     return result.changes;
   }
 
   forgetAll(): void {
-    // Clear the profiles too — they're prose derived from now-deleted events.
-    // Leaving them would serve a profile after a full wipe ("deletable for real").
-    this.db.exec("DELETE FROM events; DELETE FROM view_topics; DELETE FROM view_profile; DELETE FROM view_scoped_profile;");
+    // Every derived table, including the full-text index — it stores the topic
+    // and claim text verbatim, so leaving it would keep "deleted" content
+    // readable in the database file (the residue guarantee in deletion.test.ts
+    // catches exactly this).
+    this.db.exec(
+      "DELETE FROM events; DELETE FROM view_topics; DELETE FROM view_profile;"
+      + " DELETE FROM view_scoped_profile; DELETE FROM view_search;",
+    );
+    this.reclaim();
+    // Only on the full wipe: rebuilds the file so even pages freed before
+    // secure_delete was enabled (an install that upgraded into it) are gone.
+    // Cheap here precisely because everything was just deleted.
+    this.db.exec("VACUUM");
+  }
+
+  /**
+   * Freed pages are zeroed by `secure_delete`, but in WAL mode the pre-delete
+   * copy lives on in `-wal` until a checkpoint. Truncating it is what makes
+   * "deleted" true on disk rather than only inside a transaction.
+   */
+  private reclaim(): void {
+    this.db.pragma("wal_checkpoint(TRUNCATE)");
   }
 
   close(): void {
