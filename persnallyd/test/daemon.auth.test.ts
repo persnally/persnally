@@ -105,7 +105,9 @@ describe("dashboard key and sessions", () => {
     const permissions = new URL("../src/permissions.js", import.meta.url).pathname;
     const out = execFileSync(process.execPath, [
       "-e",
-      `import(${JSON.stringify(permissions)}).then((m) => console.log(m.sessionValid(process.argv[1])))`,
+      // Written raw, not console.log'd: npm sets FORCE_COLOR for its scripts
+      // under a TTY, and the inspector wraps a bare boolean in ANSI codes.
+      `import(${JSON.stringify(permissions)}).then((m) => process.stdout.write(String(m.sessionValid(process.argv[1]))))`,
       id,
     ], { encoding: "utf-8", env: { ...process.env, PERSNALLY_DIR: dir } }).trim();
 

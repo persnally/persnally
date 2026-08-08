@@ -40,6 +40,11 @@ jobs:
 
       - name: Build (tsc strict) + test (incl. MCP protocol e2e)
         run: npm test
+        # npm sets this for its scripts under a TTY, so a maintainer running
+        # `npm publish` gets it and CI never did — a test asserting on a child's
+        # console.log output passed here and failed on the release machine.
+        env:
+          FORCE_COLOR: 1
 
       # Catches a moderate+ vulnerability landing via a *transitive* bump with
       # no diff to review — Dependency Review only sees deps a PR adds or
