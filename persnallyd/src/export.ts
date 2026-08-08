@@ -89,7 +89,12 @@ export function renderMarkdown(b: ExportBundle): string {
   return out.join("\n");
 }
 
-/** Table cells break on a bare pipe; newlines break the row. */
+/**
+ * Table cells break on a bare pipe; newlines break the row. Backslash goes
+ * first — escaping the pipe alone leaves `\|` as `\\|`, which Markdown reads as
+ * an escaped backslash followed by a live cell separator, so the value escapes
+ * its cell. Topic names are client-writable via persnally_track.
+ */
 function esc(s: string): string {
-  return s.replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ");
+  return s.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ");
 }
