@@ -2,20 +2,45 @@
 
 All notable changes to Persnally will be documented in this file.
 
-## [Unreleased]
+## [3.0.0] - 2026-08-08
 
-The daemon now authenticates every request. Loopback binding was never a credential — the port is reachable by every process and every user on the machine — so the routes that weren't token-checked were readable and writable by anything running locally, including the raw event log and the "delete everything" endpoint.
+The daemon now authenticates every request, custody promises are enforced rather than asserted, and imports read several times more of your history than they did.
 
 ### Security
-- **Every route requires a credential.** Only `/topics`, `/profile`, `/search`, `/ask`, and `POST /events` were checked before. Now `GET /events`, `/voice`, `/activity`, `/questions`, `/scopes`, `/stats`, `/engine`, `POST /synthesize`, `/consolidate`, `/engine/key`, `/feedback`, and every `DELETE` demand one too. `/health` stays open — it carries no store data and the daemon's own startup probe needs it.
-- **The dashboard authenticates with a session, not the open port.** `persnally dashboard` prints a link carrying a key from your mode-0600 config; the daemon exchanges it for an `HttpOnly; SameSite=Strict` session cookie and redirects, so the key never lingers in the address bar, browser history, or a `Referer` header. Bare `http://127.0.0.1:4983` now shows a locked page telling you which command to run. Sessions last 12h and die the moment the key rotates — `persnally dashboard --rotate` signs out every open browser, from any process.
-- **Client tokens reach only the client surface.** A connected AI can read context and record events, but can no longer read the raw event log via `GET /events`, widen its own grant via `/scopes`, or spend your inference budget on `/synthesize` — closing a scope bypass where a category-limited client could read everything through the log.
-- **A client's scope comes from its verified token, never a self-reported `?client=`.**
+
+Loopback binding was never a credential — the port is reachable by every process and every user on the machine.
+
+- **Every route requires a credential.** Only `/topics`, `/profile`, `/search`, `/ask`, and `POST /events` were checked before. Now `GET /events`, `/voice`, `/activity`, `/questions`, `/scopes`, `/stats`, `/engine`, `POST /synthesize`, `/consolidate`, `/engine/key`, `/feedback`, and every `DELETE` demand one too. `/health` stays open — it carries no store data and the startup probe needs it.
+- **The dashboard authenticates with a session, not the open port.** `persnally dashboard` prints a link carrying a key from your mode-0600 config; the daemon exchanges it for an `HttpOnly; SameSite=Strict` cookie and redirects, so the key never lingers in the address bar, history, or a `Referer`.
+- **A client token may only write events attributed to itself.** Writes claiming `cli` or `dashboard` provenance — the shape `persnally correct` produces — were accepted from any connected client. Since corrections are authoritative and outrank everything the engine inferred, one prompt-injected client could permanently rewrite what every other AI believed about you, rendered as your own words.
+- **Revoked means revoked.** A revoked client could still read your full style pack (the most prescriptive layer), event counts, and the names of every other connected client — and could permanently tombstone voice patterns. All closed. A *scoped* client still gets style by design (it's how you write, not what about), and the dashboard now says so instead of implying otherwise.
+- **Wiping everything is the owner's action alone.** Connect is default-open, so every freshly connected AI held the power to destroy your accumulated model irreversibly. `clear_all` is gone from the MCP surface entirely; clients keep per-topic and per-style forget.
+- **Deleted data leaves no residue.** Without `secure_delete`, freed pages kept their bytes and `strings persnally.db` still found a topic you had forgotten. Now `secure_delete` + a WAL-truncating checkpoint + `VACUUM` on the full wipe. The provenance walk was also one hop and order-dependent, so a claim derived from a derived claim outlived its source; it now walks the whole chain.
+- **The store, logs, and client tokens are owner-only.** The event store, its WAL, `daemon.log`, `telemetry.jsonl`, and the client configs carrying bearer tokens were all written world-readable (0644). Now 0700/0600, tightened on existing installs too.
+- **The dashboard never shows a fabricated portrait.** With the daemon down it rendered sample data — a complete portrait of a person who doesn't exist — distinguished only by a grey dot. Sample data is now opt-in (`?demo=1`, used by the marketing preview alone); a real user gets told the daemon isn't running. Hallucinated evidence IDs are also pruned before a profile is stored, so a fabricated citation can no longer render as "evidence not found (deleted?)".
+
+### Added
+
+- **`persnally export [--md] [--out <file>]`** — take everything with you. The complete bundle (events, profile, interests, voice, corrections) as re-importable JSON, or a readable portrait. Ownership without portability was a claim; this makes it demonstrable.
+- **`persnally import <source> <path> --reextract`** — re-run extraction over history already on file, replacing rather than doubling. Imports are stamped with an extractor version, and `persnally status` tells you when stored imports predate the current one. Without this, every extraction improvement would only ever apply to new conversations.
+- **Conventions and workflow from your shell commands.** Which package manager, which test runner, rebase or merge, PRs from the CLI — mined deterministically from Claude Code sessions at zero token cost. The `convention` and `workflow` dimensions existed in the schema and were rendered by the dashboard, but nothing produced either.
+- **Demonstrated skills.** `signal.skill` had a producer and no reader anywhere; it now reaches the profile, `persnally_context`, and a new `GET /skills`.
+- **Full-text search.** Retrieval is backed by SQLite's FTS5: stemming ("tests" finds "testing"), prefixes ("postgres" finds "PostgreSQL"), and bm25 ranking so a distinctive term outranks a common one. Previously literal substring matching, which also matched "rust" inside "trusted".
 
 ### Changed
-- **Breaking:** clients that were never issued a token no longer get default-open access. If a client 401s, run `persnally connect <client>` and restart it — the error message says so.
-- An expired dashboard session shows "your session expired" instead of silently falling back to preview data — sample data must never be mistaken for your own.
-- New `persnallyd dashboard [--rotate]` and `persnallyd activity --json` (a machine-readable retention snapshot that reads the store directly, so collecting it needs no daemon credential).
+
+- **Breaking: Node 20 is no longer supported** (`engines.node: >=22`). Node 20 is end-of-life and `better-sqlite3` 13.x requires >=22.
+- **Breaking: clients never issued a token no longer get default-open access.** If a client 401s, run `persnally connect <client>` and restart it — the error says so.
+- **Imports read far more of your history.** Extraction now sees the assistant's replies, not just your prompts — so what was *answered* and *decided* is visible, where before only the questions were. ChatGPT Custom Instructions (which you wrote about yourself) are parsed instead of dropped, Claude memory is re-read when it grows rather than captured once, and the git importer mines commit subjects and touched files instead of only dates — one repo now yields the areas you work in and the languages you write, not just its folder name.
+- **Decay is per-category.** One 7-day half-life treated a career and a debugging session identically, collapsing a multi-year import into "whatever happened last week". Now career/health/finance 120d, business/creative/education/science/lifestyle 60d, technology 30d, news 7d — tunable via `decay_half_life_days` in config. Recency still ranks first; old signals are no longer erased. **Expect ranking to shift** on stores with deep history.
+- **Dashboard sessions survive daemon restarts** and last 30 days with sliding renewal, instead of dying with the process and expiring hard at 12h. `persnally dashboard --rotate` still invalidates every session instantly. You'll re-authenticate once on upgrade.
+
+### Fixed
+
+- **A key-free setup no longer reports success over history it skipped.** With no API key, setup silently passed over your Claude/ChatGPT exports and printed "Done"; configuring an engine afterwards never went back for them. Setup now offers the local-model download in the terminal, names every skipped source, and the dashboard imports before synthesizing.
+- **The nightly refresh stopped destroying export-derived voice.** It cleared all stylometry but could only re-derive from Claude Code transcripts, so voice fingerprinted from exports was permanently lost on the first nightly pass.
+- **Resumed Claude Code sessions are picked up.** `claude --continue` appends to the same file, so once a session was imported every later message in it was invisible forever.
+- `persnally --version` prints the version and exits 0 instead of dumping usage and exiting 1; one spelling of the binary name across every command you're told to type; live progress during long imports; `persnally ask` prints a dashboard link that actually opens; auto-open works on Linux and Windows, not just macOS.
 
 ## [2.10.0] - 2026-07-19
 
