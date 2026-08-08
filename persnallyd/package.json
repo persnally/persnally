@@ -11,6 +11,7 @@
   },
   "files": [
     "build/src",
+    "CHANGELOG.md",
     "LICENSE",
     "README.md"
   ],
@@ -19,7 +20,7 @@
     "lint": "eslint .",
     "test": "npm run build && node --test build/test/*.test.js && node test-mcp-e2e.mjs",
     "serve": "npm run build && node build/src/cli.js serve",
-    "prepublishOnly": "node -e \"const fs=require('fs');fs.copyFileSync('../README.md','README.md');fs.copyFileSync('../LICENSE','LICENSE')\" && npm test"
+    "prepublishOnly": "node -e \"const fs=require('fs');fs.copyFileSync('../README.md','README.md');fs.copyFileSync('../LICENSE','LICENSE');fs.copyFileSync('../CHANGELOG.md','CHANGELOG.md')\" && npm test"
   },
   "engines": {
     "node": ">=22"

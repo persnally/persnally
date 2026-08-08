@@ -133,6 +133,7 @@ web/.env.local
 .ruff_cache/
 persnallyd/README.md
 persnallyd/LICENSE
+persnallyd/CHANGELOG.md
 .gstack/
 
 # Internal strategy docs — kept local, never published
