@@ -1,15 +1,19 @@
 name: Deploy web
 
-# Production deploys of the marketing site, owned by this workflow rather than
-# by Vercel's Git integration. The integration promotes whichever branch Vercel
-# calls "production" — that was `main`, which trails `dev` (our trunk) by weeks,
-# so the live site served a Next version with known vulnerabilities and a
-# custody claim we had already corrected on `dev`.
+# The only path production deploys take. Vercel's GitHub App is not installed
+# on the account — its API refuses a link with "you need to install the GitHub
+# integration first" — so no push has auto-deployed since the repo moved orgs,
+# and the site silently served a months-old build.
 #
-# Vercel's integration is still what builds PR previews. This workflow only
-# takes over *production*, so set Production Branch to `dev` in the Vercel
-# dashboard (or disable auto-promotion) — otherwise a push to `main` and a push
-# to `dev` both promote, and the last one to finish wins.
+# Even with the App installed, Vercel's cloud builder would still fail: it runs
+# CLI 58.1.0, which cannot handle Next 16.3.0's Turbopack output and dies in
+# onBuildComplete on a missing `.next/next-server.js.nft.json` — after the Next
+# build itself reports success. Building here with a pinned CLI and shipping the
+# artifact (`--prebuilt`) is what makes deploys work at all, not a convenience.
+#
+# `--prod` targets production regardless of branch, so Vercel's Production
+# Branch setting is irrelevant to this workflow. `dev` is our trunk and is what
+# ships.
 on:
   push:
     branches: [dev]
@@ -76,12 +80,21 @@ jobs:
         id: target
         run: |
           if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.target }}" = "production" ]; then
+            # Production ships trunk and nothing else. A manual dispatch from
+            # some other branch would otherwise put unreviewed work on the
+            # public domain — which is exactly how a stale build reached
+            # production once already.
+            if [ "${{ github.ref }}" != "refs/heads/dev" ]; then
+              echo "::error::Production deploys only from dev; this ran on ${{ github.ref }}. Use target=preview."
+              exit 1
+            fi
             echo "env=production" >> "$GITHUB_OUTPUT"
             echo "flag=--prod" >> "$GITHUB_OUTPUT"
           else
             echo "env=preview" >> "$GITHUB_OUTPUT"
             echo "flag=" >> "$GITHUB_OUTPUT"
           fi
+          echo "Deploying ${{ github.sha }} from ${{ github.ref }}"
 
       - name: Pull project settings
         run: npx vercel pull --yes --environment=${{ steps.target.outputs.env }} --token="$VERCEL_TOKEN"
@@ -117,19 +130,43 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      # A deploy that returns 200 on the deployment URL but not on the domain
-      # has failed in the only way that matters to a visitor.
-      - name: Verify the deployment answers
+      # Two failures to catch. A deploy can report success while the domain is
+      # down, and — the one that actually bit us — the domain can happily serve
+      # a completely different build than the one just shipped. Next's chunk
+      # filenames are content-hashed, so comparing the set of them proves the
+      # bytes on persnally.com are the bytes this run produced.
+      - name: Verify the domain serves this build
         run: |
-          url="${{ steps.deploy.outputs.url }}"
-          [ "${{ steps.target.outputs.env }}" = "production" ] && url="https://persnally.com"
-          for i in 1 2 3 4 5; do
-            code=$(curl -sS -o /dev/null -w '%{http_code}' -L --max-time 30 "$url" || echo 000)
-            [ "$code" = "200" ] && echo "$url → 200" && exit 0
-            echo "attempt $i: $url → $code"
-            sleep 10
+          set -o pipefail
+          deployment="${{ steps.deploy.outputs.url }}"
+          # Prints the hash of the chunk set, or nothing if the page had none —
+          # an empty match must not compare equal to an empty match and pass.
+          fingerprint() {
+            local chunks
+            chunks=$(curl -sS -L --max-time 30 "$1" | grep -oE '/_next/static/[^"]+\.js' | sort -u)
+            [ -n "$chunks" ] || return 1
+            printf '%s' "$chunks" | sha256sum | cut -c1-16
+          }
+
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -L --max-time 30 "$deployment" || echo 000)
+            [ "$code" = "200" ] && break
+            echo "attempt $i: deployment → $code"; sleep 10
           done
-          echo "::error::$url never returned 200 after the deploy"
+          [ "$code" = "200" ] || { echo "::error::deployment never returned 200"; exit 1; }
+
+          if [ "${{ steps.target.outputs.env }}" != "production" ]; then
+            echo "preview live: $deployment"; exit 0
+          fi
+
+          want=$(fingerprint "$deployment") || {
+            echo "::error::the deployment served no /_next/static chunks — nothing to compare"; exit 1; }
+          for i in 1 2 3 4 5 6; do
+            got=$(fingerprint "https://persnally.com/?deploy-check=${{ github.run_id }}-$i" || echo none)
+            [ "$got" = "$want" ] && echo "persnally.com serves this build ($want)" && exit 0
+            echo "attempt $i: domain=$got want=$want"; sleep 15
+          done
+          echo "::error::persnally.com is not serving this build (deployment=$want domain=$got)"
           exit 1
 
       - name: Summary
