@@ -135,50 +135,51 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      # Two failures to catch. A deploy can report success while the domain is
-      # down, and — the one that actually bit us — the domain can happily serve
-      # a completely different build than the one just shipped. Next's chunk
-      # filenames are content-hashed, so comparing the set of them proves the
-      # bytes on persnally.com are the bytes this run produced.
+      # A deploy reports success as soon as the upload lands, which says nothing
+      # about what visitors get: the domain kept serving a months-old build
+      # through several "successful" deploys.
+      #
+      # The check compares the domain against this run's own build output. Not
+      # against the deployment URL — Deployment Protection answers that with a
+      # Vercel login page, and that page carries Next chunks of its own, so
+      # comparing the two fingerprints compared the site to a login screen.
+      #
+      # Next's chunk filenames are content-hashed and reproducible: an
+      # independent rebuild of the same commit produced all 9 of the names the
+      # live site was serving, so "every chunk the domain references exists in
+      # what we just built" is a real identity check, not a liveness one.
       - name: Verify the domain serves this build
         run: |
           set -o pipefail
-          deployment="${{ steps.deploy.outputs.url }}"
-          # Prints the hash of the chunk set, or nothing if the page had none —
-          # an empty match must not compare equal to an empty match and pass.
-          fingerprint() {
-            local chunks
-            chunks=$(curl -sS -L --max-time 30 "$1" | grep -oE '/_next/static/[^"]+\.js' | sort -u)
-            [ -n "$chunks" ] || return 1
-            printf '%s' "$chunks" | sha256sum | cut -c1-16
-          }
-
-          for i in 1 2 3 4 5 6; do
-            code=$(curl -sS -o /dev/null -w '%{http_code}' -L --max-time 30 "$deployment" || echo 000)
-            [ "$code" = "200" ] && break
-            echo "attempt $i: deployment → $code"; sleep 10
-          done
-          [ "$code" = "200" ] || { echo "::error::deployment never returned 200"; exit 1; }
 
           if [ "${{ steps.target.outputs.env }}" != "production" ]; then
-            echo "preview live: $deployment"; exit 0
+            echo "preview: ${{ steps.deploy.outputs.url }}"
+            exit 0
           fi
 
-          # If Deployment Protection makes the deployment URL non-public there is
-          # nothing to compare against. Say so loudly and fall back to liveness
-          # rather than either failing a good deploy or pretending it was checked.
-          if ! want=$(fingerprint "$deployment"); then
-            echo "::warning::deployment URL served no chunks (likely Deployment Protection) — verifying liveness only, NOT that the domain serves this build"
-            code=$(curl -sS -o /dev/null -w '%{http_code}' -L --max-time 30 "https://persnally.com" || echo 000)
-            [ "$code" = "200" ] || { echo "::error::persnally.com → $code"; exit 1; }
-            echo "persnally.com → 200 (build identity unverified)"; exit 0
-          fi
-          for i in 1 2 3 4 5 6; do
-            got=$(fingerprint "https://persnally.com/?deploy-check=${{ github.run_id }}-$i" || echo none)
-            [ "$got" = "$want" ] && echo "persnally.com serves this build ($want)" && exit 0
-            echo "attempt $i: domain=$got want=$want"; sleep 15
+          built=$(find .vercel/output/static/_next/static/chunks -name '*.js' -exec basename {} \; 2>/dev/null | sort)
+          [ -n "$built" ] || { echo "::error::no chunks in the build output — nothing to verify against"; exit 1; }
+          echo "built $(printf '%s\n' "$built" | wc -l) chunks"
+
+          # The alias can take a couple of minutes to propagate; a 90s window
+          # failed a deploy that had in fact landed correctly.
+          for i in $(seq 1 10); do
+            served=$(curl -sS -L --max-time 30 "https://persnally.com/?deploy-check=${{ github.run_id }}-$i" \
+              | grep -oE '/_next/static/chunks/[^"]+\.js' | xargs -r -n1 basename | sort -u) || served=""
+            if [ -n "$served" ]; then
+              missing=$(comm -23 <(printf '%s\n' "$served") <(printf '%s\n' "$built"))
+              if [ -z "$missing" ]; then
+                echo "persnally.com serves this build ($(printf '%s\n' "$served" | wc -l) chunks matched)"
+                exit 0
+              fi
+              echo "attempt $i: $(printf '%s\n' "$missing" | wc -l) chunk(s) not from this build"
+            else
+              echo "attempt $i: domain served no chunks"
+            fi
+            sleep 20
           done
-          echo "::error::persnally.com is not serving this build (deployment=$want domain=$got)"
+          echo "::error::persnally.com is not serving this build. Unmatched chunks:"
+          printf '%s\n' "$missing" | head -5
           exit 1
 
       - name: Summary
