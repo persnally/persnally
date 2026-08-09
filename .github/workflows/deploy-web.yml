@@ -1,0 +1,191 @@
+name: Deploy web
+
+# The only path production deploys take. Vercel's GitHub App is not installed
+# on the account — its API refuses a link with "you need to install the GitHub
+# integration first" — so no push has auto-deployed since the repo moved orgs,
+# and the site silently served a months-old build.
+#
+# Even with the App installed, Vercel's cloud builder would still fail: it runs
+# CLI 58.1.0, which cannot handle Next 16.3.0's Turbopack output and dies in
+# onBuildComplete on a missing `.next/next-server.js.nft.json` — after the Next
+# build itself reports success. Building here with a pinned CLI and shipping the
+# artifact (`--prebuilt`) is what makes deploys work at all, not a convenience.
+#
+# `--prod` targets production regardless of branch, so Vercel's Production
+# Branch setting is irrelevant to this workflow. `dev` is our trunk and is what
+# ships.
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "web/**"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Where to deploy"
+        type: choice
+        options: [preview, production]
+        default: preview
+
+# Never cancel a running deploy: a half-promoted production alias is worse than
+# a queued one.
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+# Every step runs from the repo root on purpose. The Vercel project already
+# sets rootDirectory=web, and the CLI applies that relative to the working
+# directory — running from inside web/ makes it resolve web/web.
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail early if the deploy credentials are missing
+        env:
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          ORG: ${{ secrets.VERCEL_ORG_ID }}
+          PROJECT: ${{ secrets.VERCEL_PROJECT_ID }}
+        # Without this the Vercel CLI fails several minutes in, after a full
+        # build, with an error that reads like a build fault rather than a
+        # missing secret.
+        run: |
+          missing=
+          [ -n "$TOKEN" ]   || missing="$missing VERCEL_TOKEN"
+          [ -n "$ORG" ]     || missing="$missing VERCEL_ORG_ID"
+          [ -n "$PROJECT" ] || missing="$missing VERCEL_PROJECT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing — add them under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # Pinned, and installed outside the checkout so it cannot alter the tree
+      # being deployed. 58.9.0 specifically: Vercel's own cloud builder runs
+      # 58.1.0, which fails on Next 16.3.0's Turbopack output.
+      - name: Install Vercel CLI
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/vercel-cli" vercel@58.9.0
+          echo "$RUNNER_TEMP/vercel-cli/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Confirm the pinned CLI is what runs
+        run: vercel --version
+
+      - name: Resolve target
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.target }}" = "production" ]; then
+            # Production ships trunk and nothing else. A manual dispatch from
+            # some other branch would otherwise put unreviewed work on the
+            # public domain — which is exactly how a stale build reached
+            # production once already.
+            if [ "${{ github.ref }}" != "refs/heads/dev" ]; then
+              echo "::error::Production deploys only from dev; this ran on ${{ github.ref }}. Use target=preview."
+              exit 1
+            fi
+            echo "env=production" >> "$GITHUB_OUTPUT"
+            echo "flag=--prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=preview" >> "$GITHUB_OUTPUT"
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Deploying ${{ github.sha }} from ${{ github.ref }}"
+
+      - name: Pull project settings
+        run: vercel pull --yes --environment=${{ steps.target.outputs.env }} --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Build here, deploy the artifact: the deployed bytes are the ones this
+      # run produced, not something rebuilt later on Vercel's side.
+      - name: Build
+        run: vercel build ${{ steps.target.outputs.flag }} --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy
+        id: deploy
+        run: |
+          # Actions' default shell is `bash -e` without pipefail, so a failing
+          # vercel would otherwise be masked by tail's exit code.
+          set -o pipefail
+          # The CLI writes progress to stdout too; the deployment URL is the last line.
+          url=$(vercel deploy --prebuilt ${{ steps.target.outputs.flag }} --token="$VERCEL_TOKEN" | tail -1)
+          case "$url" in
+            https://*) ;;
+            *) echo "::error::Vercel did not return a deployment URL (got: $url)"; exit 1 ;;
+          esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Two failures to catch. A deploy can report success while the domain is
+      # down, and — the one that actually bit us — the domain can happily serve
+      # a completely different build than the one just shipped. Next's chunk
+      # filenames are content-hashed, so comparing the set of them proves the
+      # bytes on persnally.com are the bytes this run produced.
+      - name: Verify the domain serves this build
+        run: |
+          set -o pipefail
+          deployment="${{ steps.deploy.outputs.url }}"
+          # Prints the hash of the chunk set, or nothing if the page had none —
+          # an empty match must not compare equal to an empty match and pass.
+          fingerprint() {
+            local chunks
+            chunks=$(curl -sS -L --max-time 30 "$1" | grep -oE '/_next/static/[^"]+\.js' | sort -u)
+            [ -n "$chunks" ] || return 1
+            printf '%s' "$chunks" | sha256sum | cut -c1-16
+          }
+
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -L --max-time 30 "$deployment" || echo 000)
+            [ "$code" = "200" ] && break
+            echo "attempt $i: deployment → $code"; sleep 10
+          done
+          [ "$code" = "200" ] || { echo "::error::deployment never returned 200"; exit 1; }
+
+          if [ "${{ steps.target.outputs.env }}" != "production" ]; then
+            echo "preview live: $deployment"; exit 0
+          fi
+
+          # If Deployment Protection makes the deployment URL non-public there is
+          # nothing to compare against. Say so loudly and fall back to liveness
+          # rather than either failing a good deploy or pretending it was checked.
+          if ! want=$(fingerprint "$deployment"); then
+            echo "::warning::deployment URL served no chunks (likely Deployment Protection) — verifying liveness only, NOT that the domain serves this build"
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -L --max-time 30 "https://persnally.com" || echo 000)
+            [ "$code" = "200" ] || { echo "::error::persnally.com → $code"; exit 1; }
+            echo "persnally.com → 200 (build identity unverified)"; exit 0
+          fi
+          for i in 1 2 3 4 5 6; do
+            got=$(fingerprint "https://persnally.com/?deploy-check=${{ github.run_id }}-$i" || echo none)
+            [ "$got" = "$want" ] && echo "persnally.com serves this build ($want)" && exit 0
+            echo "attempt $i: domain=$got want=$want"; sleep 15
+          done
+          echo "::error::persnally.com is not serving this build (deployment=$want domain=$got)"
+          exit 1
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deployed ${{ steps.target.outputs.env }}"
+            echo ""
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Deployment: ${{ steps.deploy.outputs.url }}"
+          } >> "$GITHUB_STEP_SUMMARY"
