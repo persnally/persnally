@@ -161,9 +161,12 @@ jobs:
           [ -n "$built" ] || { echo "::error::no chunks in the build output — nothing to verify against"; exit 1; }
           echo "built $(printf '%s\n' "$built" | wc -l) chunks"
 
-          # The alias can take a couple of minutes to propagate; a 90s window
-          # failed a deploy that had in fact landed correctly.
-          for i in $(seq 1 10); do
+          # Vercel serves ISR responses stale-while-revalidate with
+          # x-nextjs-stale-time: 300, and it normalises query strings, so a
+          # cache-buster does not skip the wait — the check sees exactly what a
+          # visitor sees. The budget must therefore exceed that 300s window; a
+          # 90s one already failed a deploy that had landed correctly.
+          for i in $(seq 1 16); do
             served=$(curl -sS -L --max-time 30 "https://persnally.com/?deploy-check=${{ github.run_id }}-$i" \
               | grep -oE '/_next/static/chunks/[^"]+\.js' | xargs -r -n1 basename | sort -u) || served=""
             if [ -n "$served" ]; then
@@ -176,7 +179,7 @@ jobs:
             else
               echo "attempt $i: domain served no chunks"
             fi
-            sleep 20
+            sleep 30
           done
           echo "::error::persnally.com is not serving this build. Unmatched chunks:"
           printf '%s\n' "$missing" | head -5
