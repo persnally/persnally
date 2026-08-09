@@ -149,6 +149,7 @@ jobs:
       # live site was serving, so "every chunk the domain references exists in
       # what we just built" is a real identity check, not a liveness one.
       - name: Verify the domain serves this build
+        id: verify
         run: |
           set -o pipefail
 
@@ -185,11 +186,35 @@ jobs:
           printf '%s\n' "$missing" | head -5
           exit 1
 
+      # always(): this ran only on success before, which is when a summary is
+      # least needed. A failed deploy now says what shipped, what didn't, and
+      # where it stopped.
       - name: Summary
+        if: always()
         run: |
+          deployed="${{ steps.deploy.outcome }}"
+          verified="${{ steps.verify.outcome }}"
+          url="${{ steps.deploy.outputs.url }}"
+
+          if [ "$deployed" = "success" ] && [ "$verified" = "success" ]; then
+            title="✅ Live on persnally.com"
+          elif [ "$deployed" = "success" ]; then
+            title="⚠️ Uploaded, but the domain was not confirmed to serve it"
+          else
+            title="❌ Nothing was deployed"
+          fi
+
           {
-            echo "### Deployed ${{ steps.target.outputs.env }}"
+            echo "### $title"
             echo ""
-            echo "- Commit: \`${{ github.sha }}\`"
-            echo "- Deployment: ${{ steps.deploy.outputs.url }}"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Target | ${{ steps.target.outputs.env || 'unresolved' }} |"
+            echo "| Branch | \`${{ github.ref_name }}\` |"
+            echo "| Commit | [\`${GITHUB_SHA:0:8}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |"
+            echo "| Deployment | ${url:-—} |"
+            echo "| Domain serves this build | ${verified:-not reached} |"
+            [ "${{ steps.target.outputs.env }}" = "production" ] && echo "| Live | https://persnally.com |"
+            echo ""
+            [ "$deployed" = "success" ] || echo "The deploy did not complete — the site is unchanged and still serving the previous build."
           } >> "$GITHUB_STEP_SUMMARY"
