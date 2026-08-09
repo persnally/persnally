@@ -21,7 +21,7 @@ npm install -g persnally
 persnally setup
 ```
 
-One command builds your mirror: it finds Claude/ChatGPT exports in `~/Downloads`, reads your local Claude Code sessions and git repos, synthesizes an evidence-linked profile, connects your AI clients (Claude Desktop, Claude Code, Cursor), and opens the dashboard.
+One command builds your mirror: it finds Claude/ChatGPT exports in `~/Downloads`, reads your local Claude Code sessions and git repos, synthesizes an evidence-linked profile, connects your AI clients (Claude Code/Desktop, Cursor, Codex, Gemini CLI, Windsurf, Zed, VS Code), and opens the dashboard.
 
 For the richest result, export your data first ([claude.ai](https://claude.com) / [chatgpt.com](https://chatgpt.com) → Settings → Data export) and drop it in `~/Downloads` — then read a description of yourself that's sharper than your own bio, every sentence traceable to the conversations it came from.
 
@@ -59,7 +59,7 @@ persnallyd dashboard                  # see it, with evidence for every claim
 ## Make your AI tools use it
 
 ```bash
-persnallyd connect --all     # writes the MCP config for Claude Desktop, Claude Code, Cursor
+persnallyd connect --all     # writes the MCP config for every installed client
 ```
 
 Or add the MCP server to any client manually. It exposes six tools backed by the daemon:
@@ -78,6 +78,19 @@ Or add the MCP server to any client manually. It exposes six tools backed by the
 { "mcpServers": { "persnally": { "command": "persnally-mcp" } } }
 ```
 
+`connect` knows where each client keeps its config and what shape it expects — they agree on stdio and little else:
+
+| Client | Config |
+|---|---|
+| Claude Code · Claude Desktop · Cursor | `mcpServers` |
+| Codex CLI | `~/.codex/config.toml` — TOML, not JSON |
+| Gemini CLI | `~/.gemini/settings.json` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Zed | `~/.config/zed/settings.json` — `context_servers` |
+| VS Code | user `mcp.json` — `servers`, with `"type": "stdio"` |
+
+**ChatGPT is a special case.** Its connectors require a public HTTPS MCP endpoint — no localhost, no stdio — so a loopback daemon structurally cannot serve it. You can import your ChatGPT history today; live context arrives with the agent relay (Phase 4).
+
 ## Your data, your rules
 
 - **Local-first.** State lives in `~/.persnally`. Nothing leaves your machine except, at import/synthesis, the text you choose to send to your own LLM for extraction (bring your own key).
@@ -91,7 +104,7 @@ Or add the MCP server to any client manually. It exposes six tools backed by the
 persnally setup                          # one command: import, synthesize, connect
 persnallyd start | stop | status         # daemon lifecycle
 persnallyd autostart [--remove]          # run at login (macOS)
-persnallyd connect [client|--all]        # add to claude-code | claude-desktop | cursor
+persnallyd connect [client|--all]        # claude-code · claude-desktop · cursor · codex · gemini-cli · windsurf · zed · vscode
 persnallyd import claude|claude-code|chatgpt|git <path>
 persnallyd scope <client> <categories>   # limit what a client can read
 persnallyd profile                       # synthesize the profile
