@@ -82,9 +82,17 @@ Usage:
   persnally restart                Restart the daemon (correctly handles autostart/launchd)
   persnally serve [--port N]       Run the daemon in the foreground (127.0.0.1:${DEFAULT_PORT})
   persnally autostart [--remove]   Start the daemon at login and keep it alive (macOS launchd · Linux systemd)
-  persnally config set-key <key>   Store the Anthropic API key (owner-only file) for the daemon
+  persnally config set-key [key]   Store the Anthropic API key (owner-only file); omit the key to read it
+                                   from stdin, keeping it out of argv and shell history
   persnally config                 Show config (key masked)
 `;
+
+/** Reads piped input whole. Used so a secret need never appear in argv. */
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const c of process.stdin) chunks.push(c as Buffer);
+  return Buffer.concat(chunks).toString("utf-8").trim();
+}
 
 function parsePort(args: string[]): number {
   const i = args.indexOf("--port");
@@ -324,8 +332,17 @@ async function main(): Promise<void> {
     }
     case "config": {
       if (args[0] === "set-key") {
-        if (!args[1]?.startsWith("sk-ant-")) return die("expected an Anthropic key (sk-ant-...)");
-        saveConfig({ anthropic_api_key: args[1] });
+        // A key passed as an argument is visible in `ps` and lands in shell
+        // history — worse when an agent composes the command, since it then
+        // also lands in a transcript. Reading stdin gives callers a way to
+        // supply it that leaves no such trace.
+        const key = args[1] ?? (process.stdin.isTTY ? "" : await readStdin());
+        if (!key.startsWith("sk-ant-")) {
+          return die("expected an Anthropic key (sk-ant-...)\n"
+            + "  Avoid putting it in the command line — pipe it instead:\n"
+            + `    printf '%s' "$ANTHROPIC_API_KEY" | ${BIN} config set-key`);
+        }
+        saveConfig({ anthropic_api_key: key });
         console.log(`Key saved to ${configPath()} (mode 600). Restart the daemon to apply: persnally stop`);
         return;
       }

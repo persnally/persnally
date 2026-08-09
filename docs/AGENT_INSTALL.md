@@ -36,12 +36,15 @@ setup once with that decision. Do not run setup here.
 Pick the first row that applies, and **do not ask the user to choose unless none
 apply**:
 
-| Situation | Do this | Flag for step 3 |
+| Situation | Do this | `ENGINE` |
 |---|---|---|
-| `ANTHROPIC_API_KEY` already in the environment | nothing — setup uses it. Do **not** run `config set-key`. | `--engine anthropic` |
-| The user supplies a key now | `persnally config set-key <their actual key>` | `--engine anthropic` |
-| Ollama is running (probe below) | nothing | `--engine ollama` |
-| None of the above | nothing | `--engine none` |
+| `ANTHROPIC_API_KEY` already in the environment | nothing — setup uses it. Do **not** run `config set-key`. | `anthropic` |
+| The user supplies a key now | pipe it in — see below | `anthropic` |
+| Ollama is running (probe below) | nothing | `ollama` |
+| None of the above | nothing | `none` |
+
+`ENGINE` is a bare value. Step 3 supplies the `--engine` itself, and passing the
+flag twice is rejected.
 
 Probe Ollama with a bounded request that fails on a non-2xx response — an
 unrelated service on that port, or a stalled one, must not hang an unattended
@@ -54,10 +57,17 @@ curl --fail --silent --show-error --max-time 2 http://127.0.0.1:11434/api/tags
 Treat it as available only if that exits 0 **and** the body is Ollama JSON
 containing a `models` array.
 
-Never run `config set-key` with a placeholder. `sk-ant-…` passes the CLI's
-prefix check and would store an invalid key that fails later at import, far from
-the cause. Only ever pass a key the user actually gave you, and never echo it
-back or write it anywhere other than through `config set-key`.
+**If the user supplies a key, never put it in the command line.** Arguments are
+visible in `ps` and land in shell history — and in your own transcript, since
+you would be the one writing the command. Pipe it instead:
+
+```bash
+printf '%s' "$THEIR_KEY" | persnally config set-key
+```
+
+Better still, let the user run that themselves. Never run `config set-key` with
+a placeholder: `sk-ant-…` passes the CLI's prefix check and would store an
+invalid key that fails much later at import, far from the cause.
 
 `--engine` is honoured strictly and never falls back. `--engine ollama` will not
 quietly use an Anthropic key that happens to be set, and `--engine anthropic`
@@ -67,7 +77,7 @@ engine than the one requested.
 ## 3. Run setup — once
 
 ```bash
-persnally setup --yes --engine <the flag from step 2>
+persnally setup --yes --engine ENGINE     # ENGINE from step 2: anthropic | ollama | none
 ```
 
 This starts the daemon, imports what it finds (Claude/ChatGPT exports in
