@@ -42,9 +42,15 @@ Dimensions:
 - sentence stats: median length, question rate, directive-opener rate, hedging rate
 - format/tone: emoji rate, exclamation rate, ALL-CAPS emphasis, "i" lowercasing, bullets vs prose, type/token vocabulary richness
 
-Emits `signal.style` events (basis `stylometry`). This is the richest-per-cost signal available and the most on-thesis (nothing leaves the machine). **Prototype: `experiments/voice_fingerprint.mjs`.**
+Emits `signal.style` events (basis `stylometry`). This is the richest-per-cost signal available and the most on-thesis (nothing leaves the machine).
 
-> **Corpus hygiene (required, proven by the prototype).** Raw human prompts are polluted by pasted data — file paths, URLs, JSON/logs, and injected blocks (`<task-notification>`, command palettes, tool output). Unfiltered, that noise *swamps* the voice signal (the prototype's first run surfaced "tmp claude 501 users" and "task notification task id" as top "phrases"). A `prose()` filter — strip injected blocks + fenced code, drop lines that are path/URL/data-shaped or lack a function word — fixed it (real tics like "be 100% sure", "industry best practices" surfaced). **This filter belongs in the importer, not just stylometry:** the same garbage currently degrades `signal.topic` extraction and the LLM profile. Fixing import hygiene lifts the whole pipeline.
+**Shipped** in `persnallyd/src/stylometry.ts` (voice/format/tone) and `persnallyd/src/workflow.ts` (convention/workflow, mined from shell commands). `experiments/voice_fingerprint.mjs` remains the exploratory tool — it prints the raw ranked n-grams the shipped extractor turns into signals, which is what makes corpus problems visible.
+
+> **Corpus hygiene (required, and harder than it looks).** Raw human prompts are polluted by pasted data — file paths, URLs, JSON/logs, and injected blocks (`<task-notification>`, command palettes, tool output). Unfiltered, that noise *swamps* the voice signal: the prototype's first run surfaced "tmp claude 501 users" and "task notification task id" as top "phrases". A `prose()` filter — strip injected blocks + fenced code, drop lines that are path/URL/data-shaped or lack a function word — recovered real tics like "be 100% sure".
+>
+> **That filter was still wrong, quietly.** It matched an injected block with a non-greedy run to *any* closing tag, so `<task-notification>` ended at the first nested `</task-id>` and the rest of the block survived as "prose". The top three tics on a 2026-08 run were Claude Code's own rate-limit text ("hit your session limit", 244×). The tag must be back-referenced (`<\/\1>`) and the strip repeated until stable. Removing it dropped 141 of 1,216 prompts and the ranking became genuine voice.
+>
+> **The importer still lacks this.** `importers/claude-code.ts` strips `<system-reminder>` and drops `<command-*>`-prefixed turns, but passes `<task-notification>` blocks through into `userMessages` — so `signal.topic` extraction and the LLM profile still see that garbage. The shipped style output is clean today because the LLM extractor tolerates it, not because the corpus is. Fixing import hygiene lifts the whole pipeline.
 
 **2. Zero-cost live capture via MCP.** Extend `persnally_track` with an optional `style[]` array so the connected AI — already reading the conversation — emits the voice/convention/emphasis signals it observes. No extra inference (the "Claude is the NLP engine" trick, past topics). The model is told: only emit a style signal on a *clear, repeated* tell, not every message (anti-spam at the source).
 
