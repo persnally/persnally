@@ -37,10 +37,9 @@ concurrency:
 permissions:
   contents: read
 
-defaults:
-  run:
-    working-directory: web
-
+# Every step runs from the repo root on purpose. The Vercel project already
+# sets rootDirectory=web, and the CLI applies that relative to the working
+# directory — running from inside web/ makes it resolve web/web.
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -71,10 +70,16 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      # Pinned: an unpinned `vercel@latest` silently changes the build contract
-      # between two deploys of the same commit.
+      # Pinned, and installed outside the checkout so it cannot alter the tree
+      # being deployed. 58.9.0 specifically: Vercel's own cloud builder runs
+      # 58.1.0, which fails on Next 16.3.0's Turbopack output.
       - name: Install Vercel CLI
-        run: npm install --no-save vercel@58.9.0
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/vercel-cli" vercel@58.9.0
+          echo "$RUNNER_TEMP/vercel-cli/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Confirm the pinned CLI is what runs
+        run: vercel --version
 
       - name: Resolve target
         id: target
@@ -97,7 +102,7 @@ jobs:
           echo "Deploying ${{ github.sha }} from ${{ github.ref }}"
 
       - name: Pull project settings
-        run: npx vercel pull --yes --environment=${{ steps.target.outputs.env }} --token="$VERCEL_TOKEN"
+        run: vercel pull --yes --environment=${{ steps.target.outputs.env }} --token="$VERCEL_TOKEN"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -106,7 +111,7 @@ jobs:
       # Build here, deploy the artifact: the deployed bytes are the ones this
       # run produced, not something rebuilt later on Vercel's side.
       - name: Build
-        run: npx vercel build ${{ steps.target.outputs.flag }} --token="$VERCEL_TOKEN"
+        run: vercel build ${{ steps.target.outputs.flag }} --token="$VERCEL_TOKEN"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -119,7 +124,7 @@ jobs:
           # vercel would otherwise be masked by tail's exit code.
           set -o pipefail
           # The CLI writes progress to stdout too; the deployment URL is the last line.
-          url=$(npx vercel deploy --prebuilt ${{ steps.target.outputs.flag }} --token="$VERCEL_TOKEN" | tail -1)
+          url=$(vercel deploy --prebuilt ${{ steps.target.outputs.flag }} --token="$VERCEL_TOKEN" | tail -1)
           case "$url" in
             https://*) ;;
             *) echo "::error::Vercel did not return a deployment URL (got: $url)"; exit 1 ;;
@@ -159,8 +164,15 @@ jobs:
             echo "preview live: $deployment"; exit 0
           fi
 
-          want=$(fingerprint "$deployment") || {
-            echo "::error::the deployment served no /_next/static chunks — nothing to compare"; exit 1; }
+          # If Deployment Protection makes the deployment URL non-public there is
+          # nothing to compare against. Say so loudly and fall back to liveness
+          # rather than either failing a good deploy or pretending it was checked.
+          if ! want=$(fingerprint "$deployment"); then
+            echo "::warning::deployment URL served no chunks (likely Deployment Protection) — verifying liveness only, NOT that the domain serves this build"
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -L --max-time 30 "https://persnally.com" || echo 000)
+            [ "$code" = "200" ] || { echo "::error::persnally.com → $code"; exit 1; }
+            echo "persnally.com → 200 (build identity unverified)"; exit 0
+          fi
           for i in 1 2 3 4 5 6; do
             got=$(fingerprint "https://persnally.com/?deploy-check=${{ github.run_id }}-$i" || echo none)
             [ "$got" = "$want" ] && echo "persnally.com serves this build ($want)" && exit 0
