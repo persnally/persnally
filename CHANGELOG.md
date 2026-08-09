@@ -2,6 +2,27 @@
 
 All notable changes to Persnally will be documented in this file.
 
+## [3.1.0] - 2026-08-10
+
+Persnally now tells you when it is broken, connects to eight AI clients instead of three, and can be installed end to end by an agent.
+
+### Added
+
+- **`persnally doctor`.** Being invisible after day one is the design goal; the cost is that breakage is invisible too. Three real failures on a maintainer's machine went unnoticed: the CLI lost its executable bit and every command died with `permission denied`; the daemon ran the previous version for a day after an upgrade, so none of that release's security fixes were active; and live capture stopped for two days across heavy use without a signal anywhere. `doctor` checks the binaries resolve and are executable, that the daemon is reachable *and on the same version as the CLI*, that Claude Code sessions are not newer than the last context read, the SessionStart hook, and the extraction engine. Exit is non-zero only on failure, and `--json` is available for scripts. `status` prints the one-line problems too, because nobody runs a diagnostic for a fault they have no reason to suspect.
+- **Five more clients: Codex CLI, Gemini CLI, Windsurf, Zed and VS Code.** They agree on stdio and little else, so each config shape is written the way that vendor documents it — Zed nests `command` as an object, VS Code requires an explicit `type`, and Codex is TOML rather than JSON. `persnally connect --all` now covers eight clients and still skips the ones you do not have. ChatGPT remains unreachable by design: its connectors require a public HTTPS endpoint, and the daemon is loopback-only. Your ChatGPT *history* still imports.
+- **Unattended setup for agents.** `persnally setup --yes` consents to the local model download without a terminal, and `--engine ollama|anthropic|none` forces the extractor. Previously the only non-interactive outcome was the degraded one. `--engine none` is a real choice: git history and writing style import fully offline.
+- **`docs/AGENT_INSTALL.md` and `llms.txt`.** The likeliest installer of a personal context engine is the user's own AI. The guide is written for a machine — deterministic commands, a failure-mode table, and explicit rules: never `sudo`, never hand-edit the event store, and never report success without running `doctor`.
+- **`persnally config set-key` reads stdin** when given no argument, so a key need not appear in `ps` output or shell history.
+
+### Changed
+
+- **A forced engine is now honoured strictly and never falls back.** `--engine ollama` on a machine with `ANTHROPIC_API_KEY` set previously resolved to the Anthropic extractor and sent conversation text off the machine — the opposite of what was asked, in the product where that matters most. Forced `anthropic` with no key now fails rather than silently using Ollama.
+- The local dashboard carries the Persnally mark in its header and favicon, and its GitHub link points at the current repository.
+
+### Fixed
+
+- **A backslash before a pipe escaped its cell in the Markdown export.** `esc()` escaped the pipe but not the backslash, so `\|` became `\\|` — which Markdown reads as one literal backslash followed by a live cell separator. Topic names are client-writable through `persnally_track`, so a prompt-injected client could shape one to inject arbitrary Markdown into your own export. Present in 3.0.0.
+
 ## [3.0.0] - 2026-08-08
 
 The daemon now authenticates every request, custody promises are enforced rather than asserted, and imports read several times more of your history than they did.
