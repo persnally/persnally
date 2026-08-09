@@ -1118,6 +1118,20 @@ async function Footer() {
           <p className="font-display mt-2.5 text-2xl tracking-tight text-ink">
             So every AI finally knows <Em>you.</Em>
           </p>
+          <div className="mt-7 flex max-w-sm items-center gap-3.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/persnally-mark.svg"
+              alt="The Context Knot: four loops drawn in one continuous line"
+              width={40}
+              height={40}
+              className="size-10 shrink-0"
+            />
+            <p className="text-[13px] leading-relaxed text-mute">
+              <span className="text-ink">The Context Knot</span> — four loops, one unbroken line.
+              Every tool separate; you continuous.
+            </p>
+          </div>
         </div>
         <div className="flex flex-col items-start gap-4 sm:items-end">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3 font-mono text-[12px] uppercase tracking-[0.12em] text-mute">
