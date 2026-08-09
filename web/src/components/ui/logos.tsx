@@ -2,10 +2,10 @@
    currentColor so they stay on-brand with electric+black. */
 import {
   siClaude,
-  siCline,
   siCursor,
   siGithub,
   siGithubcopilot,
+  siGooglegemini,
   siNpm,
   siWindsurf,
   siZedindustries,
@@ -34,15 +34,33 @@ export const NpmIcon = ({ className }: { className?: string }) => (
   <Glyph icon={siNpm} className={className} />
 );
 
-/* Tools whose context Persnally serves — for the marquee. */
-export const TOOLS: { name: string; icon: SimpleIcon }[] = [
-  { name: "Claude", icon: siClaude },
-  { name: "ChatGPT", icon: siOpenai },
-  { name: "Cursor", icon: siCursor },
-  { name: "Copilot", icon: siGithubcopilot },
-  { name: "Zed", icon: siZedindustries },
-  { name: "Windsurf", icon: siWindsurf },
-  { name: "Cline", icon: siCline },
-];
+/* Every mark the site draws. Deliberately separate from TOOLS: illustrations of
+   AI amnesia name ChatGPT because it *is* one of the amnesiac tools, which has
+   nothing to do with whether Persnally can connect to it. Keying by literal name
+   makes a bad lookup a build error — the previous `TOOLS.find(...)!.icon` form
+   returned undefined at runtime the moment a name left the list. */
+export const BRANDS = {
+  Claude: siClaude,
+  ChatGPT: siOpenai,
+  Cursor: siCursor,
+  Copilot: siGithubcopilot,
+  Zed: siZedindustries,
+  Windsurf: siWindsurf,
+  Codex: siOpenai,
+  Gemini: siGooglegemini,
+} satisfies Record<string, SimpleIcon>;
+
+export type BrandName = keyof typeof BRANDS;
+export const brand = (name: BrandName): SimpleIcon => BRANDS[name];
+
+/* Clients `persnally connect` actually configures — keep in step with CLIENTS in
+   persnallyd/src/connect.ts. Only tools that receive live context over MCP belong
+   here; ChatGPT cannot (its connectors need a public HTTPS endpoint and the
+   daemon is loopback-only), so it is named in the marquee caption instead, where
+   the import-only distinction can be stated. */
+const CONNECTABLE: readonly BrandName[] = ["Claude", "Cursor", "Codex", "Gemini", "Copilot", "Zed", "Windsurf"];
+
+export const TOOLS: { name: BrandName; icon: SimpleIcon }[] =
+  CONNECTABLE.map((name) => ({ name, icon: BRANDS[name] }));
 
 export { Glyph };

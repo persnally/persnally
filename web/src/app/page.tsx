@@ -4,7 +4,7 @@ import { EngravedSelf } from "./_components/EngravedSelf";
 import { SetupTabs } from "./_components/SetupTabs";
 import { RepetitionFeed } from "./_components/RepetitionFeed";
 import { ProCard } from "./_components/ProCard";
-import { GithubIcon, NpmIcon, Glyph, TOOLS } from "@/components/ui/logos";
+import { GithubIcon, NpmIcon, Glyph, TOOLS, brand } from "@/components/ui/logos";
 import { ArrowUpRight, Check, Cpu, Minus, X } from "lucide-react";
 
 const EXT = { target: "_blank", rel: "noopener noreferrer" } as const;
@@ -176,7 +176,7 @@ function Marquee() {
         </div>
       </div>
       <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
-        Works with the AI tools you already use
+        One command connects them all · ChatGPT history imports too
       </p>
     </Section>
   );
@@ -312,7 +312,7 @@ function HowItWorks() {
   );
 }
 
-const claudeIcon = TOOLS.find((t) => t.name === "Claude")!.icon;
+const claudeIcon = brand("Claude");
 
 function Terminal({ children }: { children: React.ReactNode }) {
   return <div className="terminal rounded-[2px] p-3.5">{children}</div>;
@@ -584,7 +584,7 @@ function Engine() {
           <div className="mt-5 flex flex-1 flex-col justify-evenly space-y-0 border-t border-ink/20">
             {[
               { icon: <Glyph icon={claudeIcon} className="size-4" />, name: "Claude", method: "persnally_context" },
-              { icon: <Glyph icon={TOOLS.find((t) => t.name === "Cursor")!.icon} className="size-4" />, name: "Cursor", method: "persnally_context" },
+              { icon: <Glyph icon={brand("Cursor")} className="size-4" />, name: "Cursor", method: "persnally_context" },
               { icon: <Glyph icon={claudeIcon} className="size-4" />, name: "Claude Code", method: "persnally_ask" },
               { icon: <Cpu className="size-4 text-electric" />, name: "your agent", method: "persnally_search" },
             ].map((r) => (
@@ -645,7 +645,7 @@ function Engine() {
             <div className="grid gap-x-8 gap-y-0 sm:grid-cols-1">
             {[
               { name: "Claude", icon: <Glyph icon={claudeIcon} className="size-4" />, state: "allowed" },
-              { name: "Cursor", icon: <Glyph icon={TOOLS.find((t) => t.name === "Cursor")!.icon} className="size-4" />, state: "allowed" },
+              { name: "Cursor", icon: <Glyph icon={brand("Cursor")} className="size-4" />, state: "allowed" },
               { name: "Claude Code", icon: <Glyph icon={claudeIcon} className="size-4" />, state: "scoped" },
               { name: "agents", icon: <Cpu className="size-4 text-electric" />, state: "scoped" },
             ].map((r) => (
