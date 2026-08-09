@@ -1128,8 +1128,8 @@ async function Footer() {
               className="size-10 shrink-0"
             />
             <p className="text-[13px] leading-relaxed text-mute">
-              <span className="text-ink">The Context Knot</span> — four loops, one unbroken line.
-              Every tool separate; you continuous.
+              <span className="text-ink">The Context Knot</span> — many fragments of your life
+              converge into one understanding.
             </p>
           </div>
         </div>
