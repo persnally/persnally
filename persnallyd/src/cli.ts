@@ -10,6 +10,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { applyApiKey, configPath, loadConfig, saveConfig } from "./config.js";
 import { CLIENTS, connectAll, connectClient, installClaudeCodeHook, type Client } from "./connect.js";
+import {
+  installedHook, newestSession, render as renderChecks, resolveBin, runChecks, worst,
+  type Facts,
+} from "./doctor.js";
 import { runConsolidation } from "./consolidate.js";
 import { buildBundle, renderMarkdown } from "./export.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL, type ChosenExtractor } from "./llm.js";
@@ -69,6 +73,7 @@ Usage:
   persnally forget --batch <id>    Undo one import batch
   persnally dashboard [--rotate]   Open the local dashboard (--rotate signs out open browser sessions)
   persnally status                 Store stats and daemon health
+  persnally doctor [--json]        Check the install end to end (bins, daemon, capture, hook)
   persnally activity [--json]      Context-read engagement over time (retention pulse)
   persnally start [--port N]       Start the daemon in the background
   persnally stop                   Stop the background daemon
@@ -82,6 +87,45 @@ Usage:
 function parsePort(args: string[]): number {
   const i = args.indexOf("--port");
   return i > -1 && args[i + 1] ? Number(args[i + 1]) : DEFAULT_PORT;
+}
+
+/** Reachable daemon's version, or null. Never throws — callers are diagnostics. */
+async function daemonVersion(port: number): Promise<{ version: string } | null> {
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/health`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!r.ok) return null;
+    return (await r.json()) as { version: string };
+  } catch {
+    return null;
+  }
+}
+
+async function gatherFacts(port: number): Promise<Facts> {
+  const store = new EventStore();
+  const lastReadAt = store.activity().lastReadAt;
+  store.close();
+
+  const health = await daemonVersion(port);
+  // An engine exists if a key is configured or Ollama has any model. Mirrors
+  // chooseExtractor's preference order without running an extraction.
+  const hasEngine = Boolean(process.env.ANTHROPIC_API_KEY || loadConfig().anthropic_api_key)
+    || ((await ollamaTags()) ?? []).length > 0;
+
+  return {
+    cliVersion: VERSION,
+    daemonVersion: health?.version ?? null,
+    daemonPid: runningPid(),
+    autostartInstalled: autostartInstalled(),
+    bins: ["persnally", "persnallyd", "persnally-mcp"].map((b) => resolveBin(b)),
+    lastReadAt,
+    newestSessionAt: newestSession(DEFAULT_TRANSCRIPTS_DIR),
+    hookCommand: installedHook(),
+    hasEngine,
+    now: Date.now(),
+    platform: process.platform,
+  };
 }
 
 async function main(): Promise<void> {
@@ -557,6 +601,18 @@ async function main(): Promise<void> {
       store.close();
       return;
     }
+    case "doctor": {
+      const checks = runChecks(await gatherFacts(parsePort(args)));
+      if (args.includes("--json")) {
+        console.log(JSON.stringify({ level: worst(checks), checks }, null, 2));
+      } else {
+        console.log(renderChecks(checks));
+      }
+      // Non-zero on failure so a wrapper script or agent can branch on it.
+      if (worst(checks) === "fail") process.exitCode = 1;
+      return;
+    }
+
     case "status": {
       const store2 = new EventStore();
       const s = store2.stats();
@@ -582,6 +638,15 @@ async function main(): Promise<void> {
           console.log(`  ${importer}: ~${events} event(s) from an older extractor`);
         }
         console.log(`  Re-run with the current extractor: ${BIN} import <source> <path> --reextract`);
+      }
+
+      // Surface breakage where people already look. A silent install is the
+      // whole risk: nobody runs a diagnostic they have no reason to suspect.
+      const problems = runChecks(await gatherFacts(parsePort(args))).filter((c) => c.level !== "ok");
+      if (problems.length) {
+        console.log("");
+        for (const p of problems) console.log(`${p.level === "fail" ? "✗" : "!"} ${p.title}`);
+        console.log(`  Details: ${BIN} doctor`);
       }
       return;
     }
