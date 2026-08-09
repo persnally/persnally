@@ -4,13 +4,14 @@ import { EngravedSelf } from "./_components/EngravedSelf";
 import { SetupTabs } from "./_components/SetupTabs";
 import { RepetitionFeed } from "./_components/RepetitionFeed";
 import { ProCard } from "./_components/ProCard";
-import { GithubIcon, NpmIcon, Glyph, TOOLS } from "@/components/ui/logos";
+import { GithubIcon, NpmIcon, ProductHuntIcon, Glyph, TOOLS, brand } from "@/components/ui/logos";
 import { ArrowUpRight, Check, Cpu, Minus, X } from "lucide-react";
 
 const EXT = { target: "_blank", rel: "noopener noreferrer" } as const;
 
 const GITHUB = "https://github.com/persnally/persnally";
 const NPM = "https://www.npmjs.com/package/persnally";
+const PRODUCT_HUNT = "https://www.producthunt.com/products/persnally";
 
 export default function Home() {
   return (
@@ -176,7 +177,7 @@ function Marquee() {
         </div>
       </div>
       <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
-        Works with the AI tools you already use
+        One command connects them all · ChatGPT history imports too
       </p>
     </Section>
   );
@@ -312,7 +313,7 @@ function HowItWorks() {
   );
 }
 
-const claudeIcon = TOOLS.find((t) => t.name === "Claude")!.icon;
+const claudeIcon = brand("Claude");
 
 function Terminal({ children }: { children: React.ReactNode }) {
   return <div className="terminal rounded-[2px] p-3.5">{children}</div>;
@@ -584,7 +585,7 @@ function Engine() {
           <div className="mt-5 flex flex-1 flex-col justify-evenly space-y-0 border-t border-ink/20">
             {[
               { icon: <Glyph icon={claudeIcon} className="size-4" />, name: "Claude", method: "persnally_context" },
-              { icon: <Glyph icon={TOOLS.find((t) => t.name === "Cursor")!.icon} className="size-4" />, name: "Cursor", method: "persnally_context" },
+              { icon: <Glyph icon={brand("Cursor")} className="size-4" />, name: "Cursor", method: "persnally_context" },
               { icon: <Glyph icon={claudeIcon} className="size-4" />, name: "Claude Code", method: "persnally_ask" },
               { icon: <Cpu className="size-4 text-electric" />, name: "your agent", method: "persnally_search" },
             ].map((r) => (
@@ -645,7 +646,7 @@ function Engine() {
             <div className="grid gap-x-8 gap-y-0 sm:grid-cols-1">
             {[
               { name: "Claude", icon: <Glyph icon={claudeIcon} className="size-4" />, state: "allowed" },
-              { name: "Cursor", icon: <Glyph icon={TOOLS.find((t) => t.name === "Cursor")!.icon} className="size-4" />, state: "allowed" },
+              { name: "Cursor", icon: <Glyph icon={brand("Cursor")} className="size-4" />, state: "allowed" },
               { name: "Claude Code", icon: <Glyph icon={claudeIcon} className="size-4" />, state: "scoped" },
               { name: "agents", icon: <Cpu className="size-4 text-electric" />, state: "scoped" },
             ].map((r) => (
@@ -1097,10 +1098,13 @@ async function getLatestVersion(): Promise<string | null> {
 async function Footer() {
   const version = await getLatestVersion();
   return (
-    <footer className="relative overflow-hidden border-t border-ink/20">
-      <Section className="flex flex-col items-start justify-between gap-8 pt-14 sm:flex-row sm:items-center">
+    <footer className="border-t border-ink/20 pb-16">
+      <Section className="flex flex-col items-start justify-between gap-8 pt-14 sm:flex-row sm:items-start">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
+          <p className="font-display text-2xl tracking-tight text-ink">
+            So every AI finally knows <Em>you.</Em>
+          </p>
+          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
             © 2026 Persnally
             {version && (
               <>
@@ -1115,52 +1119,27 @@ async function Footer() {
               </>
             )}
           </p>
-          <p className="font-display mt-2.5 text-2xl tracking-tight text-ink">
-            So every AI finally knows <Em>you.</Em>
-          </p>
         </div>
         <div className="flex flex-col items-start gap-4 sm:items-end">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 font-mono text-[12px] uppercase tracking-[0.12em] text-mute">
-            <a
-              href={GITHUB}
-              {...EXT}
-              aria-label="Persnally on GitHub"
-              title="GitHub"
-              className="transition-colors hover:text-ink"
-            >
-              <GithubIcon className="size-[18px]" />
-            </a>
-            <a
-              href={NPM}
-              {...EXT}
-              aria-label="persnally on npm"
-              title="npm"
-              className="transition-colors hover:text-ink"
-            >
-              <NpmIcon className="size-[18px]" />
-            </a>
-            <a href={`${GITHUB}/blob/main/LICENSE`} {...EXT} className="transition-colors hover:text-ink">
-              FSL-1.1-MIT
-            </a>
-          </div>
-          <a
-            href="https://www.producthunt.com/products/persnally?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-persnally"
-            {...EXT}
-            aria-label="Persnally on Product Hunt"
-            className="transition-opacity hover:opacity-85"
-          >
+          <div className="flex max-w-sm items-center gap-3">
+            {/* Same 30px as the nav — one mark, one size, wherever it appears. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1182562&theme=light&t=1782584790813"
-              alt="Persnally - So every AI finally knows you | Product Hunt"
-              width={220}
-              height={48}
+              src="/brand/persnally-mark.svg"
+              alt="The Context Knot: four loops drawn in one continuous line"
+              width={30}
+              height={30}
+              className="size-[30px] shrink-0"
             />
-          </a>
+            <p className="text-[13px] leading-relaxed text-mute">
+              <span className="text-ink">The Context Knot</span> — many fragments of your life
+              converge into one understanding.
+            </p>
+          </div>
         </div>
       </Section>
 
-      <Section className="pt-8">
+      <Section className="flex flex-col items-start justify-between gap-6 pt-16 sm:flex-row sm:items-center">
         <p className="font-mono text-[10px] leading-relaxed text-faint">
           Engravings: 16th–19th-century plates —{" "}
           <a
@@ -1172,18 +1151,40 @@ async function Footer() {
           </a>
           , public domain.
         </p>
-      </Section>
 
-      {/* Giant engraved wordmark — outlined serif, like the plate lettering */}
-      <div aria-hidden className="pointer-events-none mt-10 select-none px-6">
-        <span
-          className="font-display block translate-y-[14%] text-center text-[clamp(4rem,20vw,16rem)] leading-[0.8] tracking-tight text-transparent"
-          style={{ WebkitTextStroke: "1.5px color-mix(in oklab, var(--color-ink) 38%, transparent)" }}
-        >
-          persnally
-          <span style={{ WebkitTextStroke: "1.5px var(--color-electric)" }}>.</span>
-        </span>
-      </div>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 sm:justify-end font-mono text-[12px] uppercase tracking-[0.12em] text-mute">
+          <a
+            href={GITHUB}
+            {...EXT}
+            aria-label="Persnally on GitHub"
+            title="GitHub"
+            className="transition-colors hover:text-ink"
+          >
+            <GithubIcon className="size-[18px]" />
+          </a>
+          <a
+            href={NPM}
+            {...EXT}
+            aria-label="persnally on npm"
+            title="npm"
+            className="transition-colors hover:text-ink"
+          >
+            <NpmIcon className="size-[18px]" />
+          </a>
+          <a
+            href={PRODUCT_HUNT}
+            {...EXT}
+            aria-label="Persnally on Product Hunt"
+            title="Product Hunt"
+            className="transition-colors hover:text-ink"
+          >
+            <ProductHuntIcon className="size-[18px]" />
+          </a>
+          <a href={`${GITHUB}/blob/main/LICENSE`} {...EXT} className="transition-colors hover:text-ink">
+            FSL-1.1-MIT
+          </a>
+        </div>
+      </Section>
     </footer>
   );
 }
