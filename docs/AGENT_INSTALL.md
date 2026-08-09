@@ -35,17 +35,26 @@ applies and **do not ask the user to choose unless none apply**:
 
 | Situation | Command |
 |---|---|
-| `ANTHROPIC_API_KEY` is set, or the user gives you a key | `persnally config set-key sk-ant-…` |
-| Ollama is installed (`curl -s localhost:11434/api/tags` responds) | `persnally setup --yes` — fetches a ~2GB model if needed |
-| Neither, and the user does not want either | `persnally setup --engine none` |
+| `ANTHROPIC_API_KEY` is already in the environment | nothing — setup uses it. Do **not** run `config set-key`. |
+| The user supplies a key now | `persnally config set-key <their actual key>` |
+| Ollama is installed (`curl -s localhost:11434/api/tags` responds) | `persnally setup --engine ollama --yes` — fetches a ~2GB model if needed |
+| Neither, and the user wants neither | `persnally setup --engine none` |
+
+Never run `config set-key` with a placeholder. `sk-ant-…` passes the CLI's
+prefix check and would store an invalid key that fails later at import, far from
+the cause. Only ever pass a key the user actually gave you, and never echo it
+back or write it anywhere other than through `config set-key`.
 
 `--engine none` is a real option, not a failure: git history and writing-style
-analysis are fully offline and still produce a useful profile. Conversation
-import is simply deferred; re-running `persnally setup` later picks up exactly
-what was skipped.
+analysis are fully offline and still import. **It does not produce a profile** —
+profile synthesis needs a model. Conversation import and the profile are both
+deferred until an engine exists; re-running `persnally setup` later picks up
+exactly what was skipped.
 
-Never put an API key in a shell command you echo back to the user, and never
-write one into a file other than via `persnally config set-key`.
+`--engine` is honoured strictly and never falls back. `--engine ollama` will not
+quietly use an Anthropic key that happens to be set, and `--engine anthropic`
+fails outright if no key is configured rather than sending data to a different
+engine than the one requested.
 
 ## 3. Run setup
 

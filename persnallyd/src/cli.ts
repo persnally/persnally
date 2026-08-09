@@ -146,7 +146,10 @@ async function main(): Promise<void> {
       // 1. Extraction engine. Optional (git works without one) but everything
       //    that makes the portrait worth reading needs it, so try to get one
       //    rather than silently degrading to a git-only mirror.
-      const engine = await resolveSetupEngine(parseEngineOptions(args));
+      const engineOpts = parseEngineOptions(args);
+      // "none" means no engine at all, so it can never be a forced *choice*.
+      const forcedEngine = engineOpts.engine === "none" ? undefined : engineOpts.engine ?? undefined;
+      const engine = await resolveSetupEngine(engineOpts);
 
       // 2. Daemon
       if (!runningPid()) {
@@ -209,7 +212,7 @@ async function main(): Promise<void> {
       // 5. Profile
       if (engine && store.stats().total > 0) {
         console.log("→ Synthesizing your profile…");
-        const profileEngine = await chooseExtractor("profile");
+        const profileEngine = await chooseExtractor("profile", forcedEngine);
         await synthesizeProfile(store, profileEngine.extract, profileEngine.model);
         console.log("  ✓ Profile ready");
       }
@@ -800,6 +803,8 @@ export interface EngineOptions {
 }
 
 export function parseEngineOptions(args: string[]): EngineOptions {
+  const occurrences = args.filter((a) => a === "--engine").length;
+  if (occurrences > 1) throw new Error("--engine given more than once");
   const i = args.indexOf("--engine");
   let engine: EngineOptions["engine"] = null;
   if (i > -1) {
@@ -821,15 +826,27 @@ async function resolveSetupEngine(opts: EngineOptions): Promise<ChosenExtractor 
     return null;
   }
 
-  const found = await chooseExtractor("extract").catch(() => null);
+  // A forced engine is resolved directly and never falls back — see
+  // chooseExtractor. Falling back here would hand `--engine ollama` the
+  // Anthropic extractor whenever a key happened to be set.
+  if (opts.engine) {
+    try {
+      const forced = await chooseExtractor("extract", opts.engine);
+      console.log(`✓ Extraction engine: ${forced.label}`);
+      return forced;
+    } catch (e) {
+      // Ollama running with no model is recoverable below; anything else is not.
+      if (opts.engine === "anthropic" || (await ollamaTags()) === null) {
+        console.log(`· ${e instanceof Error ? e.message : String(e)}`);
+        return null;
+      }
+    }
+  }
+
+  const found = opts.engine ? null : await chooseExtractor("extract").catch(() => null);
   if (found) {
     console.log(`✓ Extraction engine: ${found.label}`);
     return found;
-  }
-
-  if (opts.engine === "anthropic") {
-    console.log(`· --engine anthropic, but no key is set. Run \`${BIN} config set-key <sk-ant-…>\` and re-run.`);
-    return null;
   }
 
   const tags = await ollamaTags();
@@ -882,7 +899,7 @@ async function resolveSetupEngine(opts: EngineOptions): Promise<ChosenExtractor 
     return null;
   }
 
-  const engine = await chooseExtractor("extract").catch(() => null);
+  const engine = await chooseExtractor("extract", opts.engine ?? undefined).catch(() => null);
   if (engine) console.log(`✓ Extraction engine: ${engine.label}`);
   return engine;
 }

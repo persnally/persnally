@@ -118,12 +118,38 @@ export interface ChosenExtractor {
   label: string;
 }
 
-/** Anthropic key wins (quality); otherwise local Ollama (privacy, zero setup); otherwise guide the user. */
-export async function chooseExtractor(purpose: "extract" | "profile" = "extract"): Promise<ChosenExtractor> {
-  if (process.env.ANTHROPIC_API_KEY) {
-    const model = purpose === "profile" ? DEFAULT_PROFILE_MODEL : DEFAULT_EXTRACT_MODEL;
-    return { extract: anthropicExtract, model, label: `${model} (Anthropic API)` };
+function anthropicChoice(purpose: "extract" | "profile"): ChosenExtractor {
+  const model = purpose === "profile" ? DEFAULT_PROFILE_MODEL : DEFAULT_EXTRACT_MODEL;
+  return { extract: anthropicExtract, model, label: `${model} (Anthropic API)` };
+}
+
+/**
+ * Anthropic key wins (quality); otherwise local Ollama (privacy, zero setup);
+ * otherwise guide the user.
+ *
+ * `force` overrides that order and never falls back. Preference-order fallback
+ * is right when the user expressed no preference and wrong the moment they did:
+ * with a key present, an unforced call would answer `--engine ollama` with the
+ * Anthropic extractor and ship conversation text off the machine — the opposite
+ * of what was asked, in the one product where that matters most.
+ */
+export async function chooseExtractor(
+  purpose: "extract" | "profile" = "extract",
+  force?: "anthropic" | "ollama",
+): Promise<ChosenExtractor> {
+  if (force === "anthropic") {
+    if (process.env.ANTHROPIC_API_KEY) return anthropicChoice(purpose);
+    throw new Error("--engine anthropic, but no API key is set. Run: persnally config set-key <sk-ant-…>");
   }
+  if (force === "ollama") {
+    const forced = await localModel();
+    if (forced) {
+      return { extract: ollamaExtract, model: forced, label: `${forced} (local via Ollama — nothing leaves this machine)` };
+    }
+    throw new Error("--engine ollama, but Ollama has no model available. Run: ollama pull llama3.2");
+  }
+
+  if (process.env.ANTHROPIC_API_KEY) return anthropicChoice(purpose);
   const model = await localModel();
   if (model) {
     return { extract: ollamaExtract, model, label: `${model} (local via Ollama — nothing leaves this machine)` };
