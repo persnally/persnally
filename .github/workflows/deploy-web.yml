@@ -48,7 +48,7 @@ jobs:
 
       - name: Fail early if the deploy credentials are missing
         env:
-          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          TOKEN: ${{ secrets.VERCEL_TOKEN_PERSNALLY }}
           ORG: ${{ secrets.VERCEL_ORG_ID }}
           PROJECT: ${{ secrets.VERCEL_PROJECT_ID }}
         # Without this the Vercel CLI fails several minutes in, after a full
@@ -56,7 +56,7 @@ jobs:
         # missing secret.
         run: |
           missing=
-          [ -n "$TOKEN" ]   || missing="$missing VERCEL_TOKEN"
+          [ -n "$TOKEN" ]   || missing="$missing VERCEL_TOKEN_PERSNALLY"
           [ -n "$ORG" ]     || missing="$missing VERCEL_ORG_ID"
           [ -n "$PROJECT" ] || missing="$missing VERCEL_PROJECT_ID"
           if [ -n "$missing" ]; then
@@ -104,7 +104,7 @@ jobs:
       - name: Pull project settings
         run: vercel pull --yes --environment=${{ steps.target.outputs.env }} --token="$VERCEL_TOKEN"
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_PERSNALLY }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
@@ -113,7 +113,7 @@ jobs:
       - name: Build
         run: vercel build ${{ steps.target.outputs.flag }} --token="$VERCEL_TOKEN"
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_PERSNALLY }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
@@ -131,7 +131,7 @@ jobs:
           esac
           echo "url=$url" >> "$GITHUB_OUTPUT"
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_PERSNALLY }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
