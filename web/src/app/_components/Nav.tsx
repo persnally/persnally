@@ -15,6 +15,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
    reflows mid-animation and the movement stays on the compositor. */
 
 const CONDENSE_AFTER = 96; // px — above this the bar is always full, so the top of the page is never condensed
+const NAV_LINKS = [
+  { href: "#how", label: "How it works" },
+  { href: "#trust", label: "Trust" },
+  { href: "#pricing", label: "Pricing" },
+];
+
 const DIRECTION_NOISE = 4; // px — ignore sub-pixel jitter and trackpad rubber-banding
 
 export function Nav() {
@@ -135,15 +141,19 @@ export function Nav() {
           }}
           aria-hidden={condensed}
         >
-          <a href="#how" className="transition-colors hover:text-ink">
-            How it works
-          </a>
-          <a href="#trust" className="transition-colors hover:text-ink">
-            Trust
-          </a>
-          <a href="#pricing" className="transition-colors hover:text-ink">
-            Pricing
-          </a>
+          {/* pointer-events alone would leave these tabbable while invisible —
+              focusable content inside aria-hidden is a WCAG violation, and a
+              keyboard user would be tabbing through a bar that isn't there. */}
+          {NAV_LINKS.map(({ href, label }) => (
+            <a
+              key={href}
+              href={href}
+              className="transition-colors hover:text-ink"
+              tabIndex={condensed ? -1 : undefined}
+            >
+              {label}
+            </a>
+          ))}
         </nav>
 
         <a
