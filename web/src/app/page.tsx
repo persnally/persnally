@@ -4,13 +4,14 @@ import { EngravedSelf } from "./_components/EngravedSelf";
 import { SetupTabs } from "./_components/SetupTabs";
 import { RepetitionFeed } from "./_components/RepetitionFeed";
 import { ProCard } from "./_components/ProCard";
-import { GithubIcon, NpmIcon, Glyph, TOOLS, brand } from "@/components/ui/logos";
+import { GithubIcon, NpmIcon, ProductHuntIcon, Glyph, TOOLS, brand } from "@/components/ui/logos";
 import { ArrowUpRight, Check, Cpu, Minus, X } from "lucide-react";
 
 const EXT = { target: "_blank", rel: "noopener noreferrer" } as const;
 
 const GITHUB = "https://github.com/persnally/persnally";
 const NPM = "https://www.npmjs.com/package/persnally";
+const PRODUCT_HUNT = "https://www.producthunt.com/products/persnally";
 
 export default function Home() {
   return (
@@ -1097,10 +1098,13 @@ async function getLatestVersion(): Promise<string | null> {
 async function Footer() {
   const version = await getLatestVersion();
   return (
-    <footer className="relative overflow-hidden border-t border-ink/20">
-      <Section className="flex flex-col items-start justify-between gap-8 pt-14 sm:flex-row sm:items-center">
+    <footer className="border-t border-ink/20 pb-16">
+      <Section className="flex flex-col items-start justify-between gap-8 pt-14 sm:flex-row sm:items-start">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
+          <p className="font-display text-2xl tracking-tight text-ink">
+            So every AI finally knows <Em>you.</Em>
+          </p>
+          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
             © 2026 Persnally
             {version && (
               <>
@@ -1115,23 +1119,6 @@ async function Footer() {
               </>
             )}
           </p>
-          <p className="font-display mt-2.5 text-2xl tracking-tight text-ink">
-            So every AI finally knows <Em>you.</Em>
-          </p>
-          <div className="mt-7 flex max-w-sm items-center gap-3.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/brand/persnally-mark.svg"
-              alt="The Context Knot: four loops drawn in one continuous line"
-              width={40}
-              height={40}
-              className="size-10 shrink-0"
-            />
-            <p className="text-[13px] leading-relaxed text-mute">
-              <span className="text-ink">The Context Knot</span> — many fragments of your life
-              converge into one understanding.
-            </p>
-          </div>
         </div>
         <div className="flex flex-col items-start gap-4 sm:items-end">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3 font-mono text-[12px] uppercase tracking-[0.12em] text-mute">
@@ -1153,29 +1140,40 @@ async function Footer() {
             >
               <NpmIcon className="size-[18px]" />
             </a>
+            <a
+              href={PRODUCT_HUNT}
+              {...EXT}
+              aria-label="Persnally on Product Hunt"
+              title="Product Hunt"
+              className="transition-colors hover:text-ink"
+            >
+              <ProductHuntIcon className="size-[18px]" />
+            </a>
             <a href={`${GITHUB}/blob/main/LICENSE`} {...EXT} className="transition-colors hover:text-ink">
               FSL-1.1-MIT
             </a>
           </div>
-          <a
-            href="https://www.producthunt.com/products/persnally?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-persnally"
-            {...EXT}
-            aria-label="Persnally on Product Hunt"
-            className="transition-opacity hover:opacity-85"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1182562&theme=light&t=1782584790813"
-              alt="Persnally - So every AI finally knows you | Product Hunt"
-              width={220}
-              height={48}
-            />
-          </a>
         </div>
       </Section>
 
-      <Section className="pt-8">
-        <p className="font-mono text-[10px] leading-relaxed text-faint">
+      <Section className="flex flex-col items-start justify-between gap-6 pt-8 sm:flex-row sm:items-center">
+        <div className="flex max-w-sm items-center gap-3">
+          {/* Same 30px as the nav — one mark, one size, wherever it appears. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/persnally-mark.svg"
+            alt="The Context Knot: four loops drawn in one continuous line"
+            width={30}
+            height={30}
+            className="size-[30px] shrink-0"
+          />
+          <p className="text-[13px] leading-relaxed text-mute">
+            <span className="text-ink">The Context Knot</span> — many fragments of your life
+            converge into one understanding.
+          </p>
+        </div>
+
+        <p className="font-mono text-[10px] leading-relaxed text-faint sm:text-right">
           Engravings: 16th–19th-century plates —{" "}
           <a
             href="https://wellcomecollection.org/works"
@@ -1187,17 +1185,6 @@ async function Footer() {
           , public domain.
         </p>
       </Section>
-
-      {/* Giant engraved wordmark — outlined serif, like the plate lettering */}
-      <div aria-hidden className="pointer-events-none mt-10 select-none px-6">
-        <span
-          className="font-display block translate-y-[14%] text-center text-[clamp(4rem,20vw,16rem)] leading-[0.8] tracking-tight text-transparent"
-          style={{ WebkitTextStroke: "1.5px color-mix(in oklab, var(--color-ink) 38%, transparent)" }}
-        >
-          persnally
-          <span style={{ WebkitTextStroke: "1.5px var(--color-electric)" }}>.</span>
-        </span>
-      </div>
     </footer>
   );
 }

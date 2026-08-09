@@ -7,6 +7,7 @@ import {
   siGithubcopilot,
   siGooglegemini,
   siNpm,
+  siProducthunt,
   siWindsurf,
   siZedindustries,
 } from "simple-icons";
@@ -32,6 +33,9 @@ export const GithubIcon = ({ className }: { className?: string }) => (
 );
 export const NpmIcon = ({ className }: { className?: string }) => (
   <Glyph icon={siNpm} className={className} />
+);
+export const ProductHuntIcon = ({ className }: { className?: string }) => (
+  <Glyph icon={siProducthunt} className={className} />
 );
 
 /* Every mark the site draws. Deliberately separate from TOOLS: illustrations of
