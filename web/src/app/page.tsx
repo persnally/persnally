@@ -1121,59 +1121,26 @@ async function Footer() {
           </p>
         </div>
         <div className="flex flex-col items-start gap-4 sm:items-end">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 font-mono text-[12px] uppercase tracking-[0.12em] text-mute">
-            <a
-              href={GITHUB}
-              {...EXT}
-              aria-label="Persnally on GitHub"
-              title="GitHub"
-              className="transition-colors hover:text-ink"
-            >
-              <GithubIcon className="size-[18px]" />
-            </a>
-            <a
-              href={NPM}
-              {...EXT}
-              aria-label="persnally on npm"
-              title="npm"
-              className="transition-colors hover:text-ink"
-            >
-              <NpmIcon className="size-[18px]" />
-            </a>
-            <a
-              href={PRODUCT_HUNT}
-              {...EXT}
-              aria-label="Persnally on Product Hunt"
-              title="Product Hunt"
-              className="transition-colors hover:text-ink"
-            >
-              <ProductHuntIcon className="size-[18px]" />
-            </a>
-            <a href={`${GITHUB}/blob/main/LICENSE`} {...EXT} className="transition-colors hover:text-ink">
-              FSL-1.1-MIT
-            </a>
+          <div className="flex max-w-sm items-center gap-3">
+            {/* Same 30px as the nav — one mark, one size, wherever it appears. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/persnally-mark.svg"
+              alt="The Context Knot: four loops drawn in one continuous line"
+              width={30}
+              height={30}
+              className="size-[30px] shrink-0"
+            />
+            <p className="text-[13px] leading-relaxed text-mute">
+              <span className="text-ink">The Context Knot</span> — many fragments of your life
+              converge into one understanding.
+            </p>
           </div>
         </div>
       </Section>
 
-      <Section className="flex flex-col items-start justify-between gap-6 pt-8 sm:flex-row sm:items-center">
-        <div className="flex max-w-sm items-center gap-3">
-          {/* Same 30px as the nav — one mark, one size, wherever it appears. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/persnally-mark.svg"
-            alt="The Context Knot: four loops drawn in one continuous line"
-            width={30}
-            height={30}
-            className="size-[30px] shrink-0"
-          />
-          <p className="text-[13px] leading-relaxed text-mute">
-            <span className="text-ink">The Context Knot</span> — many fragments of your life
-            converge into one understanding.
-          </p>
-        </div>
-
-        <p className="font-mono text-[10px] leading-relaxed text-faint sm:text-right">
+      <Section className="flex flex-col items-start justify-between gap-6 pt-16 sm:flex-row sm:items-center">
+        <p className="font-mono text-[10px] leading-relaxed text-faint">
           Engravings: 16th–19th-century plates —{" "}
           <a
             href="https://wellcomecollection.org/works"
@@ -1184,6 +1151,39 @@ async function Footer() {
           </a>
           , public domain.
         </p>
+
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 sm:justify-end font-mono text-[12px] uppercase tracking-[0.12em] text-mute">
+          <a
+            href={GITHUB}
+            {...EXT}
+            aria-label="Persnally on GitHub"
+            title="GitHub"
+            className="transition-colors hover:text-ink"
+          >
+            <GithubIcon className="size-[18px]" />
+          </a>
+          <a
+            href={NPM}
+            {...EXT}
+            aria-label="persnally on npm"
+            title="npm"
+            className="transition-colors hover:text-ink"
+          >
+            <NpmIcon className="size-[18px]" />
+          </a>
+          <a
+            href={PRODUCT_HUNT}
+            {...EXT}
+            aria-label="Persnally on Product Hunt"
+            title="Product Hunt"
+            className="transition-colors hover:text-ink"
+          >
+            <ProductHuntIcon className="size-[18px]" />
+          </a>
+          <a href={`${GITHUB}/blob/main/LICENSE`} {...EXT} className="transition-colors hover:text-ink">
+            FSL-1.1-MIT
+          </a>
+        </div>
       </Section>
     </footer>
   );
