@@ -48,7 +48,9 @@ const BIN = "persnally";
 const USAGE = `${BIN} ${VERSION} — so every AI finally knows you
 
 Usage:
-  persnally setup                  One command: find exports, import, synthesize, connect, open
+  persnally setup [--yes] [--engine ollama|anthropic|none]
+                                   One command: find exports, import, synthesize, connect, open
+                                   --yes runs unattended (an agent can drive it); --engine forces the extractor
   persnally connect [client|--all] [--scope cats]  Add Persnally to any of 8 clients, or --all (optionally scope it inline)
   persnally scope <client> <categories|--clear>   Limit what a client can read (e.g. scope cursor technology,career)
   persnally scope                  Show all client scopes
@@ -144,7 +146,7 @@ async function main(): Promise<void> {
       // 1. Extraction engine. Optional (git works without one) but everything
       //    that makes the portrait worth reading needs it, so try to get one
       //    rather than silently degrading to a git-only mirror.
-      const engine = await resolveSetupEngine();
+      const engine = await resolveSetupEngine(parseEngineOptions(args));
 
       // 2. Daemon
       if (!runningPid()) {
@@ -789,11 +791,45 @@ async function main(): Promise<void> {
  * skipped, and a terminal user shouldn't have to find the dashboard to learn
  * that — this is the one failure case setup can actually fix in place.
  */
-async function resolveSetupEngine(): Promise<ChosenExtractor | null> {
+/** How setup should obtain an extraction engine without a human present. */
+export interface EngineOptions {
+  /** Accept the model download without asking — the agent-driven path. */
+  yes: boolean;
+  /** Force a specific engine; null means the usual preference order. */
+  engine: "ollama" | "anthropic" | "none" | null;
+}
+
+export function parseEngineOptions(args: string[]): EngineOptions {
+  const i = args.indexOf("--engine");
+  let engine: EngineOptions["engine"] = null;
+  if (i > -1) {
+    // A present-but-malformed flag must fail, not fall back to the default:
+    // an agent whose command was truncated would otherwise get a different
+    // engine than it asked for and no indication anything went wrong.
+    const raw = args[i + 1];
+    if (!raw || !["ollama", "anthropic", "none"].includes(raw)) {
+      throw new Error(`--engine must be ollama, anthropic or none (got ${raw ? `"${raw}"` : "nothing"})`);
+    }
+    engine = raw as EngineOptions["engine"];
+  }
+  return { yes: args.includes("--yes") || args.includes("-y"), engine };
+}
+
+async function resolveSetupEngine(opts: EngineOptions): Promise<ChosenExtractor | null> {
+  if (opts.engine === "none") {
+    console.log("· Engine skipped (--engine none) — git and voice import offline; conversations are left for later.");
+    return null;
+  }
+
   const found = await chooseExtractor("extract").catch(() => null);
   if (found) {
     console.log(`✓ Extraction engine: ${found.label}`);
     return found;
+  }
+
+  if (opts.engine === "anthropic") {
+    console.log(`· --engine anthropic, but no key is set. Run \`${BIN} config set-key <sk-ant-…>\` and re-run.`);
+    return null;
   }
 
   const tags = await ollamaTags();
@@ -805,20 +841,29 @@ async function resolveSetupEngine(): Promise<ChosenExtractor | null> {
   }
 
   const pull = `ollama pull ${RECOMMENDED_LOCAL_MODEL}`;
-  if (!process.stdin.isTTY) {
+  // An agent running this has no terminal to answer in, so consent has to be
+  // expressible as a flag — otherwise the only non-interactive outcome is the
+  // degraded one.
+  const preapproved = opts.yes || opts.engine === "ollama";
+  if (!preapproved && !process.stdin.isTTY) {
     console.log(`· Ollama is running but has no model. Run \`${pull}\`, then re-run \`${BIN} setup\`.`);
+    console.log(`    Or let setup fetch it: ${BIN} setup --yes`);
     return null;
   }
 
-  const { createInterface } = await import("node:readline/promises");
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const reply = (await rl.question(
-    `· Ollama is running but has no model yet.\n  Download ${RECOMMENDED_LOCAL_MODEL} now (~2GB, free, never leaves this machine)? [Y/n] `,
-  )).trim().toLowerCase();
-  rl.close();
-  if (reply && !reply.startsWith("y")) {
-    console.log(`  Skipped — conversation imports need a model. Re-run \`${BIN} setup\` after \`${pull}\`.`);
-    return null;
+  if (!preapproved) {
+    const { createInterface } = await import("node:readline/promises");
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const reply = (await rl.question(
+      `· Ollama is running but has no model yet.\n  Download ${RECOMMENDED_LOCAL_MODEL} now (~2GB, free, never leaves this machine)? [Y/n] `,
+    )).trim().toLowerCase();
+    rl.close();
+    if (reply && !reply.startsWith("y")) {
+      console.log(`  Skipped — conversation imports need a model. Re-run \`${BIN} setup\` after \`${pull}\`.`);
+      return null;
+    }
+  } else {
+    console.log(`· Fetching ${RECOMMENDED_LOCAL_MODEL} (~2GB, free, never leaves this machine)…`);
   }
 
   try {
