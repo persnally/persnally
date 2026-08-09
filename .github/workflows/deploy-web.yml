@@ -117,6 +117,23 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
+      # `vercel deploy --prod` switches the production alias the moment it
+      # succeeds, so a later failure leaves the new build live. Recording what
+      # was live first is what makes restoring it possible.
+      - name: Record the live deployment before changing anything
+        id: prev
+        run: |
+          set -o pipefail
+          id=$(curl -sS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID?teamId=$VERCEL_ORG_ID" \
+            | jq -r '.targets.production.id // empty')
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "currently live: ${id:-none (first deploy)}"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_PERSNALLY }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
       - name: Deploy
         id: deploy
         run: |
@@ -186,6 +203,25 @@ jobs:
           printf '%s\n' "$missing" | head -5
           exit 1
 
+      # The only window where a failure can leave production changed: the alias
+      # switched on deploy, then verification failed. Put the previous build
+      # back so a bad run ends with the last known-good site live, not this one.
+      #
+      # `promote`, not `rollback`: rollback sets lastRollbackTarget, which pins
+      # production and would silently block every future deploy from taking the
+      # alias — the exact failure mode that hid a stale site for weeks.
+      - name: Restore the previous build
+        id: restore
+        if: failure() && steps.deploy.outcome == 'success' && steps.target.outputs.env == 'production' && steps.prev.outputs.id != ''
+        run: |
+          echo "::warning::verification failed after the alias moved — restoring ${{ steps.prev.outputs.id }}"
+          vercel promote "${{ steps.prev.outputs.id }}" --token="$VERCEL_TOKEN" --timeout 3m
+          echo "restored the previous production deployment"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_PERSNALLY }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
       # always(): this ran only on success before, which is when a summary is
       # least needed. A failed deploy now says what shipped, what didn't, and
       # where it stopped.
@@ -194,18 +230,31 @@ jobs:
         run: |
           deployed="${{ steps.deploy.outcome }}"
           verified="${{ steps.verify.outcome }}"
+          restored="${{ steps.restore.outcome }}"
           url="${{ steps.deploy.outputs.url }}"
 
+          # What is live at the end matters more than which step failed.
           if [ "$deployed" = "success" ] && [ "$verified" = "success" ]; then
             title="✅ Live on persnally.com"
+            state="This build is live."
+          elif [ "$restored" = "success" ]; then
+            title="↩️ Reverted — the previous build is live"
+            state="The domain never served this build, so the previous one was restored. persnally.com is serving known-good content."
+          elif [ "$restored" = "failure" ]; then
+            title="🚨 Verification failed AND the revert failed"
+            state="persnally.com may be serving an unverified build. Roll back manually in the Vercel dashboard."
           elif [ "$deployed" = "success" ]; then
             title="⚠️ Uploaded, but the domain was not confirmed to serve it"
+            state="No revert ran. Check what persnally.com is serving."
           else
             title="❌ Nothing was deployed"
+            state="The site is unchanged and still serving the previous build."
           fi
 
           {
             echo "### $title"
+            echo ""
+            echo "$state"
             echo ""
             echo "| | |"
             echo "|---|---|"
@@ -214,7 +263,6 @@ jobs:
             echo "| Commit | [\`${GITHUB_SHA:0:8}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |"
             echo "| Deployment | ${url:-—} |"
             echo "| Domain serves this build | ${verified:-not reached} |"
+            [ -n "$restored" ] && echo "| Reverted to previous | $restored |"
             [ "${{ steps.target.outputs.env }}" = "production" ] && echo "| Live | https://persnally.com |"
-            echo ""
-            [ "$deployed" = "success" ] || echo "The deploy did not complete — the site is unchanged and still serving the previous build."
           } >> "$GITHUB_STEP_SUMMARY"
