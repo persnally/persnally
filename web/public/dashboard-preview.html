@@ -32,6 +32,9 @@
   /* ── header ── */
   header { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 34px; }
   .brand { display: flex; align-items: center; gap: 10px; }
+  /* 22px, not the site nav's 30px: this wordmark is 17px sans, the site's is
+     22px display serif. Matching the mark to its own wordmark keeps the ratio
+     (1.29 here, 1.36 there); matching absolute pixels would make it 1.76. */
   .mark { width: 22px; height: 22px; display: block; }
   .wordmark { font-weight: 600; font-size: 17px; letter-spacing: -0.2px; }
   .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); }
