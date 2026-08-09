@@ -39,7 +39,9 @@ test("connect --all writes installed clients, merges configs, skips missing", as
 });
 
 test("connect rejects unknown clients", async () => {
-  await assert.rejects(run("node", [CLI, "connect", "vscode"], { env }), /unknown client/);
+  // Not `vscode` — that is a supported client now. Any real editor name here is
+  // one release away from becoming valid, so use one we will never ship.
+  await assert.rejects(run("node", [CLI, "connect", "notepad"], { env }), /unknown client/);
 });
 
 test("connect issues an identity token: env in the client config, secret in ours, rotated per connect", async () => {

@@ -49,7 +49,7 @@ const USAGE = `${BIN} ${VERSION} — so every AI finally knows you
 
 Usage:
   persnally setup                  One command: find exports, import, synthesize, connect, open
-  persnally connect [client|--all] [--scope cats]  Add Persnally to claude-code | claude-desktop | cursor (optionally scope it inline)
+  persnally connect [client|--all] [--scope cats]  Add Persnally to any of 8 clients, or --all (optionally scope it inline)
   persnally scope <client> <categories|--clear>   Limit what a client can read (e.g. scope cursor technology,career)
   persnally scope                  Show all client scopes
   persnally init                   Create the local store (~/.persnally/persnally.db)
