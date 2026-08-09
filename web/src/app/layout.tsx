@@ -17,7 +17,7 @@ const text = Newsreader({ subsets: ["latin"], style: ["normal", "italic"], varia
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 const description =
-  "Persnally is a local-first personal context engine. It learns who you are from your AI history and serves that context to every AI tool you use — local-first, across every AI.";
+  "Learns who you are from your AI history and serves that context to every AI you use — Claude, Cursor, Codex. Local-first: your data stays yours.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://persnally.com"),
