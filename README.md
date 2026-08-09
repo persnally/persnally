@@ -25,15 +25,27 @@ One command builds your mirror: it finds Claude/ChatGPT exports in `~/Downloads`
 
 For the richest result, export your data first ([claude.ai](https://claude.com) / [chatgpt.com](https://chatgpt.com) → Settings → Data export) and drop it in `~/Downloads` — then read a description of yourself that's sharper than your own bio, every sentence traceable to the conversations it came from.
 
+**Or have your AI do it.** Paste this into Claude Code, Codex, Gemini CLI, Cursor — anything that can run commands:
+
+```
+Set up Persnally on this machine for me. Follow
+https://github.com/persnally/persnally/blob/main/docs/AGENT_INSTALL.md
+exactly, then tell me what it learned about me and which of my AI clients
+you connected.
+```
+
+Every command in that guide is non-interactive, so it runs unattended. It ends by
+verifying the install with `persnally doctor` rather than assuming it worked.
+
 Prefer each step explicit?
 
 ```bash
-persnallyd start                      # the local daemon
-persnallyd import claude ~/Downloads/<your-claude-export>
-persnallyd import claude-code         # your local Claude Code sessions
-persnallyd import git ~/Projects      # offline, no API needed
-persnallyd profile                    # synthesize who you are
-persnallyd dashboard                  # see it, with evidence for every claim
+persnally start                      # the local daemon
+persnally import claude ~/Downloads/<your-claude-export>
+persnally import claude-code         # your local Claude Code sessions
+persnally import git ~/Projects      # offline, no API needed
+persnally profile                    # synthesize who you are
+persnally dashboard                  # see it, with evidence for every claim
 ```
 
 ## How it works
@@ -52,14 +64,14 @@ persnallyd dashboard                  # see it, with evidence for every claim
 
 - **Event-sourced.** Everything is an append-only event; the profile and interest graph are *derived views* you can rebuild or delete at will.
 - **Provenance-complete.** Every claim in your profile links to the exact events behind it — the dashboard's "why does it think this?" is a real answer, not a guess.
-- **Truly deletable.** `persnallyd forget <topic>` hard-deletes the events *and* everything derived from them. No tombstones, no residue.
-- **Yours to take.** `persnallyd export` writes the whole store — events, profile, interests, voice — to a file you keep. No lock-in to prove.
+- **Truly deletable.** `persnally forget <topic>` hard-deletes the events *and* everything derived from them. No tombstones, no residue.
+- **Yours to take.** `persnally export` writes the whole store — events, profile, interests, voice — to a file you keep. No lock-in to prove.
 - **Deterministic reads.** Serving context to an AI never calls a model — it's instant, free, and works offline. Models run only at import and synthesis.
 
 ## Make your AI tools use it
 
 ```bash
-persnallyd connect --all     # writes the MCP config for every installed client
+persnally connect --all     # writes the MCP config for every installed client
 ```
 
 Or add the MCP server to any client manually. It exposes six tools backed by the daemon:
@@ -101,21 +113,22 @@ Or add the MCP server to any client manually. It exposes six tools backed by the
 ## CLI
 
 ```
-persnally setup                          # one command: import, synthesize, connect
-persnallyd start | stop | status         # daemon lifecycle
-persnallyd autostart [--remove]          # run at login (macOS)
-persnallyd connect [client|--all]        # claude-code · claude-desktop · cursor · codex · gemini-cli · windsurf · zed · vscode
-persnallyd import claude|claude-code|chatgpt|git <path>
-persnallyd scope <client> <categories>   # limit what a client can read
-persnallyd profile                       # synthesize the profile
-persnallyd consolidate                   # reflect now: refresh decay, add behavior patterns
-persnallyd voice                         # refresh your "how you write" fingerprint (offline)
-persnallyd show [topics|events|profile]
-persnallyd dashboard                     # open the local dashboard (authenticated link)
-persnallyd activity [--json]             # context-read engagement over time (retention pulse)
-persnallyd export [--md] [--out <file>] # take everything with you (JSON, or a readable portrait)
-persnallyd forget <topic> | --all | --batch <id> | --style <dim> <pattern>
-persnallyd config set-key <sk-ant-…>     # key for the background daemon
+persnally setup [--yes] [--engine …]    # one command: import, synthesize, connect (--yes runs unattended)
+persnally doctor [--json]               # check the install end to end; exit 1 if broken
+persnally start | stop | status         # daemon lifecycle
+persnally autostart [--remove]          # run at login (macOS)
+persnally connect [client|--all]        # claude-code · claude-desktop · cursor · codex · gemini-cli · windsurf · zed · vscode
+persnally import claude|claude-code|chatgpt|git <path>
+persnally scope <client> <categories>   # limit what a client can read
+persnally profile                       # synthesize the profile
+persnally consolidate                   # reflect now: refresh decay, add behavior patterns
+persnally voice                         # refresh your "how you write" fingerprint (offline)
+persnally show [topics|events|profile]
+persnally dashboard                     # open the local dashboard (authenticated link)
+persnally activity [--json]             # context-read engagement over time (retention pulse)
+persnally export [--md] [--out <file>] # take everything with you (JSON, or a readable portrait)
+persnally forget <topic> | --all | --batch <id> | --style <dim> <pattern>
+persnally config set-key <sk-ant-…>     # key for the background daemon
 ```
 
 ## Status

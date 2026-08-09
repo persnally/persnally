@@ -48,7 +48,9 @@ const BIN = "persnally";
 const USAGE = `${BIN} ${VERSION} — so every AI finally knows you
 
 Usage:
-  persnally setup                  One command: find exports, import, synthesize, connect, open
+  persnally setup [--yes] [--engine ollama|anthropic|none]
+                                   One command: find exports, import, synthesize, connect, open
+                                   --yes runs unattended (an agent can drive it); --engine forces the extractor
   persnally connect [client|--all] [--scope cats]  Add Persnally to any of 8 clients, or --all (optionally scope it inline)
   persnally scope <client> <categories|--clear>   Limit what a client can read (e.g. scope cursor technology,career)
   persnally scope                  Show all client scopes
@@ -80,9 +82,17 @@ Usage:
   persnally restart                Restart the daemon (correctly handles autostart/launchd)
   persnally serve [--port N]       Run the daemon in the foreground (127.0.0.1:${DEFAULT_PORT})
   persnally autostart [--remove]   Start the daemon at login and keep it alive (macOS launchd · Linux systemd)
-  persnally config set-key <key>   Store the Anthropic API key (owner-only file) for the daemon
+  persnally config set-key [key]   Store the Anthropic API key (owner-only file); omit the key to read it
+                                   from stdin, keeping it out of argv and shell history
   persnally config                 Show config (key masked)
 `;
+
+/** Reads piped input whole. Used so a secret need never appear in argv. */
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const c of process.stdin) chunks.push(c as Buffer);
+  return Buffer.concat(chunks).toString("utf-8").trim();
+}
 
 function parsePort(args: string[]): number {
   const i = args.indexOf("--port");
@@ -144,7 +154,10 @@ async function main(): Promise<void> {
       // 1. Extraction engine. Optional (git works without one) but everything
       //    that makes the portrait worth reading needs it, so try to get one
       //    rather than silently degrading to a git-only mirror.
-      const engine = await resolveSetupEngine();
+      const engineOpts = parseEngineOptions(args);
+      // "none" means no engine at all, so it can never be a forced *choice*.
+      const forcedEngine = engineOpts.engine === "none" ? undefined : engineOpts.engine ?? undefined;
+      const engine = await resolveSetupEngine(engineOpts);
 
       // 2. Daemon
       if (!runningPid()) {
@@ -207,7 +220,7 @@ async function main(): Promise<void> {
       // 5. Profile
       if (engine && store.stats().total > 0) {
         console.log("→ Synthesizing your profile…");
-        const profileEngine = await chooseExtractor("profile");
+        const profileEngine = await chooseExtractor("profile", forcedEngine);
         await synthesizeProfile(store, profileEngine.extract, profileEngine.model);
         console.log("  ✓ Profile ready");
       }
@@ -319,8 +332,17 @@ async function main(): Promise<void> {
     }
     case "config": {
       if (args[0] === "set-key") {
-        if (!args[1]?.startsWith("sk-ant-")) return die("expected an Anthropic key (sk-ant-...)");
-        saveConfig({ anthropic_api_key: args[1] });
+        // A key passed as an argument is visible in `ps` and lands in shell
+        // history — worse when an agent composes the command, since it then
+        // also lands in a transcript. Reading stdin gives callers a way to
+        // supply it that leaves no such trace.
+        const key = args[1] ?? (process.stdin.isTTY ? "" : await readStdin());
+        if (!key.startsWith("sk-ant-")) {
+          return die("expected an Anthropic key (sk-ant-...)\n"
+            + "  Avoid putting it in the command line — pipe it instead:\n"
+            + `    printf '%s' "$ANTHROPIC_API_KEY" | ${BIN} config set-key`);
+        }
+        saveConfig({ anthropic_api_key: key });
         console.log(`Key saved to ${configPath()} (mode 600). Restart the daemon to apply: persnally stop`);
         return;
       }
@@ -789,8 +811,56 @@ async function main(): Promise<void> {
  * skipped, and a terminal user shouldn't have to find the dashboard to learn
  * that — this is the one failure case setup can actually fix in place.
  */
-async function resolveSetupEngine(): Promise<ChosenExtractor | null> {
-  const found = await chooseExtractor("extract").catch(() => null);
+/** How setup should obtain an extraction engine without a human present. */
+export interface EngineOptions {
+  /** Accept the model download without asking — the agent-driven path. */
+  yes: boolean;
+  /** Force a specific engine; null means the usual preference order. */
+  engine: "ollama" | "anthropic" | "none" | null;
+}
+
+export function parseEngineOptions(args: string[]): EngineOptions {
+  const occurrences = args.filter((a) => a === "--engine").length;
+  if (occurrences > 1) throw new Error("--engine given more than once");
+  const i = args.indexOf("--engine");
+  let engine: EngineOptions["engine"] = null;
+  if (i > -1) {
+    // A present-but-malformed flag must fail, not fall back to the default:
+    // an agent whose command was truncated would otherwise get a different
+    // engine than it asked for and no indication anything went wrong.
+    const raw = args[i + 1];
+    if (!raw || !["ollama", "anthropic", "none"].includes(raw)) {
+      throw new Error(`--engine must be ollama, anthropic or none (got ${raw ? `"${raw}"` : "nothing"})`);
+    }
+    engine = raw as EngineOptions["engine"];
+  }
+  return { yes: args.includes("--yes") || args.includes("-y"), engine };
+}
+
+async function resolveSetupEngine(opts: EngineOptions): Promise<ChosenExtractor | null> {
+  if (opts.engine === "none") {
+    console.log("· Engine skipped (--engine none) — git and voice import offline; conversations are left for later.");
+    return null;
+  }
+
+  // A forced engine is resolved directly and never falls back — see
+  // chooseExtractor. Falling back here would hand `--engine ollama` the
+  // Anthropic extractor whenever a key happened to be set.
+  if (opts.engine) {
+    try {
+      const forced = await chooseExtractor("extract", opts.engine);
+      console.log(`✓ Extraction engine: ${forced.label}`);
+      return forced;
+    } catch (e) {
+      // Ollama running with no model is recoverable below; anything else is not.
+      if (opts.engine === "anthropic" || (await ollamaTags()) === null) {
+        console.log(`· ${e instanceof Error ? e.message : String(e)}`);
+        return null;
+      }
+    }
+  }
+
+  const found = opts.engine ? null : await chooseExtractor("extract").catch(() => null);
   if (found) {
     console.log(`✓ Extraction engine: ${found.label}`);
     return found;
@@ -805,20 +875,29 @@ async function resolveSetupEngine(): Promise<ChosenExtractor | null> {
   }
 
   const pull = `ollama pull ${RECOMMENDED_LOCAL_MODEL}`;
-  if (!process.stdin.isTTY) {
+  // An agent running this has no terminal to answer in, so consent has to be
+  // expressible as a flag — otherwise the only non-interactive outcome is the
+  // degraded one.
+  const preapproved = opts.yes || opts.engine === "ollama";
+  if (!preapproved && !process.stdin.isTTY) {
     console.log(`· Ollama is running but has no model. Run \`${pull}\`, then re-run \`${BIN} setup\`.`);
+    console.log(`    Or let setup fetch it: ${BIN} setup --yes`);
     return null;
   }
 
-  const { createInterface } = await import("node:readline/promises");
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const reply = (await rl.question(
-    `· Ollama is running but has no model yet.\n  Download ${RECOMMENDED_LOCAL_MODEL} now (~2GB, free, never leaves this machine)? [Y/n] `,
-  )).trim().toLowerCase();
-  rl.close();
-  if (reply && !reply.startsWith("y")) {
-    console.log(`  Skipped — conversation imports need a model. Re-run \`${BIN} setup\` after \`${pull}\`.`);
-    return null;
+  if (!preapproved) {
+    const { createInterface } = await import("node:readline/promises");
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const reply = (await rl.question(
+      `· Ollama is running but has no model yet.\n  Download ${RECOMMENDED_LOCAL_MODEL} now (~2GB, free, never leaves this machine)? [Y/n] `,
+    )).trim().toLowerCase();
+    rl.close();
+    if (reply && !reply.startsWith("y")) {
+      console.log(`  Skipped — conversation imports need a model. Re-run \`${BIN} setup\` after \`${pull}\`.`);
+      return null;
+    }
+  } else {
+    console.log(`· Fetching ${RECOMMENDED_LOCAL_MODEL} (~2GB, free, never leaves this machine)…`);
   }
 
   try {
@@ -837,7 +916,7 @@ async function resolveSetupEngine(): Promise<ChosenExtractor | null> {
     return null;
   }
 
-  const engine = await chooseExtractor("extract").catch(() => null);
+  const engine = await chooseExtractor("extract", opts.engine ?? undefined).catch(() => null);
   if (engine) console.log(`✓ Extraction engine: ${engine.label}`);
   return engine;
 }
