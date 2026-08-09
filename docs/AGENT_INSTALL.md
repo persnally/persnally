@@ -30,42 +30,57 @@ global install causes exactly the permission problems this product diagnoses.
 
 ## 2. Choose an extraction engine
 
-Conversation import needs a model. Three valid outcomes — pick the first that
-applies and **do not ask the user to choose unless none apply**:
+Conversation import needs a model. This step **decides** which one; step 3 runs
+setup once with that decision. Do not run setup here.
 
-| Situation | Command |
-|---|---|
-| `ANTHROPIC_API_KEY` is already in the environment | nothing — setup uses it. Do **not** run `config set-key`. |
-| The user supplies a key now | `persnally config set-key <their actual key>` |
-| Ollama is installed (`curl -s localhost:11434/api/tags` responds) | `persnally setup --engine ollama --yes` — fetches a ~2GB model if needed |
-| Neither, and the user wants neither | `persnally setup --engine none` |
+Pick the first row that applies, and **do not ask the user to choose unless none
+apply**:
+
+| Situation | Do this | Flag for step 3 |
+|---|---|---|
+| `ANTHROPIC_API_KEY` already in the environment | nothing — setup uses it. Do **not** run `config set-key`. | `--engine anthropic` |
+| The user supplies a key now | `persnally config set-key <their actual key>` | `--engine anthropic` |
+| Ollama is running (probe below) | nothing | `--engine ollama` |
+| None of the above | nothing | `--engine none` |
+
+Probe Ollama with a bounded request that fails on a non-2xx response — an
+unrelated service on that port, or a stalled one, must not hang an unattended
+install or be mistaken for Ollama:
+
+```bash
+curl --fail --silent --show-error --max-time 2 http://127.0.0.1:11434/api/tags
+```
+
+Treat it as available only if that exits 0 **and** the body is Ollama JSON
+containing a `models` array.
 
 Never run `config set-key` with a placeholder. `sk-ant-…` passes the CLI's
 prefix check and would store an invalid key that fails later at import, far from
 the cause. Only ever pass a key the user actually gave you, and never echo it
 back or write it anywhere other than through `config set-key`.
 
-`--engine none` is a real option, not a failure: git history and writing-style
-analysis are fully offline and still import. **It does not produce a profile** —
-profile synthesis needs a model. Conversation import and the profile are both
-deferred until an engine exists; re-running `persnally setup` later picks up
-exactly what was skipped.
-
 `--engine` is honoured strictly and never falls back. `--engine ollama` will not
 quietly use an Anthropic key that happens to be set, and `--engine anthropic`
 fails outright if no key is configured rather than sending data to a different
 engine than the one requested.
 
-## 3. Run setup
+## 3. Run setup — once
 
 ```bash
-persnally setup --yes
+persnally setup --yes --engine <the flag from step 2>
 ```
 
 This starts the daemon, imports what it finds (Claude/ChatGPT exports in
-`~/Downloads`, Claude Code transcripts, git repos under `~/Projects`),
-synthesizes a profile, connects installed AI clients, and prints a dashboard
-URL. It is idempotent — re-running it does not duplicate data.
+`~/Downloads`, Claude Code transcripts, git repos under `~/Projects`), connects
+installed AI clients, and prints a dashboard URL. It is idempotent — re-running
+does not duplicate data — but run it **once**, with the engine flag, rather than
+running it again without one and dropping the choice.
+
+**With `--engine none` this is expected, not a failure:** git history and
+writing-style analysis import fully offline; conversation import and profile
+synthesis are *both* deferred until an engine exists. `persnally show` will list
+interests from git activity but there will be no profile. Re-running setup later
+with an engine picks up exactly what was skipped.
 
 **Richer result:** if the user has not exported their Claude/ChatGPT history,
 tell them it roughly doubles what Persnally can learn:
@@ -117,7 +132,7 @@ failure of the install. Point the user at step 3's export instructions.
 | `permission denied` running any command | install lost its executable bit | `persnally doctor` prints the exact `chmod` |
 | `doctor` says daemon version ≠ CLI version | upgraded on disk, old process still running | `persnally restart` |
 | `doctor` says capture stopped | hook missing or daemon was down | `persnally connect claude-code && persnally restart` |
-| Setup reports sources "skipped" | no extraction engine | step 2, then re-run setup |
+| Setup reports sources "skipped", and no profile | no extraction engine — expected under `--engine none` | only act if the user wanted one: step 2, then re-run setup with that flag |
 | Client shows no Persnally tools | client not restarted since connect | restart the client |
 
 ## Do not
