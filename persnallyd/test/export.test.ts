@@ -114,6 +114,30 @@ describe("the markdown portrait is readable", () => {
     assert.equal(row.split(/(?<!\\)\|/).length, 6, "still exactly four cells");
   });
 
+  test("a backslash before a pipe cannot escape the cell — topic names are client-writable", () => {
+    // Escaping the pipe alone turns `\|` into `\\|`: Markdown reads the pair as
+    // one literal backslash, leaving the pipe live. A prompt-injected client
+    // could write such a topic through persnally_track and break out of its cell.
+    const s = new EventStore(join(dir, "inject.db"));
+    s.append([newEvent("signal.topic", "mcp:cursor", {
+      topic: String.raw`safe\| INJECTED`, weight: 0.9, intent: "building",
+      sentiment: "neutral", depth: "deep", category: "technology", entities: [],
+    }, { kind: "mcp", client: "cursor" })]);
+    s.rebuild();
+
+    const row = renderMarkdown(buildBundle(s, "3.0.0")).split("\n").find((l) => l.includes("INJECTED"))!;
+    s.close();
+
+    // Walk it the way Markdown does: `\X` consumes two characters, so a
+    // backslash that is itself escaped no longer protects what follows.
+    let cells = 0;
+    for (let i = 0; i < row.length; i++) {
+      if (row[i] === "\\") { i++; continue; }
+      if (row[i] === "|") cells++;
+    }
+    assert.equal(cells, 5, `the row must keep exactly four cells, got ${cells - 1}: ${row}`);
+  });
+
   test("an empty store produces a bundle that says so rather than throwing", () => {
     const empty = new EventStore(join(dir, "empty.db"));
     const b = buildBundle(empty, "2.10.0");
