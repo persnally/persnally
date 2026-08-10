@@ -7,7 +7,10 @@
    ink tooltip on hover (desktop) or tap (touch), so the artwork stays
    uncovered at rest. */
 
+import Image from "next/image";
 import { useState } from "react";
+import { SIZES } from "../_sizes";
+import head from "../_art/proportion-head.webp";
 
 /* points are coordinates plotted on the model — not head-region claims. Each
    reveals a plain label + a concrete thing Persnally actually learned. */
@@ -25,13 +28,14 @@ export function EngravedSelf() {
   return (
     <figure>
       <div className="relative bg-paper">
-        {/* eslint-disable-next-line @next/next/no-img-element -- static plate, multiply-blended */}
-        <img
-          src="/art/proportion-head.webp"
+        {/* The page's LCP element — preloaded from the head so it isn't
+            discovered only once the body parses. */}
+        <Image
+          src={head}
           alt="Engraving of a head in profile overlaid with a proportional measuring grid"
-          width={1000}
-          height={1044}
-          className="block w-full mix-blend-multiply"
+          sizes={SIZES.hero}
+          preload
+          className="block h-auto w-full mix-blend-multiply"
         />
         {POINTS.map((p, i) => {
           const open = active === i;
