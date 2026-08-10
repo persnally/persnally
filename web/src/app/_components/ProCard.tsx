@@ -1,9 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { Check } from "lucide-react";
 import { ANNUAL_PER_MONTH, MONTHLY, PriceToggle } from "./PriceToggle";
 import { WaitlistForm } from "./WaitlistForm";
+import keyPlate from "../_art/key.webp";
 
 // Each line says which side of the custody line it sits on. The section's
 // CustodyNote spells out why inference can't be ciphertext-only.
@@ -33,14 +35,12 @@ export function ProCard() {
         <PriceToggle annual={annual} onChange={setAnnual} />
       </div>
       <figure className="mt-5">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/art/key.webp"
+        <Image
+          src={keyPlate}
           alt=""
           aria-hidden
-          width={900}
-          height={276}
-          className="w-full mix-blend-multiply"
+          sizes="(min-width: 768px) 318px, calc(100vw - 6.5rem)"
+          className="h-auto w-full mix-blend-multiply"
         />
         <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
           the key — yours alone · backup &amp; relay stay ciphertext
