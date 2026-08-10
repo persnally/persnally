@@ -8,6 +8,7 @@ import { ProCard } from "./_components/ProCard";
 import { GithubIcon, NpmIcon, ProductHuntIcon, Glyph, TOOLS, brand } from "@/components/ui/logos";
 import { GITHUB, NPM, PRODUCT_HUNT } from "@/lib/links";
 import { ArrowUpRight, Check, Cpu, Minus, X } from "lucide-react";
+import { SIZES } from "./_sizes";
 
 // The plates are imported, not referenced by URL, so the optimizer knows each
 // one's intrinsic size and can hash it into an immutable asset.
@@ -31,19 +32,6 @@ import press from "./_art/press.webp";
 import specimen from "./_art/specimen.webp";
 
 const EXT = { target: "_blank", rel: "noopener noreferrer" } as const;
-
-/* Rendered widths, so the browser can pick a size instead of assuming 100vw.
-   Each is the widest the plate is ever drawn in that slot. */
-const SIZES = {
-  /* a third of the three-up step cards */
-  step: "(min-width: 1024px) 307px, calc(100vw - 6rem)",
-  /* half of a two-up plate grid */
-  half: "(min-width: 768px) 494px, calc(100vw - 6rem)",
-  /* a roundel, capped at its own max-width */
-  medallion: "(min-width: 26rem) 320px, calc(100vw - 6rem)",
-  /* the narrower column of the pricing pair, which lives inside max-w-3xl */
-  pricing: "(min-width: 768px) 318px, calc(100vw - 6.5rem)",
-} as const;
 
 export default function Home() {
   return (
@@ -248,7 +236,7 @@ function Wedge() {
                     src={h.src}
                     alt=""
                     aria-hidden
-                    sizes="168px"
+                    sizes={SIZES.mapSlice}
                     className="mx-auto h-auto w-full max-w-[168px] mix-blend-multiply"
                   />
                   <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.1em] text-mute">{h.tool}</p>
@@ -644,7 +632,7 @@ function Engine() {
             src={fountain}
             cap="the well — one source, every tool draws"
             h="h-[205px]"
-            sizes={SIZES.half}
+            sizes={SIZES.well}
           />
           <div className="mt-5 flex flex-1 flex-col justify-evenly space-y-0 border-t border-ink/20">
             {[
@@ -711,7 +699,7 @@ function Engine() {
               src={cards}
               cap="the card table — each player sees only its own hand"
               h="h-[242px]"
-              sizes="(min-width: 1024px) 440px, calc(100vw - 6rem)"
+              sizes={SIZES.cardTable}
             />
             <div className="grid gap-x-8 gap-y-0 sm:grid-cols-1">
             {[
@@ -946,7 +934,7 @@ function Positioning() {
         <Image
           src={armillary}
           alt="Engraving of an armillary sphere — a measured model of a world"
-          sizes="220px"
+          sizes={SIZES.armillary}
           className="mx-auto h-auto w-[220px] mix-blend-multiply"
         />
         <figcaption className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
@@ -1132,7 +1120,7 @@ function GetStarted() {
         <Image
           src={mirror}
           alt="Engraving of a woman studying her own reflection in a hand-mirror, an eagle at her side"
-          sizes="(min-width: 468px) 420px, calc(100vw - 3rem)"
+          sizes={SIZES.mirror}
           className="mx-auto h-auto w-[420px] max-w-full mix-blend-multiply"
         />
         <figcaption className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Check } from "lucide-react";
 import { ANNUAL_PER_MONTH, MONTHLY, PriceToggle } from "./PriceToggle";
 import { WaitlistForm } from "./WaitlistForm";
+import { SIZES } from "../_sizes";
 import keyPlate from "../_art/key.webp";
 
 // Each line says which side of the custody line it sits on. The section's
@@ -39,7 +40,7 @@ export function ProCard() {
           src={keyPlate}
           alt=""
           aria-hidden
-          sizes="(min-width: 768px) 318px, calc(100vw - 6.5rem)"
+          sizes={SIZES.pricing}
           className="h-auto w-full mix-blend-multiply"
         />
         <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">

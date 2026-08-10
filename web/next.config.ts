@@ -11,9 +11,9 @@ const nextConfig: NextConfig = {
     // browsers that lack it; the sources are WebP already, so this is the last
     // ~20% after the resizing win.
     formats: ["image/avif", "image/webp"],
-    // No plate is drawn wider than 572 CSS px or narrower than 168, so the
-    // default ladder's outer rungs are dead srcset bytes and dead billable
-    // transformations. Widen these before adding a full-bleed image.
+    // No plate is drawn wider than 572 CSS px (the hero) or narrower than a
+    // 80px map slice, so the default ladder's outer rungs are dead srcset
+    // bytes and dead billable transformations. Widen before a full-bleed image.
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [128, 256, 384],
   },

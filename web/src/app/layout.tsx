@@ -56,10 +56,11 @@ export const metadata: Metadata = {
   },
 };
 
-/* One @graph so the three nodes resolve to the same entity instead of three
-   unrelated blobs: who publishes it, what the site is, what the software is.
-   No FAQPage — Google dropped FAQ rich results for non-health/gov sites, and
-   the page has no visible Q&A for the markup to mirror. */
+/* Three entities — who publishes it, what the site is, what the software is —
+   in one @graph, each with an @id so the publisher references link them
+   instead of leaving three unrelated blobs. No FAQPage: Google dropped FAQ
+   rich results for non-health/gov sites, and the page has no visible Q&A for
+   the markup to mirror. */
 const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
@@ -105,7 +106,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={`${display.variable} ${text.variable} ${mono.variable}`}>
       <body className="antialiased">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        {/* `<` escaped per Next's JSON-LD guide: JSON.stringify does not do it,
+            and no future value here should be able to close the script tag. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+        />
         {OPENPANEL_CLIENT_ID && (
           <OpenPanelComponent
             clientId={OPENPANEL_CLIENT_ID}

@@ -9,6 +9,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { SIZES } from "../_sizes";
 import head from "../_art/proportion-head.webp";
 
 /* points are coordinates plotted on the model — not head-region claims. Each
@@ -32,7 +33,7 @@ export function EngravedSelf() {
         <Image
           src={head}
           alt="Engraving of a head in profile overlaid with a proportional measuring grid"
-          sizes="(min-width: 1024px) 572px, calc(100vw - 3rem)"
+          sizes={SIZES.hero}
           preload
           className="block h-auto w-full mix-blend-multiply"
         />
