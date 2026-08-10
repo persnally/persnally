@@ -2,7 +2,7 @@
   "name": "persnally",
   "version": "3.1.0",
   "license": "FSL-1.1-MIT",
-  "description": "Your own context engine — local-first, across every AI. So every AI finally knows you.",
+  "description": "Your own context engine \u2014 local-first, across every AI. So every AI finally knows you.",
   "type": "module",
   "bin": {
     "persnally": "build/src/cli.js",
@@ -16,11 +16,11 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').copyFileSync('src/dashboard.html','build/src/dashboard.html')\"",
+    "build": "node scripts/check-node.mjs && tsc && node -e \"require('fs').copyFileSync('src/dashboard.html','build/src/dashboard.html')\"",
     "lint": "eslint .",
     "test": "npm run build && node --test build/test/*.test.js && node test-mcp-e2e.mjs",
     "serve": "npm run build && node build/src/cli.js serve",
-    "prepublishOnly": "node -e \"const fs=require('fs');fs.copyFileSync('../README.md','README.md');fs.copyFileSync('../LICENSE','LICENSE');fs.copyFileSync('../CHANGELOG.md','CHANGELOG.md')\" && npm test"
+    "prepublishOnly": "node scripts/check-node.mjs && node -e \"const fs=require('fs');fs.copyFileSync('../README.md','README.md');fs.copyFileSync('../LICENSE','LICENSE');fs.copyFileSync('../CHANGELOG.md','CHANGELOG.md')\" && npm test"
   },
   "engines": {
     "node": ">=22"

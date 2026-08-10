@@ -9,7 +9,9 @@ export default tseslint.config(
   // eslint.config.mjs and test-mcp-e2e.mjs run directly under node, outside
   // tsconfig.json's `include` — type-checked rules need a project to check
   // against, so they'd otherwise fail to parse rather than fail to lint.
-  { ignores: ["build/**", "node_modules/**", "eslint.config.mjs", "test-mcp-e2e.mjs"] },
+  // Standalone .mjs outside the TypeScript project — the type-aware parser
+  // cannot resolve them, same as the two already listed.
+  { ignores: ["build/**", "node_modules/**", "eslint.config.mjs", "test-mcp-e2e.mjs", "scripts/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   security.configs.recommended,
