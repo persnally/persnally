@@ -149,6 +149,11 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       if (req.method === "GET" && url.pathname === "/") {
         return serveDashboard(req, res, url);
       }
+      // The workspace dashboard (Preact, single-file build) — parallel to the
+      // classic page while it grows to parity; same session gate, same headers.
+      if (req.method === "GET" && url.pathname === "/next") {
+        return serveDashboard(req, res, url, nextDashboardHtml, "/next");
+      }
 
       const auth = authenticate(req, url.searchParams.get("client"));
       if (auth.kind === "none") return json(res, 401, { error: auth.error });
@@ -571,6 +576,12 @@ function dashboardHtml(): string {
   return cachedHtml;
 }
 
+let cachedNextHtml: string | undefined;
+function nextDashboardHtml(): string {
+  cachedNextHtml ??= readFileSync(new URL("./dashboard-next.html", import.meta.url), "utf-8");
+  return cachedNextHtml;
+}
+
 // The page itself never carries the credential — the key arrives once as ?k=,
 // is exchanged for an HttpOnly cookie, and the redirect drops it from the
 // address bar so it can't leak through history or a Referer on an outbound link.
@@ -581,12 +592,18 @@ const DASHBOARD_HEADERS = {
   "X-Content-Type-Options": "nosniff",
 };
 
-function serveDashboard(req: http.IncomingMessage, res: http.ServerResponse, url: URL): void {
+function serveDashboard(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  url: URL,
+  page: () => string = dashboardHtml,
+  selfPath = "/",
+): void {
   const key = url.searchParams.get("k");
   if (key && verifyDashboardKey(key)) {
     res.writeHead(302, {
       ...DASHBOARD_HEADERS,
-      "Location": "/",
+      "Location": selfPath,
       "Set-Cookie": `${SESSION_COOKIE}=${createSession()}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict`,
     });
     res.end();
@@ -602,7 +619,7 @@ function serveDashboard(req: http.IncomingMessage, res: http.ServerResponse, url
       headers["Set-Cookie"] = `${SESSION_COOKIE}=${createSession()}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict`;
     }
     res.writeHead(200, headers);
-    res.end(dashboardHtml());
+    res.end(page());
     return;
   }
   res.writeHead(401, DASHBOARD_HEADERS);
