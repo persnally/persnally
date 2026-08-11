@@ -1,6 +1,7 @@
 import type { ComponentType } from "preact";
+import type { AskRow } from "../api/types";
 import type { Area } from "../lib/use-hash-route";
-import { AccessIcon, ConnectionsIcon, ControlIcon, DataIcon, MirrorIcon } from "./icons";
+import { AccessIcon, AskIcon, ConnectionsIcon, ControlIcon, DataIcon, MirrorIcon, PanelIcon, PlusIcon } from "./icons";
 import { Mark } from "./Mark";
 
 const ITEMS: { area: Area; label: string; Icon: ComponentType }[] = [
@@ -11,30 +12,67 @@ const ITEMS: { area: Area; label: string; Icon: ComponentType }[] = [
   { area: "control", label: "Control", Icon: ControlIcon },
 ];
 
-export function Rail({ active, collapsed, onToggle }: { active: Area; collapsed: boolean; onToggle: () => void }) {
+export interface RailProps {
+  active: Area;
+  collapsed: boolean;
+  onToggle: () => void;
+  onAsk: () => void;
+  recents: AskRow[];
+  status: { up: boolean; demo: boolean; version: string; engine: string };
+}
+
+export function Rail({ active, collapsed, onToggle, onAsk, recents, status }: RailProps) {
+  const { up, demo, version, engine } = status;
   return (
     <nav class="rail" aria-label="Areas">
-      <div class="rail-brand">
+      <div class="rail-head">
         <Mark />
-        <span class="label">Persnally</span>
-      </div>
-      {ITEMS.map(({ area, label, Icon }) => (
-        <a key={area} class={`rail-item${area === active ? " active" : ""}`} href={`#/${area}`} title={label}>
-          <span class="glyph">
-            <Icon />
-          </span>
-          <span class="label">{label}</span>
-        </a>
-      ))}
-      <div class="rail-foot">
-        <button
-          class="rail-collapse"
-          onClick={onToggle}
-          title={collapsed ? "Expand" : "Collapse"}
-          aria-expanded={!collapsed}
-        >
-          {collapsed ? "»" : "«"} <span class="label">{collapsed ? "Expand" : "Collapse"}</span>
+        <span class="wordmark">persnally</span>
+        <span class="spacer" />
+        <button class="rail-toggle" onClick={onToggle} title={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed}>
+          <PanelIcon />
         </button>
+      </div>
+
+      <button class="rail-primary" onClick={onAsk} title="Ask your model">
+        <span class="glyph"><PlusIcon /></span>
+        <span class="label">Ask</span>
+      </button>
+
+      <div class="rail-nav">
+        {ITEMS.map(({ area, label, Icon }) => (
+          <a key={area} class={`rail-item${area === active ? " active" : ""}`} href={`#/${area}`} title={label}>
+            <span class="glyph"><Icon /></span>
+            <span class="label">{label}</span>
+          </a>
+        ))}
+      </div>
+
+      <div class="rail-scroll">
+        <div class="rail-label">Recent asks</div>
+        {recents.length === 0 ? (
+          <div class="rail-hint">Questions your AIs ask show up here.</div>
+        ) : (
+          recents.map((r) => (
+            <a
+              key={r.answer_id}
+              class="rail-item"
+              href="#/mirror"
+              title={`${r.asker}: ${r.question}${r.deferred ? " (deferred)" : ""}`}
+            >
+              <span class="glyph"><AskIcon /></span>
+              <span class="label">{r.question}</span>
+            </a>
+          ))
+        )}
+      </div>
+
+      <div class="rail-foot" title={demo ? "preview" : up ? `daemon running · ${engine}` : "daemon unreachable"}>
+        <span class={`dot${demo ? " preview" : up ? " on" : ""}`} />
+        <span class="stack">
+          <span class="line1">{demo ? "preview" : up ? "daemon running" : "daemon unreachable"}</span>
+          <span class="line2">{demo ? "sample data" : [engine, version && `v${version}`].filter(Boolean).join(" · ")}</span>
+        </span>
       </div>
     </nav>
   );

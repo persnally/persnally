@@ -1,32 +1,114 @@
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { PersnallyClient } from "../../api/client";
-import type { Profile } from "../../api/types";
+import type { AskResult, Profile } from "../../api/types";
 import type { Boot } from "../../lib/boot-state";
 import { usePoll } from "../../lib/use-poll";
+import { Mark } from "../../shell/Mark";
 import { AskComposer } from "./AskComposer";
+import { AskEntry } from "./AskEntry";
 import { Portrait } from "./Portrait";
 
-/** Mirror — "what does it know about me?" Portrait front and center, the ask
-    composer above it: the two things only Persnally can show. */
-export function MirrorView({ client, boot }: { client: PersnallyClient; boot: Boot }) {
-  const [profile, setProfile] = useState<Profile | null | undefined>(undefined); // undefined = loading
+/**
+ * Mirror — "what does it know about me?" The portrait scrolls; the composer is
+ * docked beneath it, and each answer appends to the flow so a question and what
+ * your model said read as one continuing thread.
+ */
+export function MirrorView({
+  client,
+  boot,
+  model,
+  focusSignal,
+  onAsked,
+}: {
+  client: PersnallyClient;
+  boot: Boot;
+  model: string;
+  focusSignal: number;
+  onAsked: () => void;
+}) {
+  const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
+  const [entries, setEntries] = useState<{ question: string; result: AskResult }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [coolingUntil, setCoolingUntil] = useState(0);
+  const flow = useRef<HTMLDivElement>(null);
 
   usePoll(boot, async () => {
     setProfile(await client.profile());
   });
 
+  // Newest answer is at the bottom of the flow — follow it, like a thread.
+  // Deferred a frame: on the commit that adds an entry, scrollHeight hasn't
+  // grown yet, so scrolling here lands short of the answer just asked for.
+  useEffect(() => {
+    if (!entries.length) return;
+    const el = flow.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [entries.length]);
+
+  async function ask(question: string) {
+    setBusy(true);
+    setNotice(null);
+    setError(null);
+    const r = await client.ask(question);
+    setBusy(false);
+    if (r.kind === "ok") {
+      setEntries((prev) => [...prev, { question, result: r.result }]);
+      onAsked();
+    } else if (r.kind === "rate-limited") {
+      setNotice(r.message);
+      setCoolingUntil(Date.now() + 60_000);
+      setTimeout(() => setCoolingUntil(0), 60_000);
+    } else {
+      setError(r.message);
+    }
+  }
+
+  const bare = profile === null && entries.length === 0;
+
   return (
-    <div class="canvas-col">
-      <AskComposer client={client} />
-      {profile === undefined && <div class="card empty reveal">loading…</div>}
-      {profile === null && (
-        <div class="card empty reveal">
-          <span class="big">No portrait yet</span>
-          Import your AI history with <code>persnally setup</code>, then synthesize — five minutes from install to a
-          profile that will unsettle you a little.
+    <div class={`canvas${bare ? " empty-state" : ""}`}>
+      <div class="flow" ref={flow}>
+        <div class="flow-col">
+          {profile === undefined && <div class="empty">loading…</div>}
+          {bare && (
+            <div class="greeting reveal">
+              <Mark class="mark" />
+              <h1>No portrait yet</h1>
+              <p>
+                Import your AI history with <code>persnally setup</code>, then synthesize. You can still ask below — it
+                answers from whatever evidence is already on file.
+              </p>
+            </div>
+          )}
+          {profile && <Portrait client={client} profile={profile} />}
+          {entries.map((e) => (
+            <AskEntry key={e.result.answer_id} client={client} question={e.question} result={e.result} />
+          ))}
         </div>
-      )}
-      {profile && <Portrait client={client} profile={profile} />}
+      </div>
+
+      <div class="dock">
+        <div class="dock-col">
+          <AskComposer
+            onSubmit={(q) => void ask(q)}
+            busy={busy}
+            cooling={Date.now() < coolingUntil}
+            model={model}
+            demo={client.mode === "demo"}
+            focusSignal={focusSignal}
+          />
+          {notice && <div class="notice">{notice}</div>}
+          {error && <div class="error-text">{error}</div>}
+          {!notice && !error && (
+            <div class="disclaimer">Answered from your own history — every answer cites its evidence.</div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

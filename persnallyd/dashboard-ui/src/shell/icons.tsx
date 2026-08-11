@@ -1,4 +1,4 @@
-/** Rail icons — one consistent 16px stroke set, currentColor, no icon library. */
+/** Rail and control icons — one consistent 16px stroke set, currentColor, no icon library. */
 
 const S = {
   width: 16,
@@ -46,5 +46,32 @@ export const ControlIcon = () => (
     <path d="M4 8h10M18 8h2M4 16h2M10 16h10" />
     <circle cx="16" cy="8" r="2.2" />
     <circle cx="8" cy="16" r="2.2" />
+  </svg>
+);
+
+/** Sidebar show/hide — the toggle both reference apps put at the top of the rail. */
+export const PanelIcon = () => (
+  <svg {...S}>
+    <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+    <path d="M9.5 4.5v15" />
+  </svg>
+);
+
+export const PlusIcon = () => (
+  <svg {...S}>
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+/** Recent asks — a question, not a chat bubble. */
+export const AskIcon = () => (
+  <svg {...S}>
+    <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-2.8-.4L4 21l1.4-4.1A8.2 8.2 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4Z" />
+  </svg>
+);
+
+export const SendIcon = () => (
+  <svg {...S} stroke-width={2}>
+    <path d="M12 19V5M5 12l7-7 7 7" />
   </svg>
 );

@@ -64,6 +64,33 @@ export interface AskResult {
   evidence_event_ids: string[];
 }
 
+export interface AskRow {
+  question_id: string;
+  answer_id: string;
+  ts: string;
+  asker: string;
+  question: string;
+  answer: string;
+  confidence: number;
+  deferred: boolean;
+  verdict: "approved" | "edited" | "vetoed" | null;
+}
+
+export interface AskStats {
+  asked: number;
+  answered: number;
+  deferred: number;
+  approved: number;
+  edited: number;
+  vetoed: number;
+  precision: number | null;
+}
+
+export interface Questions {
+  items: AskRow[];
+  stats: AskStats;
+}
+
 /** POST /ask outcomes the composer must render distinctly. */
 export type AskResponse =
   | { kind: "ok"; result: AskResult }

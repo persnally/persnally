@@ -78,6 +78,12 @@ describe("the built artifact", () => {
     assert.doesNotMatch(artifact, /<img[^>]+src="http/);
   });
 
+  test("the build emits exactly one file — the daemon serves nothing else", () => {
+    // A <link> or asset reference that escapes the bundle becomes a sibling in
+    // dist/ and would 404 at runtime, since only the HTML reaches build/src/.
+    assert.deepEqual(readdirSync(join(root, "dashboard-ui/dist")), ["index.html"]);
+  });
+
   test("stays under the size guard", () => {
     assert.ok(artifact.length < 400_000, `artifact is ${artifact.length} bytes; the single-file build must stay lean`);
   });

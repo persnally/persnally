@@ -1,10 +1,7 @@
-/** The Persnally eye mark (brand variant) — inline so the single-file build
-    carries it with no asset pipeline. Source: web/public/brand/persnally-mark-eye-brand.svg */
-export function Mark() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" aria-hidden="true">
-      <path fill="currentColor" d="M 8,50 Q 50,22 92,50 Q 50,66 8,50 Z" />
-      <circle cx="36" cy="54" r="9" fill="var(--brand)" />
-    </svg>
-  );
+import markUrl from "../assets/persnally-mark.png";
+
+/** The Persnally mark, the same asset the classic dashboard carries in its
+    header. Inlined by the single-file build — no external request. */
+export function Mark({ class: cls = "mark" }: { class?: string }) {
+  return <img class={cls} src={markUrl} alt="" aria-hidden="true" width={22} height={22} />;
 }

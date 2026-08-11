@@ -4,8 +4,8 @@
  * the interface alone; a cloud build swaps the base URL and auth, nothing else.
  */
 
-import type { AskResponse, BootProbe, EngineStatus, EventEnvelope, Health, Profile, Stats } from "./types";
-import { DEMO_ASK, DEMO_ENGINE, DEMO_EVENTS, DEMO_HEALTH, DEMO_PROFILE, DEMO_STATS } from "../fixtures/demo";
+import type { AskResponse, BootProbe, EngineStatus, EventEnvelope, Health, Profile, Questions, Stats } from "./types";
+import { DEMO_ASK, DEMO_ENGINE, DEMO_EVENTS, DEMO_HEALTH, DEMO_PROFILE, DEMO_QUESTIONS, DEMO_STATS } from "../fixtures/demo";
 
 export interface PersnallyClient {
   readonly mode: "live" | "demo";
@@ -16,6 +16,8 @@ export interface PersnallyClient {
   profile(): Promise<Profile | null>;
   engine(): Promise<EngineStatus | null>;
   events(opts: { ids?: string[]; type?: string; limit?: number }): Promise<EventEnvelope[]>;
+  /** Owner-only route: a client token 403s, so this is null-tolerant. */
+  questions(limit?: number): Promise<Questions | null>;
   ask(question: string): Promise<AskResponse>;
 }
 
@@ -48,6 +50,7 @@ function liveClient(onUnauthorized: () => void): PersnallyClient {
     stats: () => get<Stats>("/stats", onUnauthorized),
     profile: () => get<Profile>("/profile", onUnauthorized),
     engine: () => get<EngineStatus>("/engine", onUnauthorized),
+    questions: (limit = 12) => get<Questions>(`/questions?limit=${limit}`, onUnauthorized),
     async events(opts) {
       const q = opts.ids?.length
         ? `ids=${opts.ids.map(encodeURIComponent).join(",")}`
@@ -86,6 +89,7 @@ function demoClient(): PersnallyClient {
     stats: () => Promise.resolve(DEMO_STATS),
     profile: () => Promise.resolve(DEMO_PROFILE),
     engine: () => Promise.resolve(DEMO_ENGINE),
+    questions: () => Promise.resolve(DEMO_QUESTIONS),
     events: (opts) =>
       Promise.resolve(
         opts.ids?.length

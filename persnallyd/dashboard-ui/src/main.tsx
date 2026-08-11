@@ -4,8 +4,16 @@ import { createClient } from "./api/client";
 import { resolveBoot, type Boot } from "./lib/boot-state";
 import { NoDaemon, SignedOut } from "./shell/Overlays";
 import { App } from "./app";
+import faviconUrl from "./assets/favicon.png";
 import "./styles/tokens.css";
 import "./styles/app.css";
+
+// Attached here rather than linked in index.html so the build stays one file.
+const icon = document.createElement("link");
+icon.rel = "icon";
+icon.type = "image/png";
+icon.href = faviconUrl;
+document.head.appendChild(icon);
 
 /**
  * Boot: probe the daemon once, resolve the trust state, then render. A 401

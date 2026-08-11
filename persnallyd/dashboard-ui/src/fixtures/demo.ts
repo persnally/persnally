@@ -4,7 +4,7 @@
  * (enforced by test/dashboard-next.test.ts). A real user never sees it.
  */
 
-import type { AskResult, EngineStatus, EventEnvelope, Health, Profile, Stats } from "../api/types";
+import type { AskResult, EngineStatus, EventEnvelope, Health, Profile, Questions, Stats } from "../api/types";
 
 export const DEMO_HEALTH: Health = { ok: true, version: "preview" };
 
@@ -79,6 +79,15 @@ export const DEMO_ENGINE: EngineStatus = {
   ollama: { reachable: false, models: [], hasModel: false },
   recommended: "llama3.2",
   pull: { state: "idle", model: "", percent: 0, status: "", error: "" },
+};
+
+export const DEMO_QUESTIONS: Questions = {
+  items: [
+    { question_id: "demo-q-a", answer_id: "demo-a-a", ts: "2026-08-11T14:20:00Z", asker: "claude-code", question: "Would they want a test for this edge case?", answer: "Yes — unverified changes read as unfinished to them.", confidence: 0.88, deferred: false, verdict: "approved" },
+    { question_id: "demo-q-b", answer_id: "demo-a-b", ts: "2026-08-11T11:05:00Z", asker: "cursor", question: "npm or pnpm for this repo?", answer: "npm — it's what every repo of theirs uses.", confidence: 0.91, deferred: false, verdict: null },
+    { question_id: "demo-q-c", answer_id: "demo-a-c", ts: "2026-08-10T19:42:00Z", asker: "claude-desktop", question: "Should I email the investor update tonight?", answer: "", confidence: 0.31, deferred: true, verdict: null },
+  ],
+  stats: { asked: 3, answered: 2, deferred: 1, approved: 1, edited: 0, vetoed: 0, precision: 1 },
 };
 
 export const DEMO_ASK: AskResult = {
