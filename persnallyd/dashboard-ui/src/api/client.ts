@@ -28,7 +28,9 @@ async function get<T>(path: string, onUnauthorized: () => void): Promise<T | nul
     return null;
   }
   if (!r.ok) return null;
-  return (await r.json()) as T;
+  // A 2xx with a malformed body must degrade like any other failure — a
+  // rejection here would strand callers' loading states forever.
+  return (await r.json().catch(() => null)) as T | null;
 }
 
 function liveClient(onUnauthorized: () => void): PersnallyClient {
@@ -86,7 +88,9 @@ function demoClient(): PersnallyClient {
     engine: () => Promise.resolve(DEMO_ENGINE),
     events: (opts) =>
       Promise.resolve(
-        opts.ids?.length ? DEMO_EVENTS.filter((e) => opts.ids?.includes(e.id)) : DEMO_EVENTS.slice(0, opts.limit ?? 100),
+        opts.ids?.length
+          ? DEMO_EVENTS.filter((e) => opts.ids?.includes(e.id))
+          : DEMO_EVENTS.filter((e) => !opts.type || e.type === opts.type).slice(0, opts.limit ?? 100),
       ),
     ask: () => new Promise((resolve) => setTimeout(() => resolve({ kind: "ok", result: DEMO_ASK }), 600)),
   };

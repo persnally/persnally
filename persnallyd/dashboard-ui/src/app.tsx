@@ -33,7 +33,13 @@ const STUBS = {
 
 export function App({ client, boot }: { client: PersnallyClient; boot: Boot }) {
   const area = useHashRoute();
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(RAIL_KEY) === "collapsed");
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(RAIL_KEY) === "collapsed";
+    } catch {
+      return false; // storage blocked — default open, don't crash the first render
+    }
+  });
 
   const toggle = () => {
     const next = !collapsed;

@@ -17,7 +17,11 @@ export function readSnapshot(): Snapshot | null {
     const raw = localStorage.getItem(SNAP_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Snapshot;
-    return parsed && typeof parsed.t === "string" && parsed.weights ? parsed : null;
+    if (!parsed || typeof parsed.t !== "string") return null;
+    const w = parsed.weights;
+    if (typeof w !== "object" || w === null || Array.isArray(w)) return null;
+    if (!Object.values(w).every((v) => typeof v === "number" && Number.isFinite(v))) return null;
+    return parsed;
   } catch {
     return null;
   }

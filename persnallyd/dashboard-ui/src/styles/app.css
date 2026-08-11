@@ -146,6 +146,8 @@ h2.sect { font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; }
 /* ── ask composer ───────────────────────────────────────── */
 
 .ask { border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--panel); overflow: hidden; }
+/* the textarea's own outline is off — the ring lives on the composer frame */
+.ask:focus-within { border-color: var(--faint); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06); }
 .ask textarea {
   display: block;
   width: 100%;

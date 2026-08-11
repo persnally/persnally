@@ -10,9 +10,11 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 // Compiled test runs from build/test/ — the repo root is two levels up.
-const root = new URL("../../", import.meta.url).pathname;
+// fileURLToPath, not .pathname: pathname keeps %20 and breaks Windows drives.
+const root = fileURLToPath(new URL("../../", import.meta.url));
 const ui = (p: string) => readFileSync(join(root, "dashboard-ui/src", p), "utf-8");
 
 describe("boot-state: the trust logic", () => {

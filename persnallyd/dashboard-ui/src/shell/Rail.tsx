@@ -27,8 +27,13 @@ export function Rail({ active, collapsed, onToggle }: { active: Area; collapsed:
         </a>
       ))}
       <div class="rail-foot">
-        <button class="rail-collapse" onClick={onToggle} title={collapsed ? "Expand" : "Collapse"}>
-          {collapsed ? "»" : "«"} <span class="label">Collapse</span>
+        <button
+          class="rail-collapse"
+          onClick={onToggle}
+          title={collapsed ? "Expand" : "Collapse"}
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? "»" : "«"} <span class="label">{collapsed ? "Expand" : "Collapse"}</span>
         </button>
       </div>
     </nav>
