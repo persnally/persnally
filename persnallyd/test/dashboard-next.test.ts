@@ -57,6 +57,33 @@ describe("fixtures have exactly one door", () => {
   });
 });
 
+describe("preview mode cannot change anything", () => {
+  const client = ui("api/client.ts");
+
+  test("the demo client makes no network call at all", () => {
+    // Every read answers from fixtures and every mutation is a no-op; a fetch
+    // inside this branch would let the marketing preview touch a real daemon.
+    const start = client.indexOf("function demoClient()");
+    const end = client.indexOf("export function createClient");
+    assert.ok(start !== -1 && end > start, "demoClient must exist ahead of createClient");
+    const body = client.slice(start, end);
+    assert.doesNotMatch(body, /fetch\s*\(/, "demoClient must never call fetch");
+  });
+
+  test("every mutation on the interface has a demo implementation", () => {
+    // A method missing from the demo branch would fall back to the live client
+    // and mutate the user's store from a preview.
+    const start = client.indexOf("function demoClient()");
+    const body = client.slice(start, client.indexOf("export function createClient"));
+    for (const method of [
+      "forgetTopic", "forgetStyle", "setScope", "clearScope", "judge",
+      "synthesize", "consolidate", "importAll", "saveKey", "pullModel",
+    ]) {
+      assert.match(body, new RegExp(`\\b${method}\\s*:`), `demoClient must implement ${method}`);
+    }
+  });
+});
+
 describe("the poll stops when the page isn't live", () => {
   test("use-poll gates every tick on boot state and visibility", () => {
     assert.match(ui("lib/use-poll.ts"), /if \(boot !== "live" \|\| document\.hidden\) return/);

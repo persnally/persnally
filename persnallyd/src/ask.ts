@@ -192,7 +192,13 @@ function record(
   const a = newEvent(
     "agent.answer",
     opts.source,
-    { question_id: q.id, answer: outcome.answer ?? "", confidence, deferred: outcome.deferred },
+    {
+      question_id: q.id,
+      answer: outcome.answer ?? "",
+      confidence,
+      deferred: outcome.deferred,
+      evidence_event_ids: outcome.evidence ?? [],
+    },
     { kind: "derived", from: [q.id] },
   );
   store.append([q, a]);

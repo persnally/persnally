@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { PersnallyClient } from "../../api/client";
-import type { AskResult, Profile } from "../../api/types";
+import type { AskResult, AskRow, Profile } from "../../api/types";
 import type { Boot } from "../../lib/boot-state";
+import { timeAgo } from "../../lib/format";
+import { prettyClient } from "../../lib/provenance";
 import { usePoll } from "../../lib/use-poll";
 import { Mark } from "../../shell/Mark";
 import { AskComposer } from "./AskComposer";
@@ -11,7 +13,8 @@ import { Portrait } from "./Portrait";
 /**
  * Mirror — "what does it know about me?" The portrait scrolls; the composer is
  * docked beneath it, and each answer appends to the flow so a question and what
- * your model said read as one continuing thread.
+ * your model said read as one continuing thread. Opening a past ask from the
+ * rail drops it into the same thread.
  */
 export function MirrorView({
   client,
@@ -19,12 +22,16 @@ export function MirrorView({
   model,
   focusSignal,
   onAsked,
+  opened,
+  onClearOpened,
 }: {
   client: PersnallyClient;
   boot: Boot;
   model: string;
   focusSignal: number;
   onAsked: () => void;
+  opened: AskRow | null;
+  onClearOpened: () => void;
 }) {
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
   const [entries, setEntries] = useState<{ question: string; result: AskResult }[]>([]);
@@ -42,13 +49,13 @@ export function MirrorView({
   // Deferred a frame: on the commit that adds an entry, scrollHeight hasn't
   // grown yet, so scrolling here lands short of the answer just asked for.
   useEffect(() => {
-    if (!entries.length) return;
+    if (!entries.length && !opened) return;
     const el = flow.current;
     if (!el) return;
     requestAnimationFrame(() => {
       el.scrollTop = el.scrollHeight;
     });
-  }, [entries.length]);
+  }, [entries.length, opened?.answer_id]);
 
   async function ask(question: string) {
     setBusy(true);
@@ -68,7 +75,7 @@ export function MirrorView({
     }
   }
 
-  const bare = profile === null && entries.length === 0;
+  const bare = profile === null && entries.length === 0 && !opened;
 
   return (
     <div class={`canvas${bare ? " empty-state" : ""}`}>
@@ -86,6 +93,24 @@ export function MirrorView({
             </div>
           )}
           {profile && <Portrait client={client} profile={profile} />}
+
+          {opened && (
+            <AskEntry
+              client={client}
+              question={opened.question}
+              result={{
+                question_id: opened.question_id,
+                answer_id: opened.answer_id,
+                answer: opened.answer,
+                confidence: opened.confidence,
+                deferred: opened.deferred,
+                evidence_event_ids: opened.evidence_event_ids,
+              }}
+              label={`asked by ${prettyClient(opened.asker)} · ${timeAgo(opened.ts)}${opened.verdict ? ` · you marked it ${opened.verdict}` : ""}`}
+              onClose={onClearOpened}
+            />
+          )}
+
           {entries.map((e) => (
             <AskEntry key={e.result.answer_id} client={client} question={e.question} result={e.result} />
           ))}

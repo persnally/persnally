@@ -13,13 +13,36 @@ const DEFER_COPY: Record<string, string> = {
   "no-engine": "No extraction engine is configured — set one up on the classic dashboard, or run persnally setup.",
 };
 
-export function AskEntry({ client, question, result }: { client: PersnallyClient; question: string; result: AskResult }) {
+export function AskEntry({
+  client,
+  question,
+  result,
+  label,
+  onClose,
+}: {
+  client: PersnallyClient;
+  question: string;
+  result: AskResult;
+  /** Provenance line for an ask opened from history (asker, when, verdict). */
+  label?: string;
+  onClose?: () => void;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
     <div class={`ask-entry reveal${result.deferred ? " deferred" : ""}`}>
+      {label && (
+        <div class="ask-label">
+          <span>{label}</span>
+          {onClose && (
+            <button class="link-btn" onClick={onClose} title="Close this ask">
+              close
+            </button>
+          )}
+        </div>
+      )}
       <div class="q">{question}</div>
-      <div class="a">{result.answer}</div>
+      <div class="a">{result.deferred && !result.answer ? "Deferred — no answer was given." : result.answer}</div>
       {result.deferred && result.reason && <div class="defer-note">{DEFER_COPY[result.reason]}</div>}
       <div class="ask-meta">
         {result.deferred ? (

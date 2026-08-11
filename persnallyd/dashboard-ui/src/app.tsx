@@ -3,10 +3,13 @@ import type { PersnallyClient } from "./api/client";
 import type { AskRow } from "./api/types";
 import type { Boot } from "./lib/boot-state";
 import { usePoll } from "./lib/use-poll";
+import { useHashRoute } from "./lib/use-hash-route";
 import { AREAS_META } from "./shell/areas";
 import { Rail } from "./shell/Rail";
-import { StubView } from "./shell/StubView";
-import { useHashRoute } from "./lib/use-hash-route";
+import { AccessView } from "./views/access/AccessView";
+import { ConnectionsView } from "./views/connections/ConnectionsView";
+import { ControlView } from "./views/control/ControlView";
+import { DataView } from "./views/data/DataView";
 import { MirrorView } from "./views/mirror/MirrorView";
 
 const RAIL_KEY = "persnally.ui.rail";
@@ -26,9 +29,10 @@ export function App({ client, boot }: { client: PersnallyClient; boot: Boot }) {
   const [recents, setRecents] = useState<AskRow[]>([]);
   const [focusSignal, setFocusSignal] = useState(0);
   const [asked, setAsked] = useState(0);
+  const [opened, setOpened] = useState<AskRow | null>(null);
 
   // Shell meta lives here so the rail's status block and the composer's model
-  // label come from one poll rather than two.
+  // label come from one poll rather than several.
   usePoll(boot, async () => {
     const h = await client.health();
     setUp(!!h?.ok);
@@ -61,6 +65,11 @@ export function App({ client, boot }: { client: PersnallyClient; boot: Boot }) {
     setFocusSignal((n) => n + 1);
   };
 
+  const openAsk = (row: AskRow) => {
+    setOpened(row);
+    if (area !== "mirror") location.hash = "#/mirror";
+  };
+
   const meta = AREAS_META[area];
 
   return (
@@ -71,27 +80,35 @@ export function App({ client, boot }: { client: PersnallyClient; boot: Boot }) {
         onToggle={toggle}
         onAsk={askNow}
         recents={recents}
+        onOpenAsk={openAsk}
+        openedId={opened?.answer_id ?? null}
         status={{ up, demo: boot === "demo", version, engine }}
       />
       <header class="topbar">
         <span class="title">{meta.title}</span>
+        <span class="sub">{meta.purpose}</span>
         <span class="spacer" />
         {boot === "demo" && <span class="ribbon">Preview — sample data, nothing is real</span>}
       </header>
-      {area === "mirror" ? (
+
+      {area === "mirror" && (
         <MirrorView
           client={client}
           boot={boot}
           model={engine || "no engine"}
           focusSignal={focusSignal}
           onAsked={() => setAsked((n) => n + 1)}
+          opened={opened}
+          onClearOpened={() => setOpened(null)}
         />
-      ) : (
+      )}
+      {area !== "mirror" && (
         <div class="canvas">
           <div class="flow">
-            <div class="flow-col">
-              <StubView title={meta.title} purpose={meta.purpose} demo={client.mode === "demo"} />
-            </div>
+            {area === "data" && <DataView client={client} boot={boot} />}
+            {area === "access" && <AccessView client={client} boot={boot} />}
+            {area === "connections" && <ConnectionsView client={client} boot={boot} />}
+            {area === "control" && <ControlView client={client} boot={boot} />}
           </div>
         </div>
       )}

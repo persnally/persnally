@@ -18,10 +18,13 @@ export interface RailProps {
   onToggle: () => void;
   onAsk: () => void;
   recents: AskRow[];
+  /** Opening a past ask drops it into the Mirror thread — no dead links. */
+  onOpenAsk: (row: AskRow) => void;
+  openedId: string | null;
   status: { up: boolean; demo: boolean; version: string; engine: string };
 }
 
-export function Rail({ active, collapsed, onToggle, onAsk, recents, status }: RailProps) {
+export function Rail({ active, collapsed, onToggle, onAsk, recents, onOpenAsk, openedId, status }: RailProps) {
   const { up, demo, version, engine } = status;
   return (
     <nav class="rail" aria-label="Areas">
@@ -54,15 +57,15 @@ export function Rail({ active, collapsed, onToggle, onAsk, recents, status }: Ra
           <div class="rail-hint">Questions your AIs ask show up here.</div>
         ) : (
           recents.map((r) => (
-            <a
+            <button
               key={r.answer_id}
-              class="rail-item"
-              href="#/mirror"
+              class={`rail-item${openedId === r.answer_id ? " active" : ""}`}
+              onClick={() => onOpenAsk(r)}
               title={`${r.asker}: ${r.question}${r.deferred ? " (deferred)" : ""}`}
             >
               <span class="glyph"><AskIcon /></span>
               <span class="label">{r.question}</span>
-            </a>
+            </button>
           ))
         )}
       </div>

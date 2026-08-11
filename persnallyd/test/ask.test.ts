@@ -68,7 +68,15 @@ test("answers above the threshold and records the question/answer pair", async (
   assert.equal(a.length, 1);
   assert.equal(q[0]!.id, r.question_id);
   assert.equal((q[0]!.payload as { asker: string }).asker, "cli");
-  assert.deepEqual(a[0]!.payload, { question_id: q[0]!.id, answer: "Yes — write the tests.", confidence: 0.92, deferred: false });
+  // The stored evidence is the filtered list too — a fabricated citation must
+  // not survive into the audit trail, only into the discarded response.
+  assert.deepEqual(a[0]!.payload, {
+    question_id: q[0]!.id,
+    answer: "Yes — write the tests.",
+    confidence: 0.92,
+    deferred: false,
+    evidence_event_ids: [assertionId],
+  });
   assert.deepEqual(a[0]!.provenance, { kind: "derived", from: [q[0]!.id] });
   store.close();
 });
@@ -81,7 +89,13 @@ test("defers below the threshold but still records the exchange", async () => {
   assert.equal(r.reason, "low-confidence");
   assert.equal(r.answer, DEFER_MESSAGE, "a deferred result must tell the agent to ask the human");
   const a = store.query({ type: "agent.answer" })[0]!;
-  assert.deepEqual(a.payload, { question_id: r.question_id, answer: "Probably?", confidence: 0.4, deferred: true });
+  assert.deepEqual(a.payload, {
+    question_id: r.question_id,
+    answer: "Probably?",
+    confidence: 0.4,
+    deferred: true,
+    evidence_event_ids: [],
+  });
   store.close();
 });
 

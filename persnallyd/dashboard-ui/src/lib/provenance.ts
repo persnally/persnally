@@ -16,7 +16,13 @@ const CLIENT_NAMES: Record<string, string> = {
   "claude-code": "Claude Code",
   "claude-desktop": "Claude Desktop",
   cursor: "Cursor",
+  "codex-cli": "Codex CLI",
+  "gemini-cli": "Gemini CLI",
+  windsurf: "Windsurf",
+  zed: "Zed",
+  vscode: "VS Code",
   cli: "CLI",
+  dashboard: "dashboard",
 };
 
 export const prettyClient = (c: string): string => CLIENT_NAMES[c] ?? c;
