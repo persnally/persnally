@@ -7,6 +7,7 @@ import { list, num, str } from "../../lib/payload";
 import { clientOf, prettyClient } from "../../lib/provenance";
 import { usePoll } from "../../lib/use-poll";
 import { Bar, ConfirmButton, Empty, Flash, Panel } from "../../ui/bits";
+import { BrandMark } from "../../ui/BrandMark";
 
 /** Access — "who reads it, and what?" The authority surface: grants, the read
     audit trail, and every question your AIs asked. */
@@ -91,6 +92,7 @@ export function AccessView({ client, boot }: { client: PersnallyClient; boot: Bo
               return (
                 <li key={c} class="row col">
                   <span class="row-line">
+                    <BrandMark name={c} />
                     <span class="row-main">
                       {prettyClient(c)}
                       <span class={`row-sub ${st.tone}`}>{st.label}</span>

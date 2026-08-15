@@ -365,6 +365,18 @@ code { font-family: var(--mono); font-size: 0.86em; }
 .row.col { flex-direction: column; align-items: stretch; gap: 6px; }
 .row-line { display: flex; align-items: center; gap: 10px; }
 .row-main { flex: 1; min-width: 0; color: var(--text); }
+.brand {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
 .row-sub { display: block; color: var(--faint); font-size: 12px; margin-top: 2px; }
 .row-sub.ok { color: var(--active); }
 .row-sub.warn { color: var(--warn); }

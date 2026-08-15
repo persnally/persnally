@@ -7,6 +7,7 @@ import { num, str } from "../../lib/payload";
 import { prettyClient } from "../../lib/provenance";
 import { usePoll } from "../../lib/use-poll";
 import { Bar, Flash, Panel } from "../../ui/bits";
+import { BrandMark } from "../../ui/BrandMark";
 
 /** The eight clients `persnally connect --all` covers. ChatGPT is absent by
     design: its connectors need a public HTTPS endpoint; the daemon is loopback. */
@@ -171,6 +172,7 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
             const hit = byImporter.get(name);
             return (
               <li key={name} class="row">
+                <BrandMark name={name} />
                 <span class="row-main">
                   {label}
                   <span class="row-sub">
@@ -200,6 +202,7 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
             const scoped = c in scopes;
             return (
               <li key={c} class="row">
+                <BrandMark name={c} />
                 <span class="row-main">
                   {prettyClient(c)}
                   <span class="row-sub">
