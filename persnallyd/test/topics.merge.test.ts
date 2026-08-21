@@ -129,3 +129,35 @@ test("forgetting by an absorbed phrasing also clears the whole row", () => {
   assert.equal(deleted, 2);
   assert.equal(store.topics(50).filter((t) => t.topic.includes("pricing plan")).length, 0);
 });
+
+test("forgetting a topic also removes signals written since the last rebuild", () => {
+  // The view is derived and append() does not rebuild it, so trusting the row's
+  // event_ids alone deleted part of a topic and let the survivor re-create it.
+  store.append([topic("caching strategy for the edge")]);
+  store.rebuild();
+  store.append([topic("caching strategy for the edge")]); // after the rebuild — not in event_ids
+  const deleted = store.forgetTopic("caching strategy for the edge");
+  assert.equal(deleted, 2, "the signal written since the rebuild survived the delete");
+  store.rebuild();
+  assert.equal(store.topics(50).filter((t) => t.topic.includes("caching strategy")).length, 0,
+    "the topic came back after rebuild");
+});
+
+test("the same topic in two categories still shares one identity — documented, not fixed here", () => {
+  // Pre-existing behaviour: topic_key is normalizeTopic() alone, so one topic
+  // string spans categories. Splitting identity by category changes a PRIMARY
+  // KEY the dashboard, search refs and forget all resolve against, so it is a
+  // migration rather than a patch. Pinned here so the behaviour is a decision.
+  const tech = newEvent("signal.topic", "import:claude", {
+    topic: "rust", weight: 0.8, intent: "building", sentiment: "positive",
+    depth: "deep", category: "technology", entities: [],
+  }, { kind: "import", batch: "b1", file: "f" });
+  const creative = newEvent("signal.topic", "import:claude", {
+    topic: "rust", weight: 0.8, intent: "building", sentiment: "positive",
+    depth: "deep", category: "creative", entities: [],
+  }, { kind: "import", batch: "b1", file: "f" });
+  store.append([tech, creative]);
+  store.rebuild();
+  assert.equal(store.topics(80).filter((t) => t.topic === "rust").length, 1, "one row, as designed today");
+  assert.equal(store.forgetTopic("rust"), 2, "forget spans both categories — the known consequence");
+});

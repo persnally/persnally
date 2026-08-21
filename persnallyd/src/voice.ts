@@ -8,6 +8,7 @@
 import { existsSync } from "node:fs";
 import { newEvent, uuidv7 } from "./events.js";
 import { DEFAULT_TRANSCRIPTS_DIR, parseClaudeCodeTranscripts } from "./importers/claude-code.js";
+import type { ParsedConversation } from "./importers/extract.js";
 import { proseLines } from "./prose.js";
 import { analyzeVoice } from "./stylometry.js";
 import { toolConventions } from "./workflow.js";
@@ -36,25 +37,22 @@ export function refreshVoice(
   // log as a single act.
   const refreshBatch = uuidv7();
   if (!existsSync(root)) return empty;
-  let corpus: string[];
+  let conversations: ParsedConversation[];
   try {
-    const { parsed } = parseClaudeCodeTranscripts(root);
-    corpus = parsed.conversations.flatMap((c) => proseLines(c.userMessages.join("\n")));
+    conversations = parseClaudeCodeTranscripts(root).parsed.conversations;
   } catch {
     return empty;
   }
+  const corpus = conversations.flatMap((c) => proseLines(c.userMessages.join("\n")));
   // Conventions are mined per workspace from the commands each session ran —
   // deterministic, no model. Grouped, because the same person uses pnpm in one
   // repo and npm in another, and pooling them yields a winner true of neither.
   const byProject = new Map<string, string[]>();
-  try {
-    const { parsed } = parseClaudeCodeTranscripts(root);
-    for (const c of parsed.conversations) {
-      const cmds = c.toolCommands ?? [];
-      if (!cmds.length || !c.project) continue;
-      byProject.set(c.project, [...(byProject.get(c.project) ?? []), ...cmds]);
-    }
-  } catch { /* conventions are a bonus here; a parse failure must not lose the voice refresh */ }
+  for (const c of conversations) {
+    const cmds = c.toolCommands ?? [];
+    if (!cmds.length || !c.project) continue;
+    byProject.set(c.project, [...(byProject.get(c.project) ?? []), ...cmds]);
+  }
 
   const v = analyzeVoice(corpus);
   if (!v.signals.length && byProject.size === 0) return empty;

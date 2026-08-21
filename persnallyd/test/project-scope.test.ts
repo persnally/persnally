@@ -136,3 +136,33 @@ test("voice serves the global layer plus this project, never another's", () => {
   store.close();
   rmSync(dir, { recursive: true, force: true });
 });
+
+test("the owner can see every project's conventions, so none is undeletable", () => {
+  // The served pack hides other projects' conventions by design; without a way
+  // to enumerate them they would exist in the store and be invisible — and so
+  // undeletable — from the owner's own surface.
+  const dir = mkdtempSync(join(tmpdir(), "persnallyd-scoped-"));
+  const store = new EventStore(join(dir, "s.db"));
+  const style = (pattern: string, project?: string) =>
+    newEvent("signal.style", "import:claude-code",
+      { dimension: "convention", pattern, polarity: "prefers", confidence: 0.8, evidence: "observed", basis: "stylometry" },
+      { kind: "import", batch: "b", file: "f", ...(project ? { project } : {}) });
+
+  store.append([
+    style("prefers pnpm over npm", "/repos/alpha"),
+    style("prefers npm over pnpm", "/repos/beta"),
+    style("works through GitHub PRs from the CLI"),
+  ]);
+
+  const scoped = store.scopedVoice();
+  assert.deepEqual(scoped.map((s) => s.project).sort(), ["/repos/alpha", "/repos/beta"]);
+  assert.deepEqual(scoped.flatMap((s) => s.items.map((i) => i.pattern)).sort(),
+    ["prefers npm over pnpm", "prefers pnpm over npm"], "unscoped signals are not project rows");
+
+  // And deleting one really removes it from the enumeration.
+  store.forgetStyle("convention", "prefers pnpm over npm");
+  assert.deepEqual(store.scopedVoice().map((s) => s.project), ["/repos/beta"]);
+
+  store.close();
+  rmSync(dir, { recursive: true, force: true });
+});

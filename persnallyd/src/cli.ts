@@ -585,8 +585,12 @@ async function main(): Promise<void> {
       // carrying a project is only served when you are in that project.
       const local = voice.items.filter((i) => i.dimension === "convention" || i.dimension === "workflow");
       if (local.length) {
+        const shown = local.slice(0, 8);
         out.push("", `# How they work${projectLabel(project) ? ` in ${projectLabel(project)}` : ""}`);
-        for (const s of local.slice(0, 8)) out.push(`- ${s.pattern}`);
+        for (const s of shown) out.push(`- ${s.pattern}`);
+        // The receipt counts what was served. A conventions-only read recorded
+        // items: 0 otherwise, indistinguishable from having emitted nothing.
+        items += shown.length;
       }
 
       // Hook-only: put the loop tools in the default path. Soft instructions

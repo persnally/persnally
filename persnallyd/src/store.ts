@@ -757,6 +757,32 @@ export class EventStore {
   }
 
   /**
+   * Every project-scoped style signal, grouped by project. The served pack hides
+   * other projects' conventions by design, which would otherwise make them
+   * invisible — and so undeletable — from the owner's own surface.
+   */
+  scopedVoice(): { project: string; items: StyleSignal[] }[] {
+    const forgotten = this.forgottenStyleKeys();
+    const byProject = new Map<string, Map<string, StyleSignal>>();
+    const rows = this.db
+      .prepare(`SELECT payload, json_extract(provenance, '$.project') AS project
+                FROM events
+                WHERE type = 'signal.style' AND json_extract(provenance, '$.project') IS NOT NULL
+                ORDER BY ts DESC`)
+      .all() as { payload: string; project: string }[];
+    for (const row of rows) {
+      const p = JSON.parse(row.payload) as StyleSignal;
+      const key = this.styleKey(p.dimension, p.pattern);
+      if (forgotten.has(key)) continue;
+      const seen = byProject.get(row.project) ?? new Map<string, StyleSignal>();
+      if (!seen.has(key)) seen.set(key, p);
+      byProject.set(row.project, seen);
+    }
+    return [...byProject].map(([project, items]) => ({ project, items: [...items.values()] }))
+      .sort((a, b) => b.items.length - a.items.length);
+  }
+
+  /**
    * Hard-deletes a style pattern's events and writes a delete correction so it
    * stays gone even if stylometry or live capture re-derives it later — the
    * "deletable for real" promise extended to the voice layer.
@@ -844,19 +870,33 @@ export class EventStore {
    * one, then widens to the row that owns those events.
    */
   private topicEventIds(key: string): Set<string> {
+    // The view is derived and append() does not rebuild it, so an event written
+    // since the last rebuild is absent from event_ids. Trusting the row alone
+    // would delete part of a topic, rebuild, and let the survivor re-create the
+    // row — reporting a count while the topic stayed on screen.
+    const own = new Set(
+      this.payloads<{ topic: string }>("signal.topic")
+        .filter((e) => normalizeTopic(e.payload.topic) === key)
+        .map((e) => e.id),
+    );
+
     const direct = this.db.prepare("SELECT event_ids FROM view_topics WHERE topic_key = ?").get(key) as
       | { event_ids: string } | undefined;
-    if (direct) return new Set(JSON.parse(direct.event_ids) as string[]);
-
-    const own = this.payloads<{ topic: string }>("signal.topic")
-      .filter((e) => normalizeTopic(e.payload.topic) === key)
-      .map((e) => e.id);
-    if (own.length === 0) return new Set();
+    if (direct) {
+      for (const id of JSON.parse(direct.event_ids) as string[]) own.add(id);
+      return own;
+    }
+    if (own.size === 0) return own;
+    // The key names a phrasing that merged into another row: take that row too,
+    // so forgetting what is displayed removes all of it.
     for (const row of this.db.prepare("SELECT event_ids FROM view_topics").all() as { event_ids: string }[]) {
       const rowIds = JSON.parse(row.event_ids) as string[];
-      if (rowIds.some((id) => own.includes(id))) return new Set(rowIds);
+      if (rowIds.some((id) => own.has(id))) {
+        for (const id of rowIds) own.add(id);
+        break;
+      }
     }
-    return new Set(own);
+    return own;
   }
 
   forgetTopic(topic: string): number {
