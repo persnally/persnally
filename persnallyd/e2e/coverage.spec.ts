@@ -81,12 +81,23 @@ test.describe.configure({ mode: "serial" });
 
 // ── the fresh install: every "nothing yet" state, and no crash anywhere ──────
 
-test("empty store: Mirror greets a new user instead of rendering a blank portrait", async ({ page }) => {
+test("a fresh install offers the import that starts the model, not a chat box", async ({ page }) => {
+  // With nothing on file the composer could only defer, and a lone text box is
+  // indistinguishable from a chat app — the first screen leads with import.
   const errors = trapErrors(page);
   await signIn(page, EMPTY, emptyKey);
-  await expect(page.locator(".portrait-empty h1, .empty h1, h1")).toContainText("No portrait yet");
-  await expect(page.locator(".ask textarea")).toBeVisible(); // still usable
+  await expect(page.locator(".greeting h1")).toHaveText("Nothing imported yet");
+  await expect(page.locator(".greeting-actions .btn")).toHaveText("Import your AI history");
+  await expect(page.locator(".ask textarea")).toHaveCount(0);
+  await expect(page.locator(".greeting p")).toContainText("nothing leaves this machine");
   expect(errors).toEqual([]);
+});
+
+test("an import that finds nothing says so on the first screen too", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signIn(page, EMPTY, emptyKey);
+  await page.locator(".greeting-actions .btn").click();
+  await expect(page.locator(".greeting .flash")).toContainText("Nothing found to import", { timeout: 90_000 });
 });
 
 test("empty store: Data admits every panel is empty, and says how to fill it", async ({ page }) => {

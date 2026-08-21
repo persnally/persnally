@@ -267,12 +267,16 @@ test("a recent ask opens from the rail with its provenance label", async ({ page
   await expect(page.locator(".ask-label")).toHaveCount(0);
 });
 
-test("with no portrait yet, Mirror greets honestly and still offers the composer", async ({ page }) => {
+test("with data but no portrait, Mirror offers the synthesis rather than a CLI command", async ({ page }) => {
+  // Distinct from a fresh install: there is evidence on file, so asking works
+  // and the missing step is synthesis — offered as a button, not as prose.
   await signIn(page, BAD, badKey);
   await expect(page.locator(".greeting h1")).toHaveText("No portrait yet");
-  await expect(page.locator(".greeting")).toContainText("persnally setup");
+  await expect(page.locator(".greeting")).toContainText("events on file");
+  await expect(page.locator(".greeting-actions .btn")).toHaveText("Synthesize the portrait");
   await expect(page.locator(".ask textarea")).toBeVisible();
 });
+
 
 test("the ask error path surfaces the real API failure, honestly", async ({ page }) => {
   const errors = trapErrors(page);

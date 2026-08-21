@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { PersnallyClient } from "../../api/client";
-import type { EngineStatus, EventEnvelope, ImportResult, Mutation, Scopes, Stats } from "../../api/types";
+import type { EngineStatus, EventEnvelope, Mutation, Scopes, Stats } from "../../api/types";
 import type { Boot } from "../../lib/boot-state";
 import { fmtN, timeAgo } from "../../lib/format";
+import { importedText } from "../../lib/import-result";
 import { num, str } from "../../lib/payload";
 import { prettyClient } from "../../lib/provenance";
 import { usePoll } from "../../lib/use-poll";
@@ -90,15 +91,7 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
     if (r.ok) await load();
   }
 
-  // The daemon reports what it actually imported; "Imported." on a run that
-  // found nothing would be the one thing this product can't afford to say.
-  const importedText = (r: ImportResult) => {
-    if (r.events > 0) {
-      return `Imported ${fmtN(r.events)} event${r.events === 1 ? "" : "s"} from ${r.imported.join(", ")}. Re-synthesize on Control to fold it into the portrait.`;
-    }
-    if (r.skipped.length > 0) return `Nothing new — already imported: ${r.skipped.join(", ")}.`;
-    return "Nothing found to import. Put a ChatGPT or Claude export in ~/Downloads, or use persnally import git <path>.";
-  };
+
 
   const engineLabel = !engine
     ? "unavailable"
@@ -190,7 +183,7 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
           <button
             class="btn"
             disabled={busy !== null}
-            onClick={() => void act("import", () => client.importAll(), importedText)}
+            onClick={() => void act("import", () => client.importAll(), (r) => `${importedText(r)} Re-synthesize on Control to fold it into the portrait.`)}
           >
             {busy === "import" ? "importing…" : "Import everything"}
           </button>

@@ -206,10 +206,16 @@ code { font-family: var(--mono); font-size: 0.86em; }
 
 /* empty state: centered greeting, composer directly beneath (dock centers too) */
 .canvas.empty-state .flow { display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8px; }
+/* Nothing docked below on a fresh install, so the setup step centres instead of
+   hugging the bottom edge where the composer would have been. */
+.canvas.empty-state.no-dock .flow { align-items: center; padding-bottom: 34px; }
 .greeting { text-align: center; }
 .greeting .mark { width: 30px; height: 30px; margin: 0 auto 14px; color: var(--text); display: block; }
 .greeting h1 { font: 400 30px/1.25 var(--display); letter-spacing: -0.01em; }
-.greeting p { color: var(--dim); margin-top: 10px; font-size: 14px; }
+.greeting p { color: var(--dim); margin-top: 10px; font-size: 14px; max-width: 46ch; margin-inline: auto; }
+.greeting-actions { margin-top: 18px; display: flex; justify-content: center; gap: 10px; }
+.btn.primary { border-color: var(--dim); color: var(--text); font-weight: 550; padding: 0.55rem 1.1rem; }
+.btn.primary:hover:not(:disabled) { background: var(--panel-2); border-color: var(--text-2); }
 
 /* ── portrait: editorial prose, no card chrome ──────────── */
 
