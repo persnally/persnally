@@ -87,6 +87,8 @@ export interface AskRow {
   answer: string;
   confidence: number;
   deferred: boolean;
+  /** Empty for answers recorded before evidence was persisted. */
+  evidence_event_ids: string[];
   verdict: "approved" | "edited" | "vetoed" | null;
 }
 
@@ -440,7 +442,13 @@ export class EventStore {
     const labeled = stats.approved + stats.edited + stats.vetoed;
     if (labeled) stats.precision = stats.approved / labeled;
 
-    const recent = this.payloads<{ question_id: string; answer: string; confidence: number; deferred: boolean }>("agent.answer", limit);
+    const recent = this.payloads<{
+      question_id: string;
+      answer: string;
+      confidence: number;
+      deferred: boolean;
+      evidence_event_ids?: string[];
+    }>("agent.answer", limit);
     const questions = new Map(
       this.getEvents([...new Set(recent.map((a) => a.payload.question_id).filter(Boolean))]).map((e) => [e.id, e]),
     );
@@ -456,6 +464,7 @@ export class EventStore {
         answer: p.answer,
         confidence: p.confidence,
         deferred: p.deferred,
+        evidence_event_ids: p.evidence_event_ids ?? [],
         verdict: verdicts.get(a.id) ?? null,
       };
     });

@@ -61,6 +61,10 @@ export const PAYLOAD_SCHEMAS = {
     answer: z.string(),
     confidence: z.number().min(0).max(1),
     deferred: z.boolean(),
+    // What the answer rested on. Without this the audit trail can't show the
+    // evidence the answer claimed at the time; defaulted so answers recorded
+    // before it existed still parse.
+    evidence_event_ids: z.array(z.string()).default([]),
   }),
   "feedback.signal": z.object({
     subject_id: z.string(),
