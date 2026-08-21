@@ -12,7 +12,9 @@ import { DATA_DIR, ensurePrivateDir, ensurePrivateFile } from "./paths.js";
 import { assemblePack, type StyleSignal } from "./stylometry.js";
 import { groupNearDuplicates, TOPIC_MERGE_THRESHOLD } from "./topics.js";
 
-const VIEW_SCHEMA_VERSION = 3;
+// 4: topic rows fold near-duplicates, so an upgraded store must re-derive —
+// otherwise the interest list keeps its split topics until the next signal write.
+const VIEW_SCHEMA_VERSION = 4;
 
 // One bind parameter per id, well under SQLite's 32k variable ceiling.
 const MAX_ID_LOOKUP = 500;
