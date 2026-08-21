@@ -199,7 +199,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         // write, not what about). A revoked one does not: "reads nothing" is
         // stated without qualification in the dashboard, so it has to be true.
         if (auth.kind === "client" && isRevoked(auth.client)) return json(res, 200, { pack: "", items: [] });
-        return json(res, 200, store.voice());
+        return json(res, 200, store.voice(url.searchParams.get("project") ?? undefined));
       }
       if (req.method === "DELETE" && url.pathname.startsWith("/voice/")) {
         const [, , dimension, pattern] = url.pathname.split("/");

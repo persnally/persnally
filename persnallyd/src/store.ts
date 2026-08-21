@@ -724,11 +724,23 @@ export class EventStore {
       .slice(0, limit);
   }
 
-  voice(): { pack: string; items: StyleSignal[] } {
+  /**
+   * The served voice pack. `project` scopes it: unscoped signals always apply,
+   * a project's own signals apply when you are in it, and another project's
+   * never do. Without that filter the pack could assert both "prefers pnpm over
+   * npm" and the reverse — each true of one repo, neither true of the person.
+   */
+  voice(project?: string): { pack: string; items: StyleSignal[] } {
     const forgotten = this.forgottenStyleKeys();
     const byPattern = new Map<string, StyleSignal>();
+    const rows = this.db
+      .prepare(`SELECT payload, json_extract(provenance, '$.project') AS project
+                FROM events WHERE type = 'signal.style' ORDER BY ts DESC`)
+      .all() as { payload: string; project: string | null }[];
     // Newest first, so the first occurrence of a pattern is the most recent.
-    for (const { payload: p } of this.payloads<StyleSignal>("signal.style")) {
+    for (const row of rows) {
+      const p = JSON.parse(row.payload) as StyleSignal;
+      if (row.project && row.project !== project) continue;
       // An `emphasis` signal from stylometry can only have come from the phrase
       // miner that was removed for emitting subject matter as preference. The
       // events stay on file and stay deletable — they just stop being served to

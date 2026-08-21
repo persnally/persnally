@@ -101,7 +101,9 @@ test("store.voice dedups by pattern (newest wins) and orders richest first", () 
 test("forgetStyle deletes the pattern and tombstones it so it never resurfaces", () => {
   const store = new EventStore(join(dir, "forget.db"));
   const sig = newEvent("signal.style", "import:claude-code",
-    { dimension: "emphasis", pattern: "be 100% sure", polarity: "insists", confidence: 0.9, evidence: "10x", basis: "stylometry" },
+    // basis "observed": an emphasis signal from stylometry is what serving now
+    // filters out, and this test is about the tombstone, not that filter.
+    { dimension: "emphasis", pattern: "be 100% sure", polarity: "insists", confidence: 0.9, evidence: "10x", basis: "observed" },
     { kind: "import", batch: "b", file: "f" });
   store.append([sig]);
   assert.equal(store.voice().items.length, 1);
