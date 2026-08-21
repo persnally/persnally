@@ -1,7 +1,8 @@
 import type { ComponentType } from "preact";
 import type { AskRow } from "../api/types";
 import type { Area } from "../lib/use-hash-route";
-import { AccessIcon, AskIcon, ConnectionsIcon, ControlIcon, DataIcon, MirrorIcon, PanelIcon, PlusIcon } from "./icons";
+import { AccessIcon, ConnectionsIcon, ControlIcon, DataIcon, MirrorIcon, PanelIcon, PlusIcon } from "./icons";
+import { BrandMark } from "../ui/BrandMark";
 import { Mark } from "./Mark";
 
 const ITEMS: { area: Area; label: string; Icon: ComponentType }[] = [
@@ -64,7 +65,9 @@ export function Rail({ active, collapsed, onToggle, onAsk, recents, onOpenAsk, o
               onClick={() => onOpenAsk(r)}
               title={`${r.asker}: ${r.question}${r.deferred ? " (deferred)" : ""}`}
             >
-              <span class="glyph"><AskIcon /></span>
+              {/* Whose question this was, at a glance — the client's own mark,
+                  or Persnally's when you asked it here. */}
+              <span class="glyph"><BrandMark name={r.asker} bare /></span>
               <span class="label">{r.question}</span>
             </button>
           ))

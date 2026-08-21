@@ -11,6 +11,7 @@ import { ConnectionsView } from "./views/connections/ConnectionsView";
 import { ControlView } from "./views/control/ControlView";
 import { DataView } from "./views/data/DataView";
 import { MirrorView } from "./views/mirror/MirrorView";
+import { PanelIcon } from "./shell/icons";
 
 const RAIL_KEY = "persnally.ui.rail";
 
@@ -78,6 +79,9 @@ export function App({ client, boot }: { client: PersnallyClient; boot: Boot }) {
 
   return (
     <div class={`shell${collapsed ? " collapsed" : ""}`}>
+      {/* Hit zone along the window's left edge: hovering it slides the hidden
+          rail back over the canvas, and moving into the rail keeps it there. */}
+      {collapsed && <div class="edge-peek" aria-hidden="true" />}
       <Rail
         active={area}
         collapsed={collapsed}
@@ -89,6 +93,11 @@ export function App({ client, boot }: { client: PersnallyClient; boot: Boot }) {
         status={{ up, demo: boot === "demo", version, engine }}
       />
       <header class="topbar">
+        {collapsed && (
+          <button class="topbar-toggle" onClick={toggle} title="Show sidebar" aria-expanded={false}>
+            <PanelIcon />
+          </button>
+        )}
         <span class="title">{meta.title}</span>
         <span class="sub">{meta.purpose}</span>
         <span class="spacer" />

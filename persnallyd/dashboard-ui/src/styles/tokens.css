@@ -42,7 +42,6 @@
 
   /* shell geometry — rail width matches the reference apps' ~230px */
   --rail-w: 232px;
-  --rail-w-collapsed: 56px;
   --topbar-h: 48px;
   --canvas-max: 680px;
 }

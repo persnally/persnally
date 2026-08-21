@@ -25,6 +25,7 @@ code { font-family: var(--mono); font-size: 0.86em; }
 /* ── shell grid ─────────────────────────────────────────── */
 
 .shell {
+  position: relative; /* the collapsed rail's hover overlay anchors here */
   display: grid;
   grid-template-columns: var(--rail-w) 1fr;
   grid-template-rows: var(--topbar-h) 1fr;
@@ -32,7 +33,6 @@ code { font-family: var(--mono); font-size: 0.86em; }
   height: 100%;
   transition: grid-template-columns 0.2s var(--ease);
 }
-.shell.collapsed { grid-template-columns: var(--rail-w-collapsed) 1fr; }
 
 /* ── rail ───────────────────────────────────────────────── */
 
@@ -103,6 +103,7 @@ code { font-family: var(--mono); font-size: 0.86em; }
 .rail-item .glyph svg { display: block; }
 .rail-item .label { overflow: hidden; text-overflow: ellipsis; }
 
+
 /* section label */
 .rail-label {
   padding: 16px 9px 5px;
@@ -138,22 +139,44 @@ code { font-family: var(--mono); font-size: 0.86em; }
 .dot.on { background: var(--active); }
 .dot.preview { background: var(--warn); }
 
-/* collapsed: labels go, glyphs stay — an icon rail, not a row of empty boxes */
-/* The recents list is meaningless as a column of identical glyphs — the whole
-   list goes when there's no room for its titles. */
-.shell.collapsed .rail .label,
-.shell.collapsed .rail .wordmark,
-.shell.collapsed .rail-label,
-.shell.collapsed .rail-hint,
-.shell.collapsed .rail-scroll,
-.shell.collapsed .rail-foot .stack { display: none; }
-.shell.collapsed .rail-nav { flex: 1; }
-.shell.collapsed .rail-head { flex-direction: column; gap: 10px; padding-bottom: 10px; }
-.shell.collapsed .rail-head .spacer { display: none; }
-.shell.collapsed .rail-item,
-.shell.collapsed .rail-primary { justify-content: center; padding-left: 0; padding-right: 0; }
-.shell.collapsed .rail-item .glyph { width: auto; }
-.shell.collapsed .rail-foot { justify-content: center; }
+/* Collapsed means hidden, not narrowed: the canvas takes the full width and
+   the rail leaves the layout. It stays in the DOM and off-screen so hovering
+   the window's left edge can slide it back over the canvas — a peek that
+   doesn't cost the width back. */
+.shell.collapsed { grid-template-columns: 0 1fr; }
+.shell.collapsed .rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--rail-w);
+  transform: translateX(-100%);
+  transition: transform 0.2s var(--ease);
+  z-index: 30;
+  box-shadow: 24px 0 48px -22px rgba(0, 0, 0, 0.75);
+}
+/* Open while the pointer is on the edge or anywhere in the rail, so crossing
+   from one to the other never snaps it shut. */
+.edge-peek {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 14px;
+  z-index: 31;
+}
+.edge-peek:hover + .rail,
+.shell.collapsed .rail:hover { transform: none; }
+
+.topbar-toggle {
+  flex: none;
+  display: inline-flex;
+  padding: 5px;
+  margin-right: 2px;
+  color: var(--faint);
+  transition: color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.topbar-toggle:hover { color: var(--text); background: var(--panel-2); }
 
 /* ── top bar: minimal, borderless ───────────────────────── */
 
@@ -324,16 +347,12 @@ code { font-family: var(--mono); font-size: 0.86em; }
   * { animation: none !important; transition: none !important; }
 }
 
-/* ── narrow screens: rail collapses to icons ────────────── */
+/* ── narrow screens ─────────────────────────────────────── */
 
+/* One interaction model at every width: a slimmer rail you hide with the same
+   control, rather than a second icon-rail mode to keep consistent. */
 @media (max-width: 760px) {
-  .shell { grid-template-columns: var(--rail-w-collapsed) 1fr; }
-  .rail .label, .rail .wordmark, .rail-label, .rail-hint, .rail-scroll, .rail-foot .stack { display: none; }
-  .rail-nav { flex: 1; }
-  .rail-head { flex-direction: column; gap: 10px; }
-  .rail-head .spacer { display: none; }
-  .rail-item, .rail-primary { justify-content: center; padding-left: 0; padding-right: 0; }
-  .rail-foot { justify-content: center; }
+  :root { --rail-w: 196px; }
   .flow { padding: 8px 16px 20px; }
   .dock { padding: 0 16px 12px; }
 }
@@ -365,6 +384,9 @@ code { font-family: var(--mono); font-size: 0.86em; }
 .row.col { flex-direction: column; align-items: stretch; gap: 6px; }
 .row-line { display: flex; align-items: center; gap: 10px; }
 .row-main { flex: 1; min-width: 0; color: var(--text); }
+/* Chrome-less variant: the glyph alone, for use inline in a row of text. */
+.brand.bare { width: auto; height: auto; border: none; background: none; }
+.brand.bare .brand-mark { width: 15px; height: 15px; display: block; }
 .brand {
   flex: none;
   width: 30px;

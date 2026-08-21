@@ -1,4 +1,5 @@
 import { siClaude, siCursor, siGit, siGooglegemini, siOllama, siWindsurf, siZedindustries } from "simple-icons";
+import { Mark } from "../shell/Mark";
 
 // OpenAI and VS Code left simple-icons at the brand owners' request; both
 // marks are inlined from their last published revisions (24×24 viewBox).
@@ -22,11 +23,27 @@ const MARKS: Record<string, { path: string; title: string }> = {
   ollama: { path: siOllama.path, title: "Ollama" },
 };
 
-/** The brand mark for a client/importer name; a monogram tile otherwise. */
-export function BrandMark({ name }: { name: string }) {
+/** Asks made here are Persnally's own — attribute them to it, not to a client. */
+const OURS = new Set(["dashboard", "cli", "persnally"]);
+
+/**
+ * The brand mark for a client/importer name; Persnally's own mark for anything
+ * that originated here, and a monogram otherwise.
+ *
+ * `bare` drops the tile chrome for use inline in a row of text.
+ */
+export function BrandMark({ name, bare = false }: { name: string; bare?: boolean }) {
+  const cls = bare ? "brand bare" : "brand";
+  if (OURS.has(name)) {
+    return (
+      <span class={cls} aria-hidden="true">
+        <Mark class="brand-mark" />
+      </span>
+    );
+  }
   const mark = MARKS[name];
   return (
-    <span class="brand" aria-hidden="true">
+    <span class={cls} aria-hidden="true">
       {mark ? (
         <svg viewBox="0 0 24 24" width="15" height="15">
           <path d={mark.path} fill="currentColor" />

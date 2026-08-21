@@ -113,17 +113,80 @@ test("hash routing loads each area directly, and an unknown hash falls back to M
   await expect(page.locator(".topbar .title")).toHaveText("Mirror");
 });
 
-test("the rail collapses to icons and the state survives a reload", async ({ page }) => {
+test("collapsing hides the rail completely, and the state survives a reload", async ({ page }) => {
   await signIn(page, OK, key);
   await expect(page.locator(".rail .wordmark")).toBeVisible();
   await page.locator(".rail-toggle").click();
+  await page.mouse.move(900, 400); // off the edge zone, or it peeks straight back
   await expect(page.locator(".shell")).toHaveClass(/collapsed/);
-  await expect(page.locator(".rail .wordmark")).toBeHidden();
+  await settleRail(page);
+
+  // Gone from the layout, not merely narrowed — the canvas takes the width.
+  const rail = (await page.locator(".rail").boundingBox())!;
+  const canvas = (await page.locator(".canvas").boundingBox())!;
+  expect(rail.x + rail.width).toBeLessThanOrEqual(0);
+  expect(canvas.x).toBe(0);
+  await expect(page.locator(".topbar-toggle")).toBeVisible();
+
   await page.reload();
+  await page.mouse.move(900, 400);
   await expect(page.locator(".shell")).toHaveClass(/collapsed/);
-  await page.locator(".rail-toggle").click(); // leave it expanded for later tests
+
+  // The top bar's toggle is the way back.
+  await page.locator(".topbar-toggle").click();
+  await expect(page.locator(".shell")).not.toHaveClass(/collapsed/);
+  await expect(page.locator(".rail .wordmark")).toBeVisible();
+});
+
+test("hovering the left edge peeks the hidden rail over the canvas, without reflowing it", async ({ page }) => {
+  await signIn(page, OK, key);
+  await page.locator(".rail-toggle").click();
+  await page.mouse.move(900, 400);
+  await settleRail(page);
+  const canvasBefore = (await page.locator(".canvas").boundingBox())!;
+
+  await page.mouse.move(5, 400); // the edge hit zone
+  await settleRail(page);
+  const peeked = (await page.locator(".rail").boundingBox())!;
+  expect(peeked.x).toBe(0);
+  expect(peeked.width).toBeGreaterThan(200);
+  await expect(page.locator(".rail .wordmark")).toBeVisible();
+  // It floats: the content underneath must not move.
+  expect((await page.locator(".canvas").boundingBox())!.x).toBe(canvasBefore.x);
+
+  // Moving into the rail keeps it open rather than snapping it shut.
+  await page.mouse.move(120, 400);
+  await settleRail(page);
+  expect((await page.locator(".rail").boundingBox())!.x).toBe(0);
+
+  await page.mouse.move(900, 400);
+  await settleRail(page);
+  expect((await page.locator(".rail").boundingBox())!.x).toBeLessThan(0);
+
+  await page.locator(".topbar-toggle").click(); // restore for later tests
   await expect(page.locator(".shell")).not.toHaveClass(/collapsed/);
 });
+
+test("every rail glyph is drawn on the same optical grid", async ({ page }) => {
+  // A set where one glyph spans 10 units and another 19 reads as broken even
+  // though both are nominally 16px.
+  await signIn(page, OK, key);
+  const boxes = await page.locator(".rail-nav .glyph svg").evaluateAll((els) =>
+    els.map((el) => {
+      const b = (el as SVGGraphicsElement).getBBox();
+      return { w: +b.width.toFixed(1), h: +b.height.toFixed(1) };
+    }),
+  );
+  expect(boxes.length).toBe(5);
+  for (const b of boxes) {
+    // Every glyph fills its box on at least one axis, and none overflows it.
+    expect(Math.max(b.w, b.h)).toBeGreaterThanOrEqual(14);
+    expect(Math.max(b.w, b.h)).toBeLessThanOrEqual(19.5);
+  }
+  const widths = boxes.map((b) => Math.max(b.w, b.h));
+  expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(4);
+});
+
 
 test("before any ask, the rail shows the honest empty-recents hint", async ({ page }) => {
   await signIn(page, OK, key);
@@ -135,6 +198,20 @@ test("before any ask, the rail shows the honest empty-recents hint", async ({ pa
 async function signIn(page: Page, port: number, k: string) {
   await page.goto(`http://127.0.0.1:${port}/next?k=${k}`);
   await expect(page.locator(".rail-head .wordmark")).toHaveText("persnally");
+}
+
+/** Wait for the rail to stop moving, rather than sampling a frame mid-flight.
+    Position matters as much as width — hiding animates `transform`, so a
+    width-only check would pass while the rail is still sliding. */
+async function settleRail(page: Page) {
+  let last = "";
+  await expect.poll(async () => {
+    const b = (await page.locator(".rail").boundingBox())!;
+    const now = `${b.x.toFixed(1)}x${b.width.toFixed(1)}`;
+    const stable = now === last;
+    last = now;
+    return stable;
+  }, { timeout: 5000 }).toBe(true);
 }
 
 /** Navigate the way a user does — a rail click (same-document hashchange). */
@@ -384,4 +461,15 @@ test("a key that fails every call is reported as failing, not as a healthy engin
   await expect(engine.locator(".flash.bad")).toContainText("The engine is failing");
   await expect(engine.locator(".flash.bad")).toContainText("Nothing new is being extracted");
   await expect(page.locator(".rail-foot .line2")).toContainText("failing");
+});
+
+test("a recent ask shows who asked it — the client's own mark, or Persnally's", async ({ page }) => {
+  // Provenance at a glance: the seeded ask came from Cursor, and the one made
+  // here belongs to Persnally. A generic chat bubble said neither.
+  await signIn(page, OK, key);
+  const rows = page.locator(".rail-scroll .rail-item");
+  await expect(rows.first()).toBeVisible();
+  const dash = rows.filter({ hasText: "npm or pnpm?" });
+  await expect(dash).toHaveAttribute("title", /^dashboard:/);
+  await expect(dash.locator(".brand.bare .brand-mark")).toBeVisible(); // Persnally's mark
 });
