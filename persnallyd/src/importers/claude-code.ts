@@ -12,6 +12,27 @@ import type { EventStore } from "../store.js";
 import { extractEvents, type ImportResult, type ParsedConversation, type ParsedExport } from "./extract.js";
 
 export const DEFAULT_TRANSCRIPTS_DIR = join(homedir(), ".claude", "projects");
+
+/**
+ * Stable identity for a workspace: the absolute path, normalized. A path can't
+ * collide, where a short name can — "website" is three different repos here,
+ * and "apps/web" is every monorepo. A git worktree folds back into its repo so
+ * reviewing a PR isn't a separate project. Display shortening is a render-time
+ * concern, not an identity one (see projectLabel).
+ */
+export function projectKey(cwd: string): string {
+  const cut = cwd.replace(/\/+$/, "").split(/\/(?:\.claude-worktrees|worktrees)\//)[0];
+  return cut || cwd;
+}
+
+/** Short label for a project path — the last segment, or the last two when that
+    segment is a generic monorepo folder that would read the same everywhere. */
+export function projectLabel(key: string): string {
+  const parts = key.split("/").filter(Boolean);
+  const last = parts[parts.length - 1] ?? key;
+  const generic = new Set(["web", "app", "apps", "src", "packages", "server", "client", "api", "www"]);
+  return generic.has(last) && parts.length > 1 ? parts.slice(-2).join("/") : last;
+}
 export const DEFAULT_MAX_SESSIONS = 200;
 const MIN_USER_MESSAGES = 2;
 // A resumed session tops up only once this many new messages have accrued —
@@ -102,6 +123,7 @@ function parseSession(path: string): SessionConversation | null {
   return {
     uuid: sessionId || basename(path, ".jsonl"),
     name: title || (cwd ? `Claude Code session in ${basename(cwd)}` : "Claude Code session"),
+    project: cwd ? projectKey(cwd) : undefined,
     summary: "",
     created_at: firstTs || new Date().toISOString(),
     userMessages,

@@ -98,6 +98,10 @@ export const provenanceSchema = z.discriminatedUnion("kind", [
     file: z.string(),
     conversation_uuid: z.string().optional(),
     message_uuid: z.string().optional(),
+    /** Which workspace this came from. The same person works differently per
+        project — pnpm in one repo, npm in another — and both claims are true
+        only with this attached. Optional: events predate it. */
+    project: z.string().optional(),
   }),
   z.object({ kind: z.literal("git"), repo: z.string(), ref: z.string().optional(), batch: z.string().optional() }),
   z.object({ kind: z.literal("derived"), from: z.array(z.string()).min(1) }),

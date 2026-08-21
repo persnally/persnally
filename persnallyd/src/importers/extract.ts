@@ -122,6 +122,8 @@ export interface ParsedConversation {
   /** Id of the last message consumed, recorded as the provenance watermark so a
       resumed session can be topped up with only what came after it. */
   lastMessageId?: string;
+  /** Workspace this session ran in, when the source knows it. */
+  project?: string;
 }
 
 export interface ParsedExport {
@@ -190,7 +192,11 @@ export async function extractEvents(
   const events: PersnallyEvent[] = [];
   const voiceCorpus: string[] = []; // clean prose for the deterministic voice fingerprint
 
-  const commandCorpus: string[] = []; // shell commands → convention/workflow signals
+  // Commands grouped by workspace, not pooled. Mining them together produced
+  // one global winner per tool family, so a store ended up asserting both
+  // "prefers pnpm over npm" and the reverse — each true of a different repo,
+  // neither true of the person.
+  const commandsByProject = new Map<string, string[]>();
   const jobs: { convo: ParsedConversation; text: string; replies: string }[] = [];
   for (const convo of parsed.conversations) {
     if (!convo.userMessages.length) continue;
@@ -200,7 +206,11 @@ export async function extractEvents(
     voiceCorpus.push(...proseLines(joined));
     const text = stripNoise(joined).slice(0, MAX_CONVO_CHARS); // strip pasted paths/URLs/logs before the LLM sees it
     if (!text) continue;
-    commandCorpus.push(...(convo.toolCommands ?? []));
+    const cmds = convo.toolCommands ?? [];
+    if (cmds.length) {
+      const key = convo.project ?? "";
+      commandsByProject.set(key, [...(commandsByProject.get(key) ?? []), ...cmds]);
+    }
     const replies = budgetedTurns(convo.assistantMessages ?? [], MAX_ASSISTANT_TURN_CHARS, MAX_ASSISTANT_CHARS);
     jobs.push({ convo, text, replies });
   }
@@ -249,7 +259,7 @@ export async function extractEvents(
     for (const t of topicsPerConvo[i]!) {
       events.push(newEvent("signal.topic", opts.source, t,
         {
-          kind: "import", batch, file: opts.file, conversation_uuid: convo.uuid,
+          kind: "import", batch, file: opts.file, conversation_uuid: convo.uuid, project: convo.project,
           ...(convo.lastMessageId ? { message_uuid: convo.lastMessageId } : {}),
         },
         safeIso(convo.created_at),
@@ -288,8 +298,12 @@ export async function extractEvents(
 
   // Conventions and workflow from the commands the sessions actually ran —
   // also deterministic, and the only producer of these two dimensions.
-  for (const s of toolConventions(commandCorpus)) {
-    events.push(newEvent("signal.style", opts.source, s, { kind: "import", batch, file: opts.file }));
+  for (const [project, cmds] of commandsByProject) {
+    for (const s of toolConventions(cmds)) {
+      events.push(newEvent("signal.style", opts.source, s, {
+        kind: "import", batch, file: opts.file, ...(project ? { project } : {}),
+      }));
+    }
   }
 
   const span = parsed.conversations.map((c) => c.created_at).sort();
