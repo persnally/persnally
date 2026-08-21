@@ -17,7 +17,7 @@ export function ControlView({ client, boot }: { client: PersnallyClient; boot: B
 
   const load = async () => {
     const [p, s, e] = await Promise.all([client.profile(), client.stats(), client.engine()]);
-    setProfile(p);
+    if (p !== undefined) setProfile(p); // undefined = couldn't tell, keep what we had
     setStats(s);
     setEngine(e);
   };
@@ -90,14 +90,17 @@ export function ControlView({ client, boot }: { client: PersnallyClient; boot: B
               Extraction
               <span class="row-sub">every imported conversation, every ask — the high-volume path</span>
             </span>
-            <span class="row-meta">{engine?.hasKey ? "claude-haiku-4-5" : engine?.ollama.hasModel ? (engine.ollama.models[0] ?? "local") : "not configured"}</span>
+            <span class="row-meta">{engine?.models.extract ?? "not configured"}</span>
           </li>
           <li class="row">
             <span class="row-main">
               Portrait synthesis
-              <span class="row-sub">once nightly, plus whenever you re-synthesize</span>
+              <span class="row-sub">
+                once nightly, plus whenever you re-synthesize
+                {profile?.model ? ` · the one you have was built by ${profile.model}` : ""}
+              </span>
             </span>
-            <span class="row-meta">{profile?.model ?? "—"}</span>
+            <span class="row-meta">{engine?.models.profile ?? "not configured"}</span>
           </li>
         </ul>
         <p class="panel-note">

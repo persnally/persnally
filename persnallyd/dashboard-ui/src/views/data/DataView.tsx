@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import type { PersnallyClient } from "../../api/client";
 import type { EventEnvelope, SearchHit, Skill, StyleSignal, TopicRow, Voice } from "../../api/types";
 import type { Boot } from "../../lib/boot-state";
@@ -34,35 +34,55 @@ export function DataView({ client, boot }: { client: PersnallyClient; boot: Boot
     // "Since you last looked" — diffed against the localStorage baseline, then
     // the baseline advances. Same key the classic dashboard uses.
     const snap = readSnapshot();
-    if (snap && t.length) {
-      const risen = t.filter((x) => (snap.weights[x.topic_key] ?? 0) > 0 && x.weight - (snap.weights[x.topic_key] ?? 0) > 0.05);
-      const fresh = t.filter((x) => snap.weights[x.topic_key] === undefined);
-      if (risen.length || fresh.length) setDelta({ risen: risen.slice(0, 5), fresh: fresh.slice(0, 5), since: snap.t });
-    }
-    if (t.length) saveSnapshot(Object.fromEntries(t.map((x) => [x.topic_key, x.weight])));
+    const risen = snap ? t.filter((x) => (snap.weights[x.topic_key] ?? 0) > 0 && x.weight - (snap.weights[x.topic_key] ?? 0) > 0.05) : [];
+    const fresh = snap ? t.filter((x) => snap.weights[x.topic_key] === undefined) : [];
+    // Cleared, not just set: a strip left standing keeps announcing topics that
+    // have since been forgotten.
+    setDelta(snap && (risen.length || fresh.length)
+      ? { risen: risen.slice(0, 5), fresh: fresh.slice(0, 5), since: snap.t }
+      : null);
+    // A preview must not write the real baseline — its sample weights would
+    // make every genuine topic look new on the next real visit.
+    if (t.length && client.mode === "live") saveSnapshot(Object.fromEntries(t.map((x) => [x.topic_key, x.weight])));
   };
 
   usePoll(boot, load);
 
+  // deleted: 0 means the row was already gone (stale list, or something else
+  // removed it). Reporting a delete that didn't happen is the one thing a
+  // custody surface can't do.
   async function forgetTopic(t: TopicRow) {
     const r = await client.forgetTopic(t.topic);
-    setFlash(r.ok ? { ok: true, text: `Forgot "${t.topic}" and everything derived from it.` } : { ok: false, text: r.error });
+    setFlash(!r.ok
+      ? { ok: false, text: r.error }
+      : r.data.deleted > 0
+        ? { ok: true, text: `Forgot "${t.topic}" — ${r.data.deleted} event${r.data.deleted === 1 ? "" : "s"} erased.` }
+        : { ok: false, text: `Nothing to forget — "${t.topic}" was already gone.` });
     if (r.ok) await load();
   }
 
   async function forgetStyle(s: StyleSignal) {
     const r = await client.forgetStyle(s.dimension, s.pattern);
-    setFlash(r.ok ? { ok: true, text: `Forgot "${s.pattern}" — it won't be re-learned.` } : { ok: false, text: r.error });
+    setFlash(!r.ok
+      ? { ok: false, text: r.error }
+      : r.data.deleted > 0
+        ? { ok: true, text: `Forgot "${s.pattern}" — it won't be re-learned.` }
+        : { ok: false, text: `Nothing to forget — "${s.pattern}" was already gone.` });
     if (r.ok) setVoice(await client.voice());
   }
 
+  // Results must belong to the query on screen: a slow response for an
+  // abandoned term used to land under a cleared box.
+  const searchSeq = useRef(0);
   async function runSearch(term: string) {
     setQ(term);
+    const seq = ++searchSeq.current;
     if (term.trim().length < 2) {
       setHits(null);
       return;
     }
-    setHits(await client.search(term.trim()));
+    const hits = await client.search(term.trim());
+    if (seq === searchSeq.current) setHits(hits);
   }
 
   const byDimension = new Map<string, StyleSignal[]>();
@@ -145,7 +165,7 @@ export function DataView({ client, boot }: { client: PersnallyClient; boot: Boot
         )}
       </Panel>
 
-      <Panel title="What changed about you" sub="behavioral patterns the nightly reflection derived">
+      <Panel title="What changed about you" sub="behavioral patterns the engine derived from your history">
         {assertions.length === 0 ? (
           <Empty>No reflections yet — they arrive with the nightly consolidation.</Empty>
         ) : (

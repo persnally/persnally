@@ -42,7 +42,11 @@ export function MirrorView({
   const flow = useRef<HTMLDivElement>(null);
 
   usePoll(boot, async () => {
-    setProfile(await client.profile());
+    const p = await client.profile();
+    // undefined means the fetch failed, not that the portrait is gone —
+    // replacing a rendered portrait with "no portrait yet" on a blip would be
+    // the dashboard lying about the store.
+    if (p !== undefined) setProfile(p);
   });
 
   // Newest answer is at the bottom of the flow — follow it, like a thread.
@@ -94,8 +98,11 @@ export function MirrorView({
           )}
           {profile && <Portrait client={client} profile={profile} />}
 
-          {opened && (
+          {opened && !entries.some((e) => e.result.answer_id === opened.answer_id) && (
             <AskEntry
+              // Keyed: without it Preact reuses one instance across different
+              // asks, and the cached evidence of the last one renders here.
+              key={opened.answer_id}
               client={client}
               question={opened.question}
               result={{

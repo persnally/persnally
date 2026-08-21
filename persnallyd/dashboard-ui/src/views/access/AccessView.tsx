@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import type { PersnallyClient } from "../../api/client";
-import { CATEGORIES, type Activity, type AskRow, type Category, type EventEnvelope, type Questions, type Scopes } from "../../api/types";
+import { CATEGORIES, type Activity, type AskRow, type Category, type EventEnvelope, type Questions, type Scopes, type Stats } from "../../api/types";
 import type { Boot } from "../../lib/boot-state";
 import { timeAgo } from "../../lib/format";
 import { list, num, str } from "../../lib/payload";
@@ -16,20 +16,23 @@ export function AccessView({ client, boot }: { client: PersnallyClient; boot: Bo
   const [reads, setReads] = useState<EventEnvelope[]>([]);
   const [activity, setActivity] = useState<Activity | null>(null);
   const [asks, setAsks] = useState<Questions | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = async () => {
-    const [sc, rd, ac, qs] = await Promise.all([
+    const [sc, rd, ac, qs, st] = await Promise.all([
       client.scopes(),
       client.events({ type: "context.read", limit: 60 }),
       client.activity(),
       client.questions(30),
+      client.stats(),
     ]);
     setScopes(sc ?? {});
     setReads(rd);
     setActivity(ac);
     setAsks(qs);
+    setStats(st);
   };
 
   usePoll(boot, load);
@@ -39,9 +42,13 @@ export function AccessView({ client, boot }: { client: PersnallyClient; boot: Bo
   // that would be the opposite of an access surface. Reads attributed to `cli`
   // or `dashboard` are your own tools, not a client with a grant — they show in
   // the read log below rather than pretending to be a grantee here.
+  // All-time MCP sources are included deliberately: the recent-reads window
+  // alone drops a client the moment it goes quiet — including one whose grant
+  // was just restored, which reads *everything* and must stay revocable here.
   const seen = new Set<string>([
     ...Object.keys(scopes),
     ...reads.filter((e) => e.source.startsWith("mcp:")).map(clientOf),
+    ...Object.keys(stats?.bySource ?? {}).filter((k) => k.startsWith("mcp:")).map((k) => k.slice(4)),
   ]);
   const clients = [...seen].filter(Boolean).sort();
   const localReads = reads.filter((e) => !e.source.startsWith("mcp:")).length;
@@ -54,8 +61,11 @@ export function AccessView({ client, boot }: { client: PersnallyClient; boot: Bo
   };
 
   async function apply(c: string, categories: Category[]) {
-    const r = categories.length === 0 ? await client.setScope(c, []) : await client.setScope(c, categories);
-    setFlash(r.ok ? { ok: true, text: `Updated what ${prettyClient(c)} can read.` } : { ok: false, text: r.error });
+    const r = await client.setScope(c, categories);
+    const text = categories.length === 0
+      ? `${prettyClient(c)} now reads nothing — every category is off.`
+      : `${prettyClient(c)} now reads only ${categories.join(", ")}.`;
+    setFlash(r.ok ? { ok: true, text } : { ok: false, text: r.error });
     if (r.ok) await load();
   }
 
@@ -81,14 +91,17 @@ export function AccessView({ client, boot }: { client: PersnallyClient; boot: Bo
         {clients.length === 0 ? (
           <Empty>
             No AI client holds a grant yet
-            {localReads > 0 && ` — the ${localReads} read${localReads === 1 ? "" : "s"} below came from your own CLI and hook, not a connected client`}
+            {localReads > 0 && ` — the reads logged below came from your own CLI and hook, not a connected client`}
             . Run <code>persnally connect --all</code>, then restart the client.
           </Empty>
         ) : (
           <ul class="rows">
             {clients.map((c) => {
               const st = state(c);
-              const current = scopes[c] ?? [];
+              // No grant on file means unrestricted, so every category is on —
+              // rendering empty chips would show the permission as narrower
+              // than it is, on the one surface that must state it exactly.
+              const current = scopes[c] ?? [...CATEGORIES];
               return (
                 <li key={c} class="row col">
                   <span class="row-line">

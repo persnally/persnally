@@ -10,7 +10,7 @@
 
 import type {
   Activity, AskResponse, AskResult, BootProbe, Category, ConsolidationResult, EnginePull, EngineStatus,
-  EventEnvelope, Health, ImportResult, Mutation, Profile, Questions, Scopes, SearchHit, Skill, Stats,
+  Deleted, EventEnvelope, Health, ImportResult, Mutation, Profile, Questions, Scopes, SearchHit, Skill, Stats,
   TopicRow, Voice,
 } from "./types";
 import {
@@ -24,7 +24,12 @@ export interface PersnallyClient {
   // reads — null means "unavailable" (absent, unauthorized, or unreachable)
   health(): Promise<Health | null>;
   stats(): Promise<Stats | null>;
-  profile(): Promise<Profile | null>;
+  /**
+   * null = the daemon says there is no portrait yet (404). undefined = we
+   * couldn't tell (unreachable, error, unparseable) — callers must not render
+   * "no portrait yet" for that, it's an assertion about the user's data.
+   */
+  profile(): Promise<Profile | null | undefined>;
   topics(limit?: number): Promise<TopicRow[]>;
   skills(limit?: number): Promise<Skill[]>;
   voice(): Promise<Voice | null>;
@@ -37,8 +42,8 @@ export interface PersnallyClient {
   pullStatus(): Promise<EnginePull | null>;
   // mutations
   ask(question: string): Promise<AskResponse>;
-  forgetTopic(topic: string): Promise<Mutation>;
-  forgetStyle(dimension: string, pattern: string): Promise<Mutation>;
+  forgetTopic(topic: string): Promise<Mutation<Deleted>>;
+  forgetStyle(dimension: string, pattern: string): Promise<Mutation<Deleted>>;
   setScope(client: string, categories: Category[]): Promise<Mutation>;
   clearScope(client: string): Promise<Mutation>;
   judge(answerId: string, verdict: "approved" | "edited" | "vetoed"): Promise<Mutation>;
@@ -94,7 +99,9 @@ function liveClient(onUnauthorized: () => void): PersnallyClient {
   return {
     mode: "live",
     async probe() {
-      const r = await fetch("/stats", { headers: { accept: "application/json" } }).catch(() => null);
+      // A socket that accepts but never answers would otherwise leave the page
+      // blank forever — boot renders nothing until this resolves.
+      const r = await fetch("/stats", { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8000) }).catch(() => null);
       if (!r) return "unreachable";
       if (r.status === 401) return "unauthorized";
       // A non-persnally host (e.g. the marketing preview) answers 404 here —
@@ -103,7 +110,14 @@ function liveClient(onUnauthorized: () => void): PersnallyClient {
     },
     health: () => g<Health>("/health"),
     stats: () => g<Stats>("/stats"),
-    profile: () => g<Profile>("/profile"),
+    async profile() {
+      const r = await fetch("/profile", { headers: { accept: "application/json" } }).catch(() => null);
+      if (!r) return undefined;
+      if (r.status === 401) { onUnauthorized(); return undefined; }
+      if (r.status === 404) return null; // the daemon's honest "none yet"
+      if (!r.ok) return undefined;
+      return (await r.json().catch(() => null)) as Profile | null;
+    },
     topics: async (limit = 40) => (await g<TopicRow[]>(`/topics?limit=${limit}`)) ?? [],
     skills: async (limit = 25) => (await g<Skill[]>(`/skills?limit=${limit}`)) ?? [],
     voice: () => g<Voice>("/voice"),

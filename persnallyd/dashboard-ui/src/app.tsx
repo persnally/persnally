@@ -23,12 +23,11 @@ export function App({ client, boot }: { client: PersnallyClient; boot: Boot }) {
       return false; // storage blocked — default open, don't crash the first render
     }
   });
-  const [up, setUp] = useState(false);
+  const [up, setUp] = useState<boolean | null>(null); // null = not asked yet
   const [version, setVersion] = useState("");
   const [engine, setEngine] = useState("");
   const [recents, setRecents] = useState<AskRow[]>([]);
   const [focusSignal, setFocusSignal] = useState(0);
-  const [asked, setAsked] = useState(0);
   const [opened, setOpened] = useState<AskRow | null>(null);
 
   // Shell meta lives here so the rail's status block and the composer's model
@@ -38,17 +37,22 @@ export function App({ client, boot }: { client: PersnallyClient; boot: Boot }) {
     setUp(!!h?.ok);
     setVersion(h?.version ?? "");
     const e = await client.engine();
-    setEngine(e === null ? "" : e.hasKey ? "Claude API" : e.ollama.hasModel ? (e.ollama.models[0] ?? "ollama") : "no engine");
+    const label = e === null ? "" : e.hasKey ? "Claude API" : (e.models.extract ?? "no engine");
+    // A failing engine is reported here too — the footer is the only thing on
+    // screen in every view, and "Claude API" alone read as working.
+    setEngine(e?.lastFailure ? `${label} — failing` : label);
     const q = await client.questions();
-    if (q) setRecents(q.items);
+    // Cleared on failure like the rest of the status block: a rail still
+    // listing asks under "daemon unreachable" invites clicking into stale data.
+    setRecents(q ? q.items : []);
   });
 
-  // A dashboard ask lands in /questions immediately — refresh the rail after one.
-  usePoll(boot, async () => {
-    if (!asked) return;
+  // A dashboard ask lands in /questions immediately, so refresh on the event
+  // rather than polling for it (a second interval read a stale `asked`).
+  const refreshRecents = async () => {
     const q = await client.questions();
     if (q) setRecents(q.items);
-  }, 4000);
+  };
 
   const toggle = () => {
     const next = !collapsed;
@@ -97,7 +101,7 @@ export function App({ client, boot }: { client: PersnallyClient; boot: Boot }) {
           boot={boot}
           model={engine || "no engine"}
           focusSignal={focusSignal}
-          onAsked={() => setAsked((n) => n + 1)}
+          onAsked={() => void refreshRecents()}
           opened={opened}
           onClearOpened={() => setOpened(null)}
         />

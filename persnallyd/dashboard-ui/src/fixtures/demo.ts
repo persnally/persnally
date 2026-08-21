@@ -177,6 +177,8 @@ export const DEMO_ENGINE: EngineStatus = {
   hasProfile: true,
   ollama: { reachable: false, models: [], hasModel: false },
   recommended: "llama3.2",
+  models: { extract: null, profile: null },
+  lastFailure: null,
   pull: { state: "idle", model: "", percent: 0, status: "", error: "" },
 };
 

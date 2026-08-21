@@ -124,6 +124,11 @@ export interface EngineStatus {
   hasProfile: boolean;
   ollama: { reachable: boolean; models: string[]; hasModel: boolean };
   recommended: string;
+  /** What the daemon reports it would actually run — never re-derived here. */
+  models: { extract: string | null; profile: string | null };
+  /** The engine's last failure, if it hasn't succeeded since. A key on file
+      is not a key that works, and silence here used to look like health. */
+  lastFailure: { at: string; message: string; count: number } | null;
   pull: EnginePull;
 }
 
@@ -187,6 +192,9 @@ export type AskResponse =
   | { kind: "ok"; result: AskResult }
   | { kind: "rate-limited"; message: string }
   | { kind: "http-error"; message: string };
+
+/** What a delete actually removed — 0 means the row was already gone. */
+export interface Deleted { deleted: number }
 
 /** Every mutation answers with this, so views can report honestly either way. */
 export type Mutation<T = unknown> = { ok: true; data: T } | { ok: false; error: string };

@@ -57,6 +57,7 @@ export function ConfirmButton({
     <span class="confirm">
       <button
         class="mini danger"
+        disabled={disabled}
         onClick={() => {
           setArmed(false);
           onConfirm();

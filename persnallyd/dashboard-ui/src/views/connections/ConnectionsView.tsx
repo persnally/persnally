@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { PersnallyClient } from "../../api/client";
-import type { EngineStatus, EventEnvelope, Scopes, Stats } from "../../api/types";
+import type { EngineStatus, EventEnvelope, ImportResult, Mutation, Scopes, Stats } from "../../api/types";
 import type { Boot } from "../../lib/boot-state";
 import { fmtN, timeAgo } from "../../lib/format";
 import { num, str } from "../../lib/payload";
@@ -54,9 +54,19 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
   useEffect(() => {
     if (engine?.pull.state !== "pulling" || pollingPull.current) return;
     pollingPull.current = true;
+    let misses = 0;
     const id = setInterval(async () => {
       const p = await client.pullStatus();
-      if (!p) return;
+      // A daemon that stopped answering can't still be downloading; give up
+      // rather than render "downloading" and poll forever.
+      if (!p) {
+        if (++misses < 5) return;
+        clearInterval(id);
+        pollingPull.current = false;
+        setEngine((prev) => (prev ? { ...prev, pull: { ...prev.pull, state: "error", error: "lost contact with the daemon during the download" } } : prev));
+        return;
+      }
+      misses = 0;
       setEngine((prev) => (prev ? { ...prev, pull: p } : prev));
       if (p.state !== "pulling") {
         clearInterval(id);
@@ -70,20 +80,32 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
     };
   }, [engine?.pull.state]);
 
-  async function act(name: string, run: () => Promise<{ ok: boolean; error?: string }>, okText: string) {
+  async function act<T>(name: string, run: () => Promise<Mutation<T>>, okText: string | ((data: T) => string)) {
     setBusy(name);
     const r = await run();
     setBusy(null);
-    setFlash(r.ok ? { ok: true, text: okText } : { ok: false, text: r.error ?? "Failed." });
+    setFlash(r.ok
+      ? { ok: true, text: typeof okText === "function" ? okText(r.data) : okText }
+      : { ok: false, text: r.error ?? "Failed." });
     if (r.ok) await load();
   }
+
+  // The daemon reports what it actually imported; "Imported." on a run that
+  // found nothing would be the one thing this product can't afford to say.
+  const importedText = (r: ImportResult) => {
+    if (r.events > 0) {
+      return `Imported ${fmtN(r.events)} event${r.events === 1 ? "" : "s"} from ${r.imported.join(", ")}. Re-synthesize on Control to fold it into the portrait.`;
+    }
+    if (r.skipped.length > 0) return `Nothing new — already imported: ${r.skipped.join(", ")}.`;
+    return "Nothing found to import. Put a ChatGPT or Claude export in ~/Downloads, or use persnally import git <path>.";
+  };
 
   const engineLabel = !engine
     ? "unavailable"
     : engine.hasKey
       ? `Claude API · key ${engine.keyMasked}`
-      : engine.ollama.hasModel
-        ? `local via Ollama · ${engine.ollama.models[0] ?? ""} — nothing leaves this machine`
+      : engine.models.extract
+        ? `local via Ollama · ${engine.models.extract} — nothing leaves this machine`
         : "not configured";
 
   const byImporter = new Map<string, { events: number; last: string }>();
@@ -102,6 +124,13 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
       <Flash msg={flash} />
 
       <Panel title="Extraction engine" sub={engineLabel}>
+        {engine?.lastFailure && (
+          <p class="flash bad">
+            The engine is failing: {engine.lastFailure.message} ({engine.lastFailure.count} call
+            {engine.lastFailure.count === 1 ? "" : "s"} in a row, last {timeAgo(engine.lastFailure.at)}).
+            Nothing new is being extracted until this clears.
+          </p>
+        )}
         {engine && !engine.hasKey && !engine.ollama.hasModel && (
           <p class="body-text">
             Nothing can be extracted until one of these is set up. Git history and writing style import fully offline.
@@ -161,7 +190,7 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
           <button
             class="btn"
             disabled={busy !== null}
-            onClick={() => void act("import", () => client.importAll(), "Imported. Re-synthesize on Control to fold it into the portrait.")}
+            onClick={() => void act("import", () => client.importAll(), importedText)}
           >
             {busy === "import" ? "importing…" : "Import everything"}
           </button>
@@ -199,21 +228,26 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
         <ul class="rows">
           {CLIENTS.map((c) => {
             const events = stats?.bySource?.[`mcp:${c}`] ?? 0;
-            const scoped = c in scopes;
+            const grant = scopes[c];
+            const revoked = grant?.length === 0;
             return (
               <li key={c} class="row">
                 <BrandMark name={c} />
                 <span class="row-main">
                   {prettyClient(c)}
                   <span class="row-sub">
-                    {events > 0
-                      ? `${fmtN(events)} event${events === 1 ? "" : "s"} written`
-                      : scoped
-                        ? "has a grant on file, no activity yet"
-                        : `no activity yet — run persnally connect ${c}, then restart it`}
+                    {revoked
+                      ? `revoked — reads nothing${events > 0 ? ` (${fmtN(events)} written before that)` : ""}`
+                      : events > 0
+                        ? `${fmtN(events)} event${events === 1 ? "" : "s"} written, all-time`
+                        : grant
+                          ? `limited to ${grant.join(", ")} — no activity yet`
+                          : `no activity yet — run persnally connect ${c}, then restart it`}
                   </span>
                 </span>
-                <span class={`tag ${events > 0 ? "ok" : ""}`}>{events > 0 ? "active" : "idle"}</span>
+                <span class={`tag ${revoked ? "" : events > 0 ? "ok" : ""}`}>
+                  {revoked ? "revoked" : events > 0 ? "used" : "idle"}
+                </span>
               </li>
             );
           })}

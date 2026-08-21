@@ -21,7 +21,8 @@ export interface RailProps {
   /** Opening a past ask drops it into the Mirror thread — no dead links. */
   onOpenAsk: (row: AskRow) => void;
   openedId: string | null;
-  status: { up: boolean; demo: boolean; version: string; engine: string };
+  /** up === null: the first /health hasn't answered yet — state unknown. */
+  status: { up: boolean | null; demo: boolean; version: string; engine: string };
 }
 
 export function Rail({ active, collapsed, onToggle, onAsk, recents, onOpenAsk, openedId, status }: RailProps) {
@@ -70,10 +71,12 @@ export function Rail({ active, collapsed, onToggle, onAsk, recents, onOpenAsk, o
         )}
       </div>
 
-      <div class="rail-foot" title={demo ? "preview" : up ? `daemon running · ${engine}` : "daemon unreachable"}>
+      <div class="rail-foot" title={demo ? "preview" : up === null ? "checking the daemon" : up ? `daemon running · ${engine}` : "daemon unreachable"}>
         <span class={`dot${demo ? " preview" : up ? " on" : ""}`} />
         <span class="stack">
-          <span class="line1">{demo ? "preview" : up ? "daemon running" : "daemon unreachable"}</span>
+          {/* null is "not asked yet" — claiming "unreachable" before the first
+              /health lands states something we don't know. */}
+          <span class="line1">{demo ? "preview" : up === null ? "checking…" : up ? "daemon running" : "daemon unreachable"}</span>
           <span class="line2">{demo ? "sample data" : [engine, version && `v${version}`].filter(Boolean).join(" · ")}</span>
         </span>
       </div>
