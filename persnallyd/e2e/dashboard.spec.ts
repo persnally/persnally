@@ -373,3 +373,15 @@ test("a mutation in preview mode is blocked and destroys nothing", async ({ page
   await expect(page.locator(".flash.bad")).toContainText("Preview mode — nothing here can be changed");
   await expect(page.locator(".row", { hasText: "PostgreSQL query planning" })).toBeVisible();
 });
+
+test("a key that fails every call is reported as failing, not as a healthy engine", async ({ page }) => {
+  // The BAD daemon holds an invalid key. The earlier ask already forced a real
+  // API rejection, so the daemon has an outage on record — a configured key
+  // that never works used to render as "Claude API" with a green dot.
+  await signIn(page, BAD, badKey);
+  await openArea(page, "connections");
+  const engine = page.locator(".panel", { hasText: "Extraction engine" });
+  await expect(engine.locator(".flash.bad")).toContainText("The engine is failing");
+  await expect(engine.locator(".flash.bad")).toContainText("Nothing new is being extracted");
+  await expect(page.locator(".rail-foot .line2")).toContainText("failing");
+});
