@@ -175,7 +175,14 @@ assert.match(askText, /2 evidence event\(s\)/);
 assert.equal(received.asks.length, 1, "ask must POST to the daemon");
 assert.equal(received.asks[0].question, "Would they want tests with this refactor?");
 assert.equal(received.asks[0].client, "e2e-test", "the daemon needs the client for scoping + provenance");
-console.log("✅ ask → daemon /ask with client identity");
+// The richest disclosure path of all — profile, assertions, corrections, voice
+// — recorded nothing, so it was invisible in both the receipts feed and the
+// north-star metric it is supposed to drive.
+const askReads = () => received.posts.filter((p) => Array.isArray(p) && p[0]?.type === "context.read" && p[0]?.payload?.scope === "ask");
+assert.equal(askReads().length, 1, "an ask must record a context.read");
+assert.match(askReads()[0][0].payload.client_purpose, /^asked: Would they want tests/);
+assert.equal(askReads()[0][0].source, "mcp:e2e-test", "the read is attributed to the asking client");
+console.log("✅ ask → daemon /ask with client identity, recorded as a read");
 
 // ── search → GET /search; hits recorded as a context.read, misses not ──
 const searchHit = await callTool("persnally_search", { query: "rust" });
@@ -191,6 +198,8 @@ console.log("✅ search → targeted lookup with read recording");
 
 // ── interests + forget ──
 assert.match(await callTool("persnally_interests", {}), /rust — 0\.90/);
+const interestReads = () => received.posts.filter((p) => Array.isArray(p) && p[0]?.type === "context.read" && p[0]?.payload?.scope === "interests");
+assert.equal(interestReads().length, 1, "showing the user their own profile is still a disclosure");
 await callTool("persnally_forget", { topic: "rust" });
 assert.ok(received.deletes.some((u) => u === "/topics/rust"), "forget must DELETE /topics/:t");
 console.log("✅ interests + forget");

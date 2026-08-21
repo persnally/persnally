@@ -4,7 +4,7 @@ import { CATEGORIES, type Activity, type AskRow, type Category, type EventEnvelo
 import type { Boot } from "../../lib/boot-state";
 import { timeAgo } from "../../lib/format";
 import { list, num, str } from "../../lib/payload";
-import { clientOf, prettyClient } from "../../lib/provenance";
+import { clientOf, isClientRead, prettyClient } from "../../lib/provenance";
 import { usePoll } from "../../lib/use-poll";
 import { Bar, ConfirmButton, Empty, Flash, Panel } from "../../ui/bits";
 import { BrandMark } from "../../ui/BrandMark";
@@ -47,11 +47,13 @@ export function AccessView({ client, boot }: { client: PersnallyClient; boot: Bo
   // was just restored, which reads *everything* and must stay revocable here.
   const seen = new Set<string>([
     ...Object.keys(scopes),
-    ...reads.filter((e) => e.source.startsWith("mcp:")).map(clientOf),
-    ...Object.keys(stats?.bySource ?? {}).filter((k) => k.startsWith("mcp:")).map((k) => k.slice(4)),
+    ...reads.filter((e) => isClientRead(e.source)).map(clientOf),
+    ...Object.keys(stats?.bySource ?? {})
+      .filter((k) => isClientRead(k))
+      .map((k) => k.slice(k.indexOf(":") + 1)),
   ]);
   const clients = [...seen].filter(Boolean).sort();
-  const localReads = reads.filter((e) => !e.source.startsWith("mcp:")).length;
+  const localReads = reads.filter((e) => !isClientRead(e.source)).length;
 
   const state = (c: string): { label: string; tone: string } => {
     const s = scopes[c];
@@ -169,7 +171,7 @@ export function AccessView({ client, boot }: { client: PersnallyClient; boot: Bo
         ) : (
           <ul class="rows">
             {reads.slice(0, 12).map((e) => {
-              const local = !e.source.startsWith("mcp:");
+              const local = !isClientRead(e.source);
               const purpose = str(e.payload.client_purpose) || str(e.payload.purpose) || "context";
               const items = num(e.payload.items);
               const scope = list(e.payload.scope).join(", ");

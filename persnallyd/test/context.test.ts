@@ -58,3 +58,55 @@ test("context --hook emits nothing when the store is empty", async () => {
     rmSync(emptyDir, { recursive: true, force: true });
   }
 });
+
+test("a hook read is attributed to the client it injects into, not to the CLI", async () => {
+  // The highest-volume read channel — every Claude Code session — was recorded
+  // as `cli`, so the access matrix attributed it to nobody and the north-star
+  // metric counted it as the owner reading themselves.
+  const d = mkdtempSync(join(tmpdir(), "context-attr-"));
+  try {
+    const store = new EventStore(join(d, "persnally.db"));
+    store.append([newEvent("signal.topic", "cli",
+      { topic: "attribution", weight: 0.8, intent: "building", sentiment: "positive", depth: "deep", category: "technology", entities: [] },
+      { kind: "local", surface: "cli" })]);
+    store.rebuild();
+    store.close();
+
+    const hookEnv = { ...process.env, PERSNALLY_DIR: d };
+    await run("node", [CLI, "context", "--hook", "--client=claude-code"], { env: hookEnv });
+    await run("node", [CLI, "context"], { env: hookEnv }); // an owner read, for contrast
+
+    const s2 = new EventStore(join(d, "persnally.db"));
+    const reads = s2.query({ type: "context.read", limit: 20 });
+    const bySource = new Map(reads.map((e) => [e.source, e.provenance as Record<string, unknown>]));
+
+    assert.ok(bySource.has("hook:claude-code"), "the hook read was not attributed to the client");
+    assert.equal(bySource.get("hook:claude-code")?.surface, "hook", "the mechanism is still recorded honestly");
+    assert.equal(bySource.get("hook:claude-code")?.client, "claude-code");
+    assert.ok(bySource.has("cli"), "a manual context read is still the owner's own");
+    s2.close();
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test("an already-installed hook, passing no --client, still attributes correctly", async () => {
+  // Hooks installed before this change pass only --hook; they must not silently
+  // keep writing unattributed reads.
+  const d = mkdtempSync(join(tmpdir(), "context-legacy-"));
+  try {
+    const store = new EventStore(join(d, "persnally.db"));
+    store.append([newEvent("signal.topic", "cli",
+      { topic: "legacy hook", weight: 0.8, intent: "building", sentiment: "positive", depth: "deep", category: "technology", entities: [] },
+      { kind: "local", surface: "cli" })]);
+    store.rebuild();
+    store.close();
+
+    await run("node", [CLI, "context", "--hook"], { env: { ...process.env, PERSNALLY_DIR: d } });
+    const s2 = new EventStore(join(d, "persnally.db"));
+    assert.deepEqual(s2.query({ type: "context.read", limit: 5 }).map((e) => e.source), ["hook:claude-code"]);
+    s2.close();
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+});

@@ -220,7 +220,9 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
             can't verify. */}
         <ul class="rows">
           {CLIENTS.map((c) => {
-            const events = stats?.bySource?.[`mcp:${c}`] ?? 0;
+            // Both channels count: an MCP tool call and a session-start hook
+            // injection are the same client consuming context.
+            const events = (stats?.bySource?.[`mcp:${c}`] ?? 0) + (stats?.bySource?.[`hook:${c}`] ?? 0);
             const grant = scopes[c];
             const revoked = grant?.length === 0;
             return (

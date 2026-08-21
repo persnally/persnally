@@ -105,10 +105,21 @@ export const provenanceSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("git"), repo: z.string(), ref: z.string().optional(), batch: z.string().optional() }),
   z.object({ kind: z.literal("derived"), from: z.array(z.string()).min(1) }),
-  z.object({ kind: z.literal("local"), surface: z.enum(["cli", "dashboard"]) }),
+  z.object({
+    kind: z.literal("local"),
+    surface: z.enum(["cli", "dashboard", "hook"]),
+    /** Who consumed it. A SessionStart hook read is performed by the CLI but
+        injected into a client's session, so the mechanism and the consumer are
+        different facts and both are recorded. */
+    client: z.string().optional(),
+  }),
 ]);
 
-const sourcePattern = /^(mcp:[a-z0-9._-]+|import:(claude-code|claude|chatgpt|git)|cli|dashboard|system)$/;
+// Sources are an enumerated namespace, not free text — a new read channel has
+// to be declared here. `hook:` is a context injection performed by the CLI on
+// behalf of a client's session, which is neither an MCP call nor the owner's own
+// `cli` read.
+const sourcePattern = /^(mcp:[a-z0-9._-]+|hook:[a-z0-9._-]+|import:(claude-code|claude|chatgpt|git)|cli|dashboard|system)$/;
 
 export const eventSchema = z.object({
   id: z.string().uuid(),

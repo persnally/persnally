@@ -31,12 +31,21 @@ export function clientOf(ev: EventEnvelope): string {
   const c = ev.provenance["client"];
   if (typeof c === "string" && c) return c;
   if (ev.source.startsWith("mcp:")) return ev.source.slice(4);
+  if (ev.source.startsWith("hook:")) return ev.source.slice(5);
   return ev.source || "local";
 }
+
+/** A read performed for an AI client, over MCP or injected by its hook. Both
+    are the client consuming context; only the mechanism differs. */
+export const isClientRead = (source: string): boolean =>
+  source.startsWith("mcp:") || source.startsWith("hook:");
 
 export function provLabel(e: EventEnvelope): string {
   const p = e.provenance;
   const kind = typeof p["kind"] === "string" ? p["kind"] : "local";
+  if (kind === "local" && p["surface"] === "hook") {
+    return `${prettyClient(String(p["client"] ?? ""))} · session start`;
+  }
   if (kind === "import") {
     const base = IMPORT_TOOL[e.source] ?? (typeof p["file"] === "string" ? p["file"] : "import");
     const convo = p["conversation_uuid"];

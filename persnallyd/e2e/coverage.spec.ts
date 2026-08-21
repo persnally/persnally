@@ -387,3 +387,25 @@ test("a preview never writes the real delta baseline", async ({ page }) => {
   const snap = await page.evaluate(() => localStorage.getItem("persnally.snapshot.v1"));
   expect(snap).toBeNull(); // sample weights would make every real topic look new
 });
+
+test("a session-start hook read is attributed to its client, not to you", async ({ page }) => {
+  // The highest-volume read channel used to record as `cli`, so the access
+  // matrix credited it to nobody and the north-star metric counted every Claude
+  // Code session as the owner reading themselves.
+  await signIn(page, RICH, richKey);
+  await openArea(page, "access");
+  const log = page.locator(".panel", { hasText: "What your AIs read about you" });
+
+  const hookRow = log.locator(".row", { hasText: "session-start hook" }).first();
+  await expect(hookRow).toBeVisible();
+  await expect(hookRow).toContainText("Claude Code");
+  await expect(hookRow).not.toContainText("you ·");
+
+  // The owner's own manual read is still labelled as theirs.
+  const ownRow = log.locator(".row", { hasText: "manual context read" }).first();
+  await expect(ownRow).toContainText("you ·");
+
+  // And the client appears in the grant matrix, where it can be narrowed.
+  await expect(page.locator(".panel", { hasText: "What each AI can read" })
+    .locator(".row.col", { hasText: "Claude Code" })).toBeVisible();
+});

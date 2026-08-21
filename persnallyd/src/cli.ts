@@ -558,6 +558,14 @@ async function main(): Promise<void> {
       // stays side-effect-free so manual inspection never inflates the metric.
       const full = args.includes("--full");
       const hook = args.includes("--hook");
+      // A hook read is consumed by the client whose session it is injected
+      // into, not by the CLI that rendered it. Recording it as "cli" attributed
+      // the highest-volume read channel to nobody, so it was invisible in both
+      // the receipts feed and the north-star metric. Defaults to claude-code
+      // because that is the only client the hook installer targets today, so
+      // already-installed hooks (which pass no --client) attribute correctly.
+      const hookClient = (args.find((a) => a.startsWith("--client="))?.slice(9) || "claude-code")
+        .toLowerCase().replace(/[^a-z0-9._-]/g, "-");
       const store = new EventStore();
       const profile = store.getProfile();
       const topics = store.topics(full ? 25 : 12);
@@ -610,9 +618,9 @@ async function main(): Promise<void> {
       try {
         store.append([newEvent(
           "context.read",
-          "cli",
+          hook ? `hook:${hookClient}` : "cli",
           { scope: full ? "full" : "brief", client_purpose: hook ? "session-start hook" : "cli context read", items },
-          { kind: "local", surface: "cli" },
+          hook ? { kind: "local", surface: "hook", client: hookClient } : { kind: "local", surface: "cli" },
         )]);
       } catch (e) {
         console.error("persnally: context.read not recorded:", e instanceof Error ? e.message : e);

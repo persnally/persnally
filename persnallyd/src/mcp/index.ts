@@ -235,6 +235,11 @@ Persnally answers from the user's accumulated history with a confidence score. I
     guarded(async () => {
       logEvent("tool_call", { tool: "persnally_ask" });
       const r = await daemonPost<AskResult>("/ask", { question, client: getClient(), asker: getClient() });
+      // The ask path ships profile, assertions, corrections and voice into a
+      // model — the richest disclosure of all, and it recorded nothing, so it
+      // was absent from both the receipts feed and the north-star metric. A
+      // deferral still disclosed the corpus it reasoned over.
+      await recordRead("ask", `asked: ${question.slice(0, 120)}`, r.evidence_event_ids.length);
       if (r.deferred) return text(r.answer);
       return text(
         `${r.answer}\n\n(confidence ${r.confidence.toFixed(2)} · ${r.evidence_event_ids.length} evidence event(s) · answered by the user's Persnally model — the user can audit this at http://127.0.0.1:4983)`,
@@ -256,6 +261,7 @@ server.tool(
         daemonGet<TopicRow[]>("/topics?limit=20"),
       ]);
       if (!topics?.length) return text("Nothing tracked yet. Chat naturally, or import your AI history with `persnallyd import`.");
+      await recordRead("interests", "showed the user their own interest profile", topics.length);
       let out = `## Your interest profile\n${stats?.total ?? 0} events, ${topics.length} top topics. Dashboard: http://127.0.0.1:4983\n\n`;
       for (const t of topics) {
         const sentiment = t.sentiment_balance > 0.2 ? "+" : t.sentiment_balance < -0.2 ? "−" : "·";
