@@ -10,8 +10,11 @@ import { newEvent, normalizeTopic, validateEvent, type PersnallyEvent } from "./
 import { loadConfig } from "./config.js";
 import { DATA_DIR, ensurePrivateDir, ensurePrivateFile } from "./paths.js";
 import { assemblePack, type StyleSignal } from "./stylometry.js";
+import { groupNearDuplicates, TOPIC_MERGE_THRESHOLD } from "./topics.js";
 
-const VIEW_SCHEMA_VERSION = 3;
+// 4: topic rows fold near-duplicates, so an upgraded store must re-derive —
+// otherwise the interest list keeps its split topics until the next signal write.
+const VIEW_SCHEMA_VERSION = 4;
 
 // One bind parameter per id, well under SQLite's 32k variable ceiling.
 const MAX_ID_LOOKUP = 500;
@@ -479,7 +482,7 @@ export class EventStore {
   rebuild(now: number = Date.now()): void {
     this.db.exec("DELETE FROM view_topics");
 
-    interface Acc { topic: string; categories: Map<string, number>; signals: WeightSignal[]; entities: Set<string>; first: string; last: string; ids: string[] }
+    interface Acc { topic: string; categories: Map<string, number>; signals: WeightSignal[]; entities: Set<string>; first: string; last: string; ids: string[]; merged: string[] }
     const acc = new Map<string, Acc>();
     // Decay is per-signal and time-dependent, so every topic signal is genuinely
     // needed here — but provenance isn't, and this runs on every tracked write.
@@ -489,7 +492,7 @@ export class EventStore {
       if (!key) continue;
       let a = acc.get(key);
       if (!a) {
-        a = { topic: p.topic, categories: new Map(), signals: [], entities: new Set(), first: e.ts, last: e.ts, ids: [] };
+        a = { topic: p.topic, categories: new Map(), signals: [], entities: new Set(), first: e.ts, last: e.ts, ids: [], merged: [] };
         acc.set(key, a);
       }
       a.categories.set(p.category, (a.categories.get(p.category) ?? 0) + 1);
@@ -502,9 +505,40 @@ export class EventStore {
 
     // Decay rate depends on the category, so resolve it before weighting.
     const overrides = decayOverrides();
-    const rows: TopicRow[] = [...acc.entries()].map(([key, a]) => {
-      const category = [...a.categories.entries()].sort((x, y) => y[1] - x[1])[0]![0];
+    const categoryOf = (a: Acc) => [...a.categories.entries()].sort((x, y) => y[1] - x[1])[0]![0];
+
+    // Extraction renames the same interest every time it sees it, which splits
+    // one topic into several weaker ones. Fold near-duplicates into the heaviest
+    // phrasing — in the view only, so every constituent event keeps its own
+    // provenance and a changed threshold just re-derives.
+    // The ranking pass is reused, so merging doesn't weigh every topic twice —
+    // only rows that absorbed a variant are recomputed. (Measured: merging costs
+    // ~2.4ms of a 41ms rebuild on a 1,886-topic store; grouping is 1.6ms of it.)
+    const weighed = new Map<string, ReturnType<typeof topicWeight>>();
+    const ranking = [...acc.entries()].map(([key, a]) => {
+      const category = categoryOf(a);
       const w = topicWeight(a.signals, now, category, overrides);
+      weighed.set(key, w);
+      return { key, category, weight: w.weight };
+    });
+    const canonicalOf = groupNearDuplicates(ranking, TOPIC_MERGE_THRESHOLD);
+    for (const [variant, canonical] of canonicalOf) {
+      const from = acc.get(variant);
+      const into = acc.get(canonical);
+      if (!from || !into) continue;
+      into.signals.push(...from.signals);
+      for (const ent of from.entities) into.entities.add(ent);
+      into.ids.push(...from.ids);
+      for (const [cat, n] of from.categories) into.categories.set(cat, (into.categories.get(cat) ?? 0) + n);
+      if (from.first < into.first) into.first = from.first;
+      if (from.last > into.last) into.last = from.last;
+      into.merged.push(from.topic);
+      acc.delete(variant);
+    }
+
+    const rows: TopicRow[] = [...acc.entries()].map(([key, a]) => {
+      const category = categoryOf(a);
+      const w = a.merged.length > 0 ? topicWeight(a.signals, now, category, overrides) : weighed.get(key)!;
       return {
         topic_key: key,
         topic: a.topic,
@@ -522,7 +556,10 @@ export class EventStore {
       };
     });
 
-    this.reindexSearch(rows);
+    // Folded phrasings stay searchable as secondary text: the display collapses
+    // to one label, but a phrase the user remembers must still find its row.
+    const mergedByKey = new Map<string, string[]>([...acc].map(([k, a]) => [k, a.merged]));
+    this.reindexSearch(rows, mergedByKey);
     const insert = this.db.prepare(
       `INSERT INTO view_topics VALUES (@topic_key, @topic, @category, @signals, @weight,
         @sentiment_balance, @dominant_intent, @entities, @first_seen, @last_seen, @event_ids)`,
@@ -601,14 +638,15 @@ export class EventStore {
    * views it searches — the same reason view_topics is re-derived rather than
    * incrementally patched.
    */
-  private reindexSearch(topics: TopicRow[]): void {
+  private reindexSearch(topics: TopicRow[], mergedByKey: Map<string, string[]> = new Map()): void {
     const insert = this.db.prepare(
       "INSERT INTO view_search (primary_text, secondary_text, kind, ref, category, strength) VALUES (?, ?, ?, ?, ?, ?)",
     );
     const run = this.db.transaction(() => {
       this.db.exec("DELETE FROM view_search");
       for (const t of topics) {
-        insert.run(t.topic, t.entities.join(" "), "topic", t.topic_key, t.category, t.weight);
+        const secondary = [t.entities.join(" "), ...(mergedByKey.get(t.topic_key) ?? [])].join(" ");
+        insert.run(t.topic, secondary, "topic", t.topic_key, t.category, t.weight);
       }
       for (const e of this.payloads<{ claim: string; confidence: number; evidence: string }>("signal.assertion")) {
         insert.run(e.payload.claim, e.payload.evidence ?? "", "assertion", e.id, "", e.payload.confidence ?? 0.5);
@@ -686,11 +724,28 @@ export class EventStore {
       .slice(0, limit);
   }
 
-  voice(): { pack: string; items: StyleSignal[] } {
+  /**
+   * The served voice pack. `project` scopes it: unscoped signals always apply,
+   * a project's own signals apply when you are in it, and another project's
+   * never do. Without that filter the pack could assert both "prefers pnpm over
+   * npm" and the reverse — each true of one repo, neither true of the person.
+   */
+  voice(project?: string): { pack: string; items: StyleSignal[] } {
     const forgotten = this.forgottenStyleKeys();
     const byPattern = new Map<string, StyleSignal>();
+    const rows = this.db
+      .prepare(`SELECT payload, json_extract(provenance, '$.project') AS project
+                FROM events WHERE type = 'signal.style' ORDER BY ts DESC`)
+      .all() as { payload: string; project: string | null }[];
     // Newest first, so the first occurrence of a pattern is the most recent.
-    for (const { payload: p } of this.payloads<StyleSignal>("signal.style")) {
+    for (const row of rows) {
+      const p = JSON.parse(row.payload) as StyleSignal;
+      if (row.project && row.project !== project) continue;
+      // An `emphasis` signal from stylometry can only have come from the phrase
+      // miner that was removed for emitting subject matter as preference. The
+      // events stay on file and stay deletable — they just stop being served to
+      // clients as instructions.
+      if (p.dimension === "emphasis" && p.basis === "stylometry") continue;
       const key = this.styleKey(p.dimension, p.pattern);
       if (forgotten.has(key) || byPattern.has(key)) continue;
       byPattern.set(key, p);
@@ -699,6 +754,32 @@ export class EventStore {
     // to the richest few (consolidation prunes the stored backlog separately).
     const items = [...byPattern.values()].sort((a, b) => b.confidence - a.confidence).slice(0, 28);
     return { pack: assemblePack(items), items };
+  }
+
+  /**
+   * Every project-scoped style signal, grouped by project. The served pack hides
+   * other projects' conventions by design, which would otherwise make them
+   * invisible — and so undeletable — from the owner's own surface.
+   */
+  scopedVoice(): { project: string; items: StyleSignal[] }[] {
+    const forgotten = this.forgottenStyleKeys();
+    const byProject = new Map<string, Map<string, StyleSignal>>();
+    const rows = this.db
+      .prepare(`SELECT payload, json_extract(provenance, '$.project') AS project
+                FROM events
+                WHERE type = 'signal.style' AND json_extract(provenance, '$.project') IS NOT NULL
+                ORDER BY ts DESC`)
+      .all() as { payload: string; project: string }[];
+    for (const row of rows) {
+      const p = JSON.parse(row.payload) as StyleSignal;
+      const key = this.styleKey(p.dimension, p.pattern);
+      if (forgotten.has(key)) continue;
+      const seen = byProject.get(row.project) ?? new Map<string, StyleSignal>();
+      if (!seen.has(key)) seen.set(key, p);
+      byProject.set(row.project, seen);
+    }
+    return [...byProject].map(([project, items]) => ({ project, items: [...items.values()] }))
+      .sort((a, b) => b.items.length - a.items.length);
   }
 
   /**
@@ -783,15 +864,47 @@ export class EventStore {
   }
 
   /** Hard-deletes matching topic events plus derived events referencing them, then rebuilds. */
-  forgetTopic(topic: string): number {
-    const key = normalizeTopic(topic);
-    // normalizeTopic isn't expressible in SQL, so topic payloads are still read
-    // to match — but only the payload, and only that one type.
-    const ids = new Set(
+  /**
+   * Every event behind the row that displays this topic. Falls back to payload
+   * matching when the key names an absorbed phrasing rather than the canonical
+   * one, then widens to the row that owns those events.
+   */
+  private topicEventIds(key: string): Set<string> {
+    // The view is derived and append() does not rebuild it, so an event written
+    // since the last rebuild is absent from event_ids. Trusting the row alone
+    // would delete part of a topic, rebuild, and let the survivor re-create the
+    // row — reporting a count while the topic stayed on screen.
+    const own = new Set(
       this.payloads<{ topic: string }>("signal.topic")
         .filter((e) => normalizeTopic(e.payload.topic) === key)
         .map((e) => e.id),
     );
+
+    const direct = this.db.prepare("SELECT event_ids FROM view_topics WHERE topic_key = ?").get(key) as
+      | { event_ids: string } | undefined;
+    if (direct) {
+      for (const id of JSON.parse(direct.event_ids) as string[]) own.add(id);
+      return own;
+    }
+    if (own.size === 0) return own;
+    // The key names a phrasing that merged into another row: take that row too,
+    // so forgetting what is displayed removes all of it.
+    for (const row of this.db.prepare("SELECT event_ids FROM view_topics").all() as { event_ids: string }[]) {
+      const rowIds = JSON.parse(row.event_ids) as string[];
+      if (rowIds.some((id) => own.has(id))) {
+        for (const id of rowIds) own.add(id);
+        break;
+      }
+    }
+    return own;
+  }
+
+  forgetTopic(topic: string): number {
+    const key = normalizeTopic(topic);
+    // Rows are merged, so what the user sees as one interest can span several
+    // phrasings. Delete the whole row they were looking at — a partial delete
+    // would leave the topic on screen after reporting it forgotten.
+    const ids = this.topicEventIds(key);
     this.addDerivedDescendants(ids);
     const del = this.db.prepare("DELETE FROM events WHERE id = ?");
     const run = this.db.transaction((toDelete: string[]) => {

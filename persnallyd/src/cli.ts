@@ -27,6 +27,7 @@ import { extractChatGPTEvents, parseChatGPTExport } from "./importers/chatgpt.js
 import { extractClaudeEvents, parseClaudeExport } from "./importers/claude.js";
 import {
   DEFAULT_TRANSCRIPTS_DIR, extractClaudeCodeEvents, parseClaudeCodeTranscripts,
+  projectKey, projectLabel,
 } from "./importers/claude-code.js";
 import { gitEvents, scanRepos } from "./importers/git.js";
 import { EXTRACTOR_VERSION, freshConversations, memorySnapshotHash, type ParsedExport } from "./importers/extract.js";
@@ -526,7 +527,9 @@ async function main(): Promise<void> {
       const r = refreshVoice(store, dir, "cli");
       store.close();
       if (!r.signals) return die(`Not enough prose in ${dir} to fingerprint a voice yet.`);
-      console.log(`Voice fingerprint refreshed from ${r.prompts} prompts.\n\n${r.pack}`);
+      console.log(`Voice fingerprint refreshed from ${r.prompts} prompts${
+        r.projects ? `, plus tool conventions from ${r.projects} project${r.projects === 1 ? "" : "s"}` : ""
+      }.\n\n${r.pack}`);
       return;
     }
     case "show": {
@@ -558,7 +561,12 @@ async function main(): Promise<void> {
       const store = new EventStore();
       const profile = store.getProfile();
       const topics = store.topics(full ? 25 : 12);
-      if (!profile && !topics.length) { store.close(); return; }
+      // The hook runs inside the workspace it is injecting into, so cwd is the
+      // project — no protocol needed to ask. Conventions differ per repo (pnpm
+      // in one, npm in another) and only the local set is true here.
+      const project = projectKey(process.cwd());
+      const voice = store.voice(project);
+      if (!profile && !topics.length && !voice.items.length) { store.close(); return; }
       const out: string[] = [];
       let items = topics.length;
       if (profile) {
@@ -573,6 +581,18 @@ async function main(): Promise<void> {
           out.push(`- ${t.topic} (${t.category}, ${t.dominant_intent}, weight ${t.weight.toFixed(2)})`);
         }
       }
+      // How to work with them, and how to work with them *here*. A convention
+      // carrying a project is only served when you are in that project.
+      const local = voice.items.filter((i) => i.dimension === "convention" || i.dimension === "workflow");
+      if (local.length) {
+        const shown = local.slice(0, 8);
+        out.push("", `# How they work${projectLabel(project) ? ` in ${projectLabel(project)}` : ""}`);
+        for (const s of shown) out.push(`- ${s.pattern}`);
+        // The receipt counts what was served. A conventions-only read recorded
+        // items: 0 otherwise, indistinguishable from having emitted nothing.
+        items += shown.length;
+      }
+
       // Hook-only: put the loop tools in the default path. Soft instructions
       // are the only lever here — measured compliance is low (3% for track),
       // so keep them few, specific, and high-value. Not shown in plain `context`.
