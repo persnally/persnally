@@ -729,6 +729,11 @@ export class EventStore {
     const byPattern = new Map<string, StyleSignal>();
     // Newest first, so the first occurrence of a pattern is the most recent.
     for (const { payload: p } of this.payloads<StyleSignal>("signal.style")) {
+      // An `emphasis` signal from stylometry can only have come from the phrase
+      // miner that was removed for emitting subject matter as preference. The
+      // events stay on file and stay deletable — they just stop being served to
+      // clients as instructions.
+      if (p.dimension === "emphasis" && p.basis === "stylometry") continue;
       const key = this.styleKey(p.dimension, p.pattern);
       if (forgotten.has(key) || byPattern.has(key)) continue;
       byPattern.set(key, p);
