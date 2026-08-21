@@ -11,6 +11,7 @@ import { anthropicExtract, DEFAULT_EXTRACT_MODEL, type LlmExtract } from "../llm
 import { proseLines, stripNoise } from "../prose.js";
 import { analyzeVoice } from "../stylometry.js";
 import { toolConventions } from "../workflow.js";
+import { recordEngineFailure, recordEngineSuccess } from "../engine-health.js";
 
 // Enough attempts to tell a bad response apart from a dead engine, few enough
 // that a dead engine costs a handful of calls instead of the whole batch.
@@ -229,6 +230,7 @@ export async function extractEvents(
       });
       const topics = topicsExtraction.parse(result).topics;
       succeeded++;
+      recordEngineSuccess(); // a working call clears any recorded outage
       done();
       return topics;
     } catch (e) {
@@ -236,6 +238,7 @@ export async function extractEvents(
       // One malformed extraction (e.g. the model returns an out-of-enum value)
       // must not abort a whole multi-conversation import. Skip it — leaving no
       // conversation_uuid marker, so the next pass retries it — and keep the rest.
+      recordEngineFailure(e);
       console.error(`extract: skipped "${convo.name}" — ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
       done();
       return [];
@@ -273,6 +276,7 @@ export async function extractEvents(
       }
     } catch (e) {
       // A malformed assertions response shouldn't discard the topics already gathered.
+      recordEngineFailure(e);
       console.error(`extract: skipped memory/projects assertions — ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
     }
   }

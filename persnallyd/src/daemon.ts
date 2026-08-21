@@ -15,12 +15,13 @@ import {
 } from "./permissions.js";
 import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Provenance } from "./events.js";
 import { importNewClaudeCodeSessions } from "./importers/claude-code.js";
-import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
+import { chooseExtractor, resolvedModels, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
 import { refreshScopedProfiles, scopeKey, synthesizeProfile } from "./profile.js";
 import { searchContext } from "./search.js";
 import { importAllSources } from "./setup.js";
 import { refreshVoice } from "./voice.js";
 import type { EventStore } from "./store.js";
+import { engineFailure, recordEngineFailure, recordEngineSuccess } from "./engine-health.js";
 
 export const DEFAULT_PORT = 4983;
 const MAX_BODY_BYTES = 25 * 1024 * 1024; // generous for import batches; bounds memory
@@ -258,7 +259,9 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       }
       if (req.method === "POST" && url.pathname === "/synthesize") {
         const engine = await chooseExtractor("profile");
-        const profile = await synthesizeProfile(store, engine.extract, engine.model);
+        const profile = await synthesizeProfile(store, engine.extract, engine.model)
+          .then((p) => { recordEngineSuccess(); return p; })
+          .catch((e: unknown) => { recordEngineFailure(e); throw e; });
         safeRefreshVoice(store, "dashboard"); // keep "how you write" current with the portrait
         // Scoped caches ride along; per-scope failures are logged, never fatal.
         await refreshScopedProfiles(store, engine.extract, engine.model);
@@ -281,6 +284,12 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
           hasProfile: !!store.getProfile(),
           ollama: { reachable: tags !== null, models: tags ?? [], hasModel: (tags?.length ?? 0) > 0 },
           recommended: RECOMMENDED_LOCAL_MODEL,
+          // Resolved here so the dashboard reports the model that runs each
+          // job instead of guessing from the tag order.
+          models: resolvedModels(key.startsWith("sk-ant-"), tags),
+          // A key on file is not a key that works; report the last failure so
+          // the dashboard can stop claiming a healthy engine.
+          lastFailure: engineFailure(),
           pull,
         });
       }
@@ -337,13 +346,23 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
           return json(res, 429, { error: `ask limit reached (${ASK_LIMIT} per ${ASK_WINDOW_MS / 60000} min) — protects your inference budget from a looping agent` });
         }
         const engine = await chooseExtractor("extract").catch(() => null);
-        const result = await askUserModel(store, {
-          question,
-          asker,
-          source: client ? `mcp:${client}` : "dashboard",
-          provenance: client ? { kind: "mcp", client } : { kind: "local", surface: "dashboard" },
-          allowed: client ? allowedCategories(client) : null,
-        }, engine);
+        // An ask is an engine call like any other, so its outcome updates the
+        // health the dashboard reports. A deferral (no engine, no context) is
+        // not a failure and must not be recorded as one.
+        let result;
+        try {
+          result = await askUserModel(store, {
+            question,
+            asker,
+            source: client ? `mcp:${client}` : "dashboard",
+            provenance: client ? { kind: "mcp", client } : { kind: "local", surface: "dashboard" },
+            allowed: client ? allowedCategories(client) : null,
+          }, engine);
+          if (engine) recordEngineSuccess();
+        } catch (e) {
+          recordEngineFailure(e);
+          throw e;
+        }
         return json(res, 200, result);
       }
       if (req.method === "GET" && url.pathname === "/questions") {
@@ -493,6 +512,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       safeRefreshVoice(store, "cli"); // nightly: keep the voice fingerprint fresh + clean
       console.error(`consolidation: ${r.newSignals} new signals, ${r.assertions} assertions, profile ${r.profileRefreshed ? "refreshed" : "kept"}, ${r.stylePruned} style signals pruned`);
     } catch (e) {
+      recordEngineFailure(e);
       console.error(`consolidation failed (retrying tomorrow, not this hour): ${e instanceof Error ? e.message : String(e)}`);
     }
   }, 30 * 60 * 1000);
