@@ -59,3 +59,16 @@ test("every read surface is spelled the same way in one place", () => {
   // The union is declared once; a channel cannot invent a fifth spelling.
   assert.match(pack.text, /export type ReadSurface = "mcp" \| "hook" \| "cli" \| "dashboard";/);
 });
+
+test("every renderer that takes a grant refuses a revoked one", () => {
+  // `allowed: []` is revoked. Gating only the category-tagged sections on it
+  // served writing style and project conventions to a client the dashboard had
+  // promised reads nothing — in both renderers, because each route was expected
+  // to remember its own check and two of them did not.
+  for (const path of ["context-pack.ts", "ask.ts"]) {
+    const f = files.find((x) => x.path === path);
+    assert.ok(f, `${path} is missing`);
+    assert.match(f.text, /readsNothing\(allowed\)/,
+      `${path} assembles context without refusing a revoked grant first`);
+  }
+});

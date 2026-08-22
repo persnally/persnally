@@ -52,7 +52,22 @@ export function isAllowed(client: string, category: string): boolean {
  * is how the user writes rather than what about.
  */
 export function isRevoked(client: string): boolean {
-  return allowedCategories(client)?.length === 0;
+  return readsNothing(allowedCategories(client));
+}
+
+/**
+ * The same rule as `isRevoked`, expressed on the grant a renderer is handed
+ * rather than the client name — `null` is the owner, `[]` is revoked.
+ *
+ * Renderers used to gate only their category-tagged sections on `allowed`, so
+ * the sections with no category (writing style, project conventions) were
+ * served to a revoked client. Every route was expected to remember its own
+ * check, and `/ask` and `/context` did not. Both renderers now start with this
+ * predicate, so the guarantee holds wherever context is assembled instead of
+ * once per route.
+ */
+export function readsNothing(allowed: Category[] | null): boolean {
+  return allowed !== null && allowed.length === 0;
 }
 
 // ── Identity tokens ──────────────────────────────────────────

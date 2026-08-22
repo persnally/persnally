@@ -8,9 +8,11 @@
 import { z } from "zod";
 import { newEvent, type Provenance } from "./events.js";
 import type { LlmExtract } from "./llm.js";
-import type { Category } from "./permissions.js";
+import { type Category, readsNothing } from "./permissions.js";
 import { overlapScore, queryTokens } from "./search.js";
 import type { EventStore } from "./store.js";
+import { projectLabel } from "./importers/claude-code.js";
+import { assemblePack } from "./stylometry.js";
 
 // Below this, a wrong answer costs more trust than a deferral saves time.
 export const CONFIDENCE_THRESHOLD = 0.7;
@@ -38,6 +40,13 @@ export interface AskOptions {
   provenance: Provenance;
   /** Category allowlist for scoped clients; null = unscoped (full material). */
   allowed?: Category[] | null;
+  /**
+   * Workspace the question is being asked about. Conventions are project-scoped,
+   * and `voice()` withholds another project's — so without this the ask path
+   * cannot see which package manager, test runner or merge strategy the user
+   * uses anywhere, which is most of what an agent asks about.
+   */
+  project?: string;
 }
 
 export interface AskResult {
@@ -56,7 +65,7 @@ export async function askUserModel(
   engine: { extract: LlmExtract; model: string } | null,
 ): Promise<AskResult> {
   const allowed = opts.allowed ?? null;
-  const { content, knownIds } = buildMaterial(store, opts.question, allowed);
+  const { content, knownIds } = buildMaterial(store, opts.question, allowed, opts.project);
 
   if (!engine) return record(store, opts, { deferred: true, reason: "no-engine" });
   if (!content) return record(store, opts, { deferred: true, reason: "not-enough-context" });
@@ -101,8 +110,9 @@ const TOPIC_CANDIDATES = 1000;
 /** Evidence corpus for the model, ranked against the question. Scoped clients
     get only their allowed categories' topics (never the cross-category profile
     or assertions) — the same boundary the daemon enforces on /profile. */
-function buildMaterial(store: EventStore, question: string, allowed: Category[] | null): { content: string; knownIds: Set<string> } {
+function buildMaterial(store: EventStore, question: string, allowed: Category[] | null, project?: string): { content: string; knownIds: Set<string> } {
   const knownIds = new Set<string>();
+  if (readsNothing(allowed)) return { content: "", knownIds };
   const lines: string[] = [];
   const q = queryTokens(question);
 
@@ -170,8 +180,19 @@ function buildMaterial(store: EventStore, question: string, allowed: Category[] 
     }
   }
 
-  const voice = store.voice();
-  if (voice.pack) lines.push("", "## How the user writes and works", voice.pack);
+  // Project-scoped facts have to say what they are scoped to. Serving "prefers
+  // npm over pnpm" unlabelled leaves a model unable to tell whether it applies
+  // to the repo being asked about — the evidence was present and unusable.
+  const voice = store.voice(project);
+  const scoped = voice.items.filter((i) => i.dimension === "convention" || i.dimension === "workflow");
+  const tone = voice.items.filter((i) => !scoped.includes(i));
+  if (tone.length) {
+    lines.push("", "## How the user writes", assemblePack(tone));
+  }
+  if (scoped.length) {
+    lines.push("", `## How the user works${project ? ` in ${projectLabel(project)}` : ""}`);
+    for (const s of scoped) lines.push(`- ${s.pattern}`);
+  }
 
   return { content: lines.join("\n").trim(), knownIds };
 }
