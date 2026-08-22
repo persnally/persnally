@@ -265,7 +265,7 @@ test("the ask path sees the conventions of the project it is asked about", async
     await askUserModel(store, {
       question: "which package manager?", asker: "t", source: "cli",
       provenance: { kind: "local", surface: "cli" }, project: "/repos/alpha",
-    }, engine as never);
+    }, engine);
     assert.match(seen[0]!, /prefers npm over pnpm/, "the asked project's convention was withheld");
     assert.doesNotMatch(seen[0]!, /prefers pnpm over npm/, "another project's convention leaked in");
     // And it must say what it is scoped to, or a model cannot tell if it applies.
@@ -274,7 +274,7 @@ test("the ask path sees the conventions of the project it is asked about", async
     await askUserModel(store, {
       question: "which package manager?", asker: "t", source: "cli",
       provenance: { kind: "local", surface: "cli" }, project: "/repos/beta",
-    }, engine as never);
+    }, engine);
     assert.match(seen[1]!, /prefers pnpm over npm/);
     assert.doesNotMatch(seen[1]!, /prefers npm over pnpm/);
   } finally {
