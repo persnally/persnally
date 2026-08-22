@@ -485,6 +485,7 @@ async function main(): Promise<void> {
       const store = new EventStore();
       const r = await askUserModel(store, {
         question, asker: "cli", source: "cli", provenance: { kind: "local", surface: "cli" },
+        project: projectKey(process.cwd()),
       }, engine);
       store.close();
       if (r.deferred) {

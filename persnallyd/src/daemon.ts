@@ -374,7 +374,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         if (!(req.headers["content-type"] ?? "").includes("application/json")) {
           return json(res, 415, { error: "Content-Type must be application/json" });
         }
-        const body = (await readBody(req)) as { question?: unknown; client?: unknown; asker?: unknown };
+        const body = (await readBody(req)) as { question?: unknown; client?: unknown; asker?: unknown; project?: unknown };
         const question = typeof body.question === "string" ? body.question.trim() : "";
         if (!question || question.length > 500) {
           return json(res, 400, { error: "question required (1–500 chars)" });
@@ -401,6 +401,9 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
             source: client ? `mcp:${client}` : "dashboard",
             provenance: client ? { kind: "mcp", client } : { kind: "local", surface: "dashboard" },
             allowed: client ? allowedCategories(client) : null,
+            // Conventions are project-scoped, so an asker that knows its
+            // workspace gets the set that is true there.
+            project: typeof body.project === "string" ? body.project : undefined,
           }, engine);
           if (engine) recordEngineSuccess();
         } catch (e) {

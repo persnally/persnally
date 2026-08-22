@@ -228,3 +228,56 @@ test("askHistory joins questions, answers, and feedback with conservative precis
   assert.equal(stats.precision, 0.5, "precision = approved / all labeled");
   store.close();
 });
+
+test("the ask path sees the conventions of the project it is asked about", async () => {
+  // Project-scoping (#219) made voice() withhold another project's conventions.
+  // The ask path passed no project, so it withheld *all* of them — the richest
+  // disclosure in the product went blind to which package manager, test runner
+  // or merge strategy the user uses. A benchmark caught it; this keeps it caught.
+  const dir = mkdtempSync(join(tmpdir(), "ask-project-"));
+  try {
+    const store = new EventStore(join(dir, "t.db"));
+    const conv = (pattern: string, project: string) =>
+      newEvent("signal.style", "import:claude-code",
+        { dimension: "convention", pattern, polarity: "prefers", confidence: 0.8, evidence: "observed", basis: "stylometry" },
+        { kind: "import", batch: "b", file: "f", project });
+    store.append([
+      conv("prefers npm over pnpm", "/repos/alpha"),
+      conv("prefers pnpm over npm", "/repos/beta"),
+      newEvent("signal.topic", "import:claude-code", {
+        topic: "dependency management", weight: 0.8, intent: "building", sentiment: "positive",
+        depth: "deep", category: "technology", entities: [],
+      }, { kind: "import", batch: "b", file: "f" }),
+    ]);
+    store.rebuild();
+
+    // A fake engine that reports the corpus it was given, so this asserts what
+    // the model can see rather than what it happens to conclude.
+    const seen: string[] = [];
+    const engine = {
+      model: "test",
+      extract: (opts: { content: string }) => {
+        seen.push(opts.content);
+        return Promise.resolve({ answer: "npm", confidence: 0.9, evidence_event_ids: [] });
+      },
+    };
+
+    await askUserModel(store, {
+      question: "which package manager?", asker: "t", source: "cli",
+      provenance: { kind: "local", surface: "cli" }, project: "/repos/alpha",
+    }, engine as never);
+    assert.match(seen[0]!, /prefers npm over pnpm/, "the asked project's convention was withheld");
+    assert.doesNotMatch(seen[0]!, /prefers pnpm over npm/, "another project's convention leaked in");
+    // And it must say what it is scoped to, or a model cannot tell if it applies.
+    assert.match(seen[0]!, /How the user works in alpha/);
+
+    await askUserModel(store, {
+      question: "which package manager?", asker: "t", source: "cli",
+      provenance: { kind: "local", surface: "cli" }, project: "/repos/beta",
+    }, engine as never);
+    assert.match(seen[1]!, /prefers pnpm over npm/);
+    assert.doesNotMatch(seen[1]!, /prefers npm over pnpm/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
