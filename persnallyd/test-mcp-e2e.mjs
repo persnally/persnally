@@ -120,6 +120,13 @@ const init = await rpc("initialize", {
   protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "e2e-test", version: "0" },
 });
 assert.equal(init.result.serverInfo.name, "persnally");
+// Context at session start for any client, with no per-client integration: the
+// initialize result carries it, so a client that reads `instructions` is
+// personalised before the first message. Cursor does; one that ignores the
+// field is unharmed.
+assert.ok(init.result.instructions, "the initialize result must carry the user's context");
+assert.match(init.result.instructions, /# Current interests/, "instructions carry the assembled pack");
+assert.match(init.result.instructions, /persnally_context to refresh/, "and say how to refresh it");
 srv.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
 
 // ── tools list ──
@@ -179,15 +186,25 @@ console.log("✅ context renders profile + voice + topics");
 // ── the serving path: this process asks the daemon, and never assembles or
 // attributes context itself. Recording is the daemon's job (it holds the
 // verified token), and is covered by test/context-read.test.ts.
-assert.equal(received.contextGets.length, 1, "context must be served through GET /context");
+// Two disclosures by now: the session-start instructions and this explicit
+// tool call. Both go through the one serving path.
+assert.equal(received.contextGets.length, 2, "context must be served through GET /context");
 {
-  const q = new URL(received.contextGets[0], "http://x").searchParams;
+  const startup = new URL(received.contextGets[0], "http://x").searchParams;
+  assert.equal(startup.get("detail"), "brief", "session start serves the brief pack, not the full one");
+  // Attribution at startup can only come from the env, because the client's name
+  // arrives later in the handshake. `persnally connect` pins PERSNALLY_CLIENT for
+  // every client it configures, so real installs are attributed; this instance is
+  // deliberately un-connected, and degrades to "unknown" rather than guessing.
+  assert.equal(startup.get("client"), "unknown", "an un-connected instance must not invent a client name");
+  assert.equal(startup.get("purpose"), "session start (server instructions)", "and is labelled exactly in the receipt");
+  const q = new URL(received.contextGets[1], "http://x").searchParams;
   assert.equal(q.get("detail"), "brief");
   assert.equal(q.get("client"), "e2e-test", "the daemon needs the client to scope and attribute");
 }
 await callTool("persnally_context", { detail: "full", purpose: "personalize a code review" });
 {
-  const q = new URL(received.contextGets[1], "http://x").searchParams;
+  const q = new URL(received.contextGets[2], "http://x").searchParams;
   assert.equal(q.get("detail"), "full");
   assert.equal(q.get("purpose"), "personalize a code review", "purpose reaches the receipt");
 }
@@ -263,6 +280,11 @@ assert.equal(received.posts[pinnedIdx][0].source, "mcp:cursor", "identity comes 
 assert.deepEqual(received.posts[pinnedIdx][0].provenance, { kind: "mcp", client: "cursor" });
 assert.equal(received.postAuths[pinnedIdx], "Bearer tok-e2e", "the connect-issued token authenticates the write");
 assert.ok(received.postAuths.slice(0, pinnedIdx).every((a) => a === null), "the un-connected instance sent no token");
+// The same pinning attributes the session-start disclosure, which is fetched
+// before the handshake can name the client.
+const pinnedStartup = received.contextGets.map((u) => new URL(u, "http://x").searchParams)
+  .find((q) => q.get("purpose") === "session start (server instructions)" && q.get("client") === "cursor");
+assert.ok(pinnedStartup, "a connected client's session-start disclosure is attributed to it");
 srv2.kill();
 console.log("✅ env-pinned identity + bearer token on the wire");
 

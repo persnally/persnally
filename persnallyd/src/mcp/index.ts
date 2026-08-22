@@ -19,7 +19,45 @@ import { getClient, logEvent, setClient } from "./telemetry.js";
 
 // Handshake version tracks package.json — same rule as the daemon's VERSION.
 const pkg = JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf-8")) as { version: string };
-const server = new McpServer({ name: "persnally", version: pkg.version });
+/**
+ * Context at session start, for every client, without a per-client integration.
+ *
+ * Claude Code has a SessionStart hook; Cursor, Desktop and the rest do not, and
+ * building one mechanism per client means a new integration for every client
+ * that ships. MCP already has the answer: `instructions` is returned in the
+ * initialize response, so any client that reads it gets the user's context
+ * before the first message. Verified consumed by Cursor (its MCPService threads
+ * `serverUseInstructions`); a client that ignores the field is unharmed.
+ *
+ * Fetched here rather than lazily because the field is part of the initialize
+ * result, so it must exist before the transport connects. Same serving path as
+ * every other channel, so it cannot drift or skip its receipt. A slow or absent
+ * daemon must not stop the server from starting — the tools still work, and
+ * the fetch carries its own deadline so a hung daemon cannot block startup.
+ */
+async function sessionInstructions(): Promise<string | undefined> {
+  try {
+    const q = new URLSearchParams({
+      detail: "brief",
+      client: getClient(),
+      purpose: "session start (server instructions)",
+    });
+    // Deadline, not just error handling: this blocks the server's own startup,
+    // so a daemon that accepts the connection and never answers would stop MCP
+    // initialising at all rather than merely delaying it.
+    const pack = await daemonGet<{ text: string; items: number }>(`/context?${q.toString()}`, 2000);
+    if (!pack?.text) return undefined;
+    return `${pack.text}\n\n---\nThe context above is this user's own, served by Persnally from data on their machine. Use it to fit your answers to them. Call persnally_context to refresh it, and persnally_ask before interrupting them with a question about their preferences.`;
+  } catch {
+    return undefined; // daemon down: start anyway, the tools report it themselves
+  }
+}
+
+// Top-level await: the initialize result carries this, so it has to be resolved
+// before the server exists.
+const server = new McpServer({ name: "persnally", version: pkg.version }, {
+  instructions: await sessionInstructions(),
+});
 
 interface TopicRow {
   topic: string;
@@ -142,7 +180,10 @@ Call this at the START of a conversation (or when personalization would improve 
       // receipt and cannot drift from what other channels serve.
       const q = new URLSearchParams({ detail, client: getClient() });
       if (purpose) q.set("purpose", purpose);
-      const pack = await daemonGet<{ text: string; items: number }>(`/context?${q.toString()}`);
+      // Deadline, not just error handling: this blocks the server's own startup,
+    // so a daemon that accepts the connection and never answers would stop MCP
+    // initialising at all rather than merely delaying it.
+    const pack = await daemonGet<{ text: string; items: number }>(`/context?${q.toString()}`, 2000);
       if (!pack?.text) {
         return text("No context yet — the user hasn't imported data or tracked any signals.");
       }
