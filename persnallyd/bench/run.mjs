@@ -14,7 +14,7 @@
  * agent.answer events, and a benchmark that writes into the data it measures is
  * not a benchmark.
  *
- * Usage:  node bench/run.mjs [--limit N] [--json out.json]
+ * Usage:  node bench/run.mjs [--limit N] [--json out.json] [--db path] [--engine id]
  */
 
 import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -35,6 +35,10 @@ const jsonOut = args.find((a) => a.startsWith("--json="))?.slice(7);
 // against their own history for free on a local model, which is the whole point
 // of a number you can check rather than take on trust.
 const forced = args.find((a) => a.startsWith("--engine="))?.slice(9);
+// Benchmark a specific store snapshot. PERSNALLY_DIR would do it, but it also
+// relocates config resolution, which silently drops the API key and falls back
+// to whatever local engine is installed — a different measurement entirely.
+const dbOverride = args.find((a) => a.startsWith("--db="))?.slice(5);
 
 // A zod schema, matching what the extractors actually parse against. A plain
 // JSON Schema silently threw on every call and scored the control as 18
@@ -73,7 +77,7 @@ async function main() {
 
   // A copy, so benchmark asks never land in the real log.
   const dir = mkdtempSync(join(tmpdir(), "persnally-bench-"));
-  const src = join(process.env.PERSNALLY_DIR ?? join(homedir(), ".persnally"), "persnally.db");
+  const src = dbOverride ?? join(process.env.PERSNALLY_DIR ?? join(homedir(), ".persnally"), "persnally.db");
   const db = join(dir, "bench.db");
   copyFileSync(src, db);
   const store = new EventStore(db);

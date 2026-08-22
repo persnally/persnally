@@ -32,7 +32,13 @@ import { basename, join } from "node:path";
 const FAMILIES = {
   "package manager": [["pnpm", null, "pnpm"], ["npm", null, "npm"], ["yarn", null, "yarn"], ["bun", null, "bun"]],
   "git integration": [["git", "rebase", "rebase"], ["git", "merge", "merge"]],
-  "test runner": [["vitest", null, "vitest"], ["jest", null, "jest"], ["pytest", null, "pytest"], ["go", "test", "go test"]],
+  // `cargo test` was missing here while the product knew about it. The key
+  // therefore called pytest (24 uses) the winner in a project that runs cargo
+  // test 77 times, and graded the product's correct answer as a contradiction.
+  // An incomplete option set is a wrong answer key: the omitted tool cannot be
+  // named, so a truthful model is forced into an error.
+  "test runner": [["vitest", null, "vitest"], ["jest", null, "jest"], ["pytest", null, "pytest"],
+                  ["cargo", "test", "cargo test"], ["go", "test", "go test"]],
   "search tool": [["rg", null, "ripgrep"], ["grep", null, "grep"]],
 };
 
