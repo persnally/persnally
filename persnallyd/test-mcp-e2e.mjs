@@ -191,7 +191,13 @@ console.log("✅ context renders profile + voice + topics");
 assert.equal(received.contextGets.length, 2, "context must be served through GET /context");
 {
   const startup = new URL(received.contextGets[0], "http://x").searchParams;
-  assert.match(startup.get("purpose") ?? "", /session start/, "the startup fetch is labelled in the receipt");
+  assert.equal(startup.get("detail"), "brief", "session start serves the brief pack, not the full one");
+  // Attribution at startup can only come from the env, because the client's name
+  // arrives later in the handshake. `persnally connect` pins PERSNALLY_CLIENT for
+  // every client it configures, so real installs are attributed; this instance is
+  // deliberately un-connected, and degrades to "unknown" rather than guessing.
+  assert.equal(startup.get("client"), "unknown", "an un-connected instance must not invent a client name");
+  assert.equal(startup.get("purpose"), "session start (server instructions)", "and is labelled exactly in the receipt");
   const q = new URL(received.contextGets[1], "http://x").searchParams;
   assert.equal(q.get("detail"), "brief");
   assert.equal(q.get("client"), "e2e-test", "the daemon needs the client to scope and attribute");
@@ -274,6 +280,11 @@ assert.equal(received.posts[pinnedIdx][0].source, "mcp:cursor", "identity comes 
 assert.deepEqual(received.posts[pinnedIdx][0].provenance, { kind: "mcp", client: "cursor" });
 assert.equal(received.postAuths[pinnedIdx], "Bearer tok-e2e", "the connect-issued token authenticates the write");
 assert.ok(received.postAuths.slice(0, pinnedIdx).every((a) => a === null), "the un-connected instance sent no token");
+// The same pinning attributes the session-start disclosure, which is fetched
+// before the handshake can name the client.
+const pinnedStartup = received.contextGets.map((u) => new URL(u, "http://x").searchParams)
+  .find((q) => q.get("purpose") === "session start (server instructions)" && q.get("client") === "cursor");
+assert.ok(pinnedStartup, "a connected client's session-start disclosure is attributed to it");
 srv2.kill();
 console.log("✅ env-pinned identity + bearer token on the wire");
 

@@ -32,7 +32,8 @@ const pkg = JSON.parse(readFileSync(new URL("../../../package.json", import.meta
  * Fetched here rather than lazily because the field is part of the initialize
  * result, so it must exist before the transport connects. Same serving path as
  * every other channel, so it cannot drift or skip its receipt. A slow or absent
- * daemon must not stop the server from starting — the tools still work.
+ * daemon must not stop the server from starting — the tools still work, and
+ * the fetch carries its own deadline so a hung daemon cannot block startup.
  */
 async function sessionInstructions(): Promise<string | undefined> {
   try {
@@ -41,7 +42,10 @@ async function sessionInstructions(): Promise<string | undefined> {
       client: getClient(),
       purpose: "session start (server instructions)",
     });
-    const pack = await daemonGet<{ text: string; items: number }>(`/context?${q.toString()}`);
+    // Deadline, not just error handling: this blocks the server's own startup,
+    // so a daemon that accepts the connection and never answers would stop MCP
+    // initialising at all rather than merely delaying it.
+    const pack = await daemonGet<{ text: string; items: number }>(`/context?${q.toString()}`, 2000);
     if (!pack?.text) return undefined;
     return `${pack.text}\n\n---\nThe context above is this user's own, served by Persnally from data on their machine. Use it to fit your answers to them. Call persnally_context to refresh it, and persnally_ask before interrupting them with a question about their preferences.`;
   } catch {
@@ -176,7 +180,10 @@ Call this at the START of a conversation (or when personalization would improve 
       // receipt and cannot drift from what other channels serve.
       const q = new URLSearchParams({ detail, client: getClient() });
       if (purpose) q.set("purpose", purpose);
-      const pack = await daemonGet<{ text: string; items: number }>(`/context?${q.toString()}`);
+      // Deadline, not just error handling: this blocks the server's own startup,
+    // so a daemon that accepts the connection and never answers would stop MCP
+    // initialising at all rather than merely delaying it.
+    const pack = await daemonGet<{ text: string; items: number }>(`/context?${q.toString()}`, 2000);
       if (!pack?.text) {
         return text("No context yet — the user hasn't imported data or tracked any signals.");
       }
