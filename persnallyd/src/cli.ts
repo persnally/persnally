@@ -27,7 +27,7 @@ import { extractChatGPTEvents, parseChatGPTExport } from "./importers/chatgpt.js
 import { extractClaudeEvents, parseClaudeExport } from "./importers/claude.js";
 import {
   DEFAULT_TRANSCRIPTS_DIR, extractClaudeCodeEvents, parseClaudeCodeTranscripts,
-  projectKey, projectLabel,
+  projectKey,
 } from "./importers/claude-code.js";
 import { gitEvents, scanRepos } from "./importers/git.js";
 import { EXTRACTOR_VERSION, freshConversations, memorySnapshotHash, type ParsedExport } from "./importers/extract.js";
@@ -41,6 +41,7 @@ import { refreshScopedProfiles, renderProfile, synthesizeProfile, synthesizeScop
 import { askUserModel } from "./ask.js";
 import { renderHits, searchContext } from "./search.js";
 import { DEFAULT_DB_PATH, EventStore } from "./store.js";
+import { buildContextPack, recordContextRead } from "./context-pack.js";
 
 /** One spelling in everything the user is told to retype. `persnallyd` is the
     same file (both bins point at cli.js); mixing them mid-flow reads as two tools. */
@@ -552,58 +553,27 @@ async function main(): Promise<void> {
       return;
     }
     case "context": {
-      // Serving path for the SessionStart hook: emit profile + interests for
-      // injection AND record the read, so hook injections count toward the
-      // context-reads metric exactly like the MCP persnally_context tool. `show`
-      // stays side-effect-free so manual inspection never inflates the metric.
+      // Serving path for the SessionStart hook and for manual inspection. Both
+      // render and record through context-pack.ts — the single door — while
+      // `show` stays side-effect-free so inspection never inflates the metric.
       const full = args.includes("--full");
       const hook = args.includes("--hook");
-      // A hook read is consumed by the client whose session it is injected
-      // into, not by the CLI that rendered it. Recording it as "cli" attributed
-      // the highest-volume read channel to nobody, so it was invisible in both
-      // the receipts feed and the north-star metric. Defaults to claude-code
-      // because that is the only client the hook installer targets today, so
-      // already-installed hooks (which pass no --client) attribute correctly.
+      // A hook read is consumed by the client whose session it is injected into,
+      // not by the CLI that rendered it. Defaults to claude-code because that is
+      // the only client the installer targets, so hooks installed before this
+      // change attribute correctly without being reinstalled.
       const hookClient = (args.find((a) => a.startsWith("--client="))?.slice(9) || "claude-code")
         .toLowerCase().replace(/[^a-z0-9._-]/g, "-");
       const store = new EventStore();
-      const profile = store.getProfile();
-      const topics = store.topics(full ? 25 : 12);
-      // The hook runs inside the workspace it is injecting into, so cwd is the
-      // project — no protocol needed to ask. Conventions differ per repo (pnpm
-      // in one, npm in another) and only the local set is true here.
-      const project = projectKey(process.cwd());
-      const voice = store.voice(project);
-      if (!profile && !topics.length && !voice.items.length) { store.close(); return; }
-      const out: string[] = [];
-      let items = topics.length;
-      if (profile) {
-        out.push("# About the user", profile.headline, "");
-        const sections = full ? profile.sections : profile.sections.slice(0, 3);
-        items += sections.length;
-        for (const s of sections) out.push(`## ${s.title}`, s.body, "");
-      }
-      if (topics.length) {
-        out.push("# Current interests (decay-weighted)");
-        for (const t of topics) {
-          out.push(`- ${t.topic} (${t.category}, ${t.dominant_intent}, weight ${t.weight.toFixed(2)})`);
-        }
-      }
-      // How to work with them, and how to work with them *here*. A convention
-      // carrying a project is only served when you are in that project.
-      const local = voice.items.filter((i) => i.dimension === "convention" || i.dimension === "workflow");
-      if (local.length) {
-        const shown = local.slice(0, 8);
-        out.push("", `# How they work${projectLabel(project) ? ` in ${projectLabel(project)}` : ""}`);
-        for (const s of shown) out.push(`- ${s.pattern}`);
-        // The receipt counts what was served. A conventions-only read recorded
-        // items: 0 otherwise, indistinguishable from having emitted nothing.
-        items += shown.length;
-      }
+      // The hook runs inside the workspace it injects into, so cwd is the
+      // project — no protocol needed to ask for it.
+      const pack = buildContextPack(store, { detail: full ? "full" : "brief", project: projectKey(process.cwd()) });
+      if (!pack.text) { store.close(); return; }
 
-      // Hook-only: put the loop tools in the default path. Soft instructions
-      // are the only lever here — measured compliance is low (3% for track),
-      // so keep them few, specific, and high-value. Not shown in plain `context`.
+      const out = [pack.text];
+      // Hook-only: put the loop tools in the default path. Soft instructions are
+      // the only lever here — measured compliance is low (3% for track) — so keep
+      // them few, specific and high-value.
       if (hook) {
         out.push(
           "",
@@ -614,23 +584,19 @@ async function main(): Promise<void> {
           "When this session ends, call persnally_track with 1–3 topics it focused on (weight, intent, depth, category). Skip only if nothing substantial was discussed.",
         );
       }
-      // Recording must never break the injection itself (mirrors MCP recordRead).
-      try {
-        store.append([newEvent(
-          "context.read",
-          hook ? `hook:${hookClient}` : "cli",
-          { scope: full ? "full" : "brief", client_purpose: hook ? "session-start hook" : "cli context read", items },
-          hook ? { kind: "local", surface: "hook", client: hookClient } : { kind: "local", surface: "cli" },
-        )]);
-      } catch (e) {
-        console.error("persnally: context.read not recorded:", e instanceof Error ? e.message : e);
-      }
+      recordContextRead(store, {
+        surface: hook ? "hook" : "cli",
+        client: hook ? hookClient : undefined,
+        scope: full ? "full" : "brief",
+        purpose: hook ? "session-start hook" : "cli context read",
+        items: pack.items,
+      });
       store.close();
-      const rendered = out.join("\n");
-      // --hook emits the SessionStart envelope itself, so the installed hook needs no jq.
+
+      const body = out.join("\n");
       console.log(hook
-        ? JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: rendered } })
-        : rendered);
+        ? JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: body } })
+        : body);
       return;
     }
     case "forget": {

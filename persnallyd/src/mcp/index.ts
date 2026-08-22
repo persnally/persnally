@@ -31,12 +31,6 @@ interface TopicRow {
   entities: string[];
 }
 
-interface Profile {
-  headline: string;
-  sections: { title: string; body: string }[];
-  generated_at: string;
-}
-
 function text(s: string) {
   return { content: [{ type: "text" as const, text: s }] };
 }
@@ -57,14 +51,11 @@ function clientSlug(): string {
 /** The north-star metric (context reads/user/week) is measured from these events.
     Recording must never break the read itself — failures only log to stderr. */
 async function recordRead(scope: string, purpose: string | undefined, items: number): Promise<void> {
-  const client = clientSlug();
+  // POST /reads rather than /events: the daemon derives source and provenance
+  // from the verified token, so a caller cannot declare its own identity. This
+  // process constructs no context.read events at all.
   try {
-    await daemonPost("/events", [{
-      type: "context.read",
-      source: `mcp:${client}`,
-      payload: { scope, client_purpose: purpose ?? "", items },
-      provenance: { kind: "mcp", client },
-    }]);
+    await daemonPost("/reads", { scope, purpose: purpose ?? "", items });
   } catch (e) {
     console.error("persnally: context.read not recorded:", e instanceof Error ? e.message : e);
   }
@@ -146,42 +137,16 @@ Call this at the START of a conversation (or when personalization would improve 
   async ({ detail, purpose }) =>
     guarded(async () => {
       logEvent("tool_call", { tool: "persnally_context", detail });
-      const client = encodeURIComponent(getClient());
-      const [profile, topics, voice, skills] = await Promise.all([
-        daemonGet<Profile>(`/profile?client=${client}`),
-        daemonGet<TopicRow[]>(`/topics?limit=${detail === "full" ? 25 : 10}&client=${client}`),
-        daemonGet<{ pack: string; items: unknown[] }>("/voice"),
-        daemonGet<{ skill: string; domain: string; proficiency: number; sources: number }[]>("/skills?limit=15"),
-      ]);
-      if (!profile && !topics?.length && !voice?.pack) {
+      // One serving path, shared with the CLI hook: the daemon renders and
+      // records together, so this tool cannot disclose context without a
+      // receipt and cannot drift from what other channels serve.
+      const q = new URLSearchParams({ detail, client: getClient() });
+      if (purpose) q.set("purpose", purpose);
+      const pack = await daemonGet<{ text: string; items: number }>(`/context?${q.toString()}`);
+      if (!pack?.text) {
         return text("No context yet — the user hasn't imported data or tracked any signals.");
       }
-      let out = "";
-      let items = topics?.length ?? 0;
-      if (profile) {
-        out += `# About this user\n${profile.headline}\n\n`;
-        const sections = detail === "full" ? profile.sections : profile.sections.slice(0, 3);
-        items += sections.length;
-        out += sections.map((s) => `## ${s.title}\n${s.body}`).join("\n\n");
-      }
-      // The prescriptive layer: how to write/answer so it fits this user, not a generic one.
-      if (voice?.pack) {
-        out += `${out ? "\n\n" : ""}# How to write for this user\n${voice.pack}`;
-        items += voice.items?.length ?? 0;
-      }
-      // Demonstrated skills, from repos they actually commit to — evidence of
-      // what they can do, distinct from what they've been talking about.
-      if (skills?.length) {
-        out += `${out ? "\n\n" : ""}# Demonstrated skills (from their own repos)\n`;
-        out += skills.map((k) => `- ${k.skill}${k.domain && k.domain !== "other" ? ` (${k.domain})` : ""}`).join("\n");
-        items += skills.length;
-      }
-      if (topics?.length) {
-        out += `\n\n# Current interests (decay-weighted)\n`;
-        out += topics.map((t) => `- ${t.topic} (${t.category}, ${t.dominant_intent}, weight ${t.weight.toFixed(2)})`).join("\n");
-      }
-      await recordRead(detail, purpose, items);
-      return text(out);
+      return text(pack.text);
     }),
 );
 
