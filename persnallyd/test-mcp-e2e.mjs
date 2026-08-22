@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const MOCK_PORT = 49832;
-const received = { posts: [], postAuths: [], deletes: [], asks: [] };
+const received = { posts: [], postAuths: [], deletes: [], asks: [], reads: [], readAuths: [], contextGets: [] };
 
 const mockDaemon = http.createServer((req, res) => {
   let body = "";
@@ -21,6 +21,11 @@ const mockDaemon = http.createServer((req, res) => {
       received.posts.push(JSON.parse(body));
       received.postAuths.push(req.headers.authorization ?? null);
       return respond(201, { inserted: JSON.parse(body).length ?? 1, ids: ["x"] });
+    }
+    if (req.method === "POST" && req.url === "/reads") {
+      received.reads.push(JSON.parse(body));
+      received.readAuths.push(req.headers.authorization ?? null);
+      return respond(202, { recorded: true });
     }
     if (req.method === "POST" && req.url === "/ask") {
       received.asks.push(JSON.parse(body));
@@ -34,6 +39,21 @@ const mockDaemon = http.createServer((req, res) => {
       return respond(200, { deleted: 1 });
     }
     const path = (req.url ?? "").split("?")[0];
+    // The one serving path: the daemon renders and records together, so the
+    // tool no longer assembles context or POSTs its own read event.
+    if (path === "/context") {
+      received.contextGets.push(req.url);
+      const detail = new URL(req.url, "http://x").searchParams.get("detail") ?? "brief";
+      return respond(200, {
+        text: [
+          "# About the user", "A builder", "",
+          "# Current interests (decay-weighted)",
+          "- rust (technology, building, weight 0.90)", "",
+          "# How to write for this user", "Write like this user: terse, no filler.",
+        ].join("\n"),
+        items: detail === "full" ? 4 : 3,
+      });
+    }
     if (path === "/profile") return respond(200, { headline: "A builder", sections: [{ title: "Work", body: "Ships fast." }], generated_at: "2026-06-11" });
     if (path === "/topics") return respond(200, [{ topic: "rust", category: "technology", weight: 0.9, signals: 3, dominant_intent: "building", sentiment_balance: 0.5, entities: [] }]);
     if (path === "/stats") return respond(200, { total: 4, first: "2026-01-01", last: "2026-06-11" });
@@ -156,16 +176,28 @@ assert.match(ctx, /rust.*0\.90/);
 assert.match(ctx, /How to write for this user[\s\S]*terse, no filler/, "context injects the voice pack");
 console.log("✅ context renders profile + voice + topics");
 
-// ── context reads are recorded as context.read events (the north-star metric) ──
-const reads = () => received.posts.filter((p) => Array.isArray(p) && p[0]?.type === "context.read");
-assert.equal(reads().length, 1, "context must record a context.read event");
-assert.equal(reads()[0][0].source, "mcp:e2e-test");
-assert.deepEqual(reads()[0][0].provenance, { kind: "mcp", client: "e2e-test" });
-assert.deepEqual(reads()[0][0].payload, { scope: "brief", client_purpose: "", items: 3 });
+// ── the serving path: this process asks the daemon, and never assembles or
+// attributes context itself. Recording is the daemon's job (it holds the
+// verified token), and is covered by test/context-read.test.ts.
+assert.equal(received.contextGets.length, 1, "context must be served through GET /context");
+{
+  const q = new URL(received.contextGets[0], "http://x").searchParams;
+  assert.equal(q.get("detail"), "brief");
+  assert.equal(q.get("client"), "e2e-test", "the daemon needs the client to scope and attribute");
+}
 await callTool("persnally_context", { detail: "full", purpose: "personalize a code review" });
-assert.equal(reads().length, 2);
-assert.deepEqual(reads()[1][0].payload, { scope: "full", client_purpose: "personalize a code review", items: 3 });
-console.log("✅ context reads recorded with scope, purpose, items");
+{
+  const q = new URL(received.contextGets[1], "http://x").searchParams;
+  assert.equal(q.get("detail"), "full");
+  assert.equal(q.get("purpose"), "personalize a code review", "purpose reaches the receipt");
+}
+// A read this process cannot avoid mis-declaring: it does not declare one.
+assert.equal(
+  received.posts.filter((p) => Array.isArray(p) && p.some((e) => e?.type === "context.read")).length,
+  0,
+  "the MCP server must not construct context.read events",
+);
+console.log("✅ context served through the one path, with client + purpose passed through");
 
 // ── ask → POST /ask with client identity; answer carries confidence + evidence count ──
 const askText = await callTool("persnally_ask", { question: "Would they want tests with this refactor?" });
@@ -175,15 +207,21 @@ assert.match(askText, /2 evidence event\(s\)/);
 assert.equal(received.asks.length, 1, "ask must POST to the daemon");
 assert.equal(received.asks[0].question, "Would they want tests with this refactor?");
 assert.equal(received.asks[0].client, "e2e-test", "the daemon needs the client for scoping + provenance");
-console.log("✅ ask → daemon /ask with client identity");
+// The richest disclosure path of all — profile, assertions, corrections, voice
+// — recorded nothing, so it was invisible in both the receipts feed and the
+// north-star metric it is supposed to drive.
+const askReads = () => received.reads.filter((r) => r.scope === "ask");
+assert.equal(askReads().length, 1, "an ask must declare a read — the richest disclosure of all");
+assert.match(askReads()[0].purpose, /^asked: Would they want tests/);
+console.log("✅ ask → daemon /ask with client identity, recorded as a read");
 
 // ── search → GET /search; hits recorded as a context.read, misses not ──
 const searchHit = await callTool("persnally_search", { query: "rust" });
 assert.match(searchHit, /What Persnally knows about "rust"/);
 assert.match(searchHit, /\[interest\] rust/);
-const searchReads = () => received.posts.filter((p) => Array.isArray(p) && p[0]?.type === "context.read" && p[0]?.payload?.scope === "search");
-assert.equal(searchReads().length, 1, "a search that serves hits records a context.read");
-assert.equal(searchReads()[0][0].payload.client_purpose, "looked up: rust");
+const searchReads = () => received.reads.filter((r) => r.scope === "search");
+assert.equal(searchReads().length, 1, "a search that serves hits declares a read");
+assert.equal(searchReads()[0].purpose, "looked up: rust");
 const searchMiss = await callTool("persnally_search", { query: "cobol" });
 assert.match(searchMiss, /nothing on "cobol"/);
 assert.equal(searchReads().length, 1, "empty searches don't inflate the read metric");
@@ -191,6 +229,8 @@ console.log("✅ search → targeted lookup with read recording");
 
 // ── interests + forget ──
 assert.match(await callTool("persnally_interests", {}), /rust — 0\.90/);
+const interestReads = () => received.reads.filter((r) => r.scope === "interests");
+assert.equal(interestReads().length, 1, "showing the user their own profile is still a disclosure");
 await callTool("persnally_forget", { topic: "rust" });
 assert.ok(received.deletes.some((u) => u === "/topics/rust"), "forget must DELETE /topics/:t");
 console.log("✅ interests + forget");

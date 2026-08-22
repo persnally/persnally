@@ -88,7 +88,10 @@ if (process.env.E2E_RICH === "1") {
     reads.push({ ...e, ts: day(n) });
   }
   // A CLI read: the owner's own, and must not be counted as a grantee client.
-  reads.push({ ...newEvent("context.read", "cli", { scope: "all", client_purpose: "hook", items: 20 }, { kind: "local", surface: "cli" }), ts: day(0) });
+  reads.push({ ...newEvent("context.read", "cli", { scope: "all", client_purpose: "manual context read", items: 20 }, { kind: "local", surface: "cli" }), ts: day(0) });
+  // A SessionStart hook read: performed by the CLI, consumed by the client whose
+  // session it was injected into. It must read as that client, not as the owner.
+  reads.push({ ...newEvent("context.read", "hook:claude-code", { scope: "brief", client_purpose: "session-start hook", items: 15 }, { kind: "local", surface: "hook", client: "claude-code" }), ts: day(0) });
 
   const q = newEvent("agent.question", "mcp:cursor", { question: "does he prefer npm or pnpm?", asker: "cursor" }, { kind: "mcp", client: "cursor" });
   const a = newEvent("agent.answer", "mcp:cursor", {

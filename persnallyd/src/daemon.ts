@@ -22,6 +22,7 @@ import { importAllSources } from "./setup.js";
 import { refreshVoice } from "./voice.js";
 import type { EventStore } from "./store.js";
 import { engineFailure, recordEngineFailure, recordEngineSuccess } from "./engine-health.js";
+import { buildContextPack, recordContextRead } from "./context-pack.js";
 
 export const DEFAULT_PORT = 4983;
 const MAX_BODY_BYTES = 25 * 1024 * 1024; // generous for import batches; bounds memory
@@ -92,10 +93,10 @@ function authenticate(req: http.IncomingMessage, claimed: string | null): Auth {
 function clientMayReach(method: string, path: string): boolean {
   switch (method) {
     case "GET":
-      return path === "/topics" || path === "/profile" || path === "/voice"
+      return path === "/context" || path === "/topics" || path === "/profile" || path === "/voice"
         || path === "/search" || path === "/stats" || path === "/skills";
     case "POST":
-      return path === "/events" || path === "/ask";
+      return path === "/events" || path === "/ask" || path === "/reads";
     case "DELETE":
       return path === "/events" || path.startsWith("/topics/") || path.startsWith("/voice/");
     default:
@@ -199,6 +200,44 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         // A revoked client reads nothing, consistent with /voice and /stats.
         if (auth.kind === "client" && isRevoked(auth.client)) return json(res, 200, []);
         return json(res, 200, store.skills(num(url, "limit", 25)));
+      }
+      // A client declares a read it performed (its own tool served context from
+      // data it already had). Attribution is derived from the verified token,
+      // never from the body — a caller must not be able to name itself.
+      if (req.method === "POST" && url.pathname === "/reads") {
+        const body = (await readBody(req)) as { scope?: unknown; purpose?: unknown; items?: unknown };
+        const id = scopeFor(auth, null);
+        if (id.error) return json(res, 401, { error: id.error });
+        recordContextRead(store, {
+          surface: id.client ? "mcp" : "cli",
+          client: id.client ?? undefined,
+          scope: typeof body.scope === "string" ? body.scope.slice(0, 40) : "context",
+          purpose: typeof body.purpose === "string" ? body.purpose.slice(0, 200) : "",
+          items: typeof body.items === "number" && Number.isFinite(body.items) ? Math.max(0, Math.trunc(body.items)) : 0,
+        });
+        return json(res, 202, { recorded: true });
+      }
+
+      // The single serving path for a model. Rendering and recording happen
+      // together here so no channel can disclose context without a receipt.
+      if (req.method === "GET" && url.pathname === "/context") {
+        const id = scopeFor(auth, url.searchParams.get("client"));
+        if (id.error) return json(res, 401, { error: id.error });
+        const allowed = id.client ? allowedCategories(id.client) : null;
+        const detail = url.searchParams.get("detail") === "full" ? "full" : "brief";
+        const project = url.searchParams.get("project") ?? undefined;
+        const pack = buildContextPack(store, { detail, project, allowed });
+        if (!pack.text) return json(res, 200, { text: "", items: 0 });
+        // A client reads over MCP; the owner's own surfaces name themselves.
+        const surface = id.client ? "mcp" : (url.searchParams.get("surface") === "hook" ? "hook" : "cli");
+        recordContextRead(store, {
+          surface,
+          client: id.client ?? url.searchParams.get("client") ?? undefined,
+          scope: detail,
+          purpose: (url.searchParams.get("purpose") ?? "").slice(0, 200) || "context read",
+          items: pack.items,
+        });
+        return json(res, 200, pack);
       }
       if (req.method === "GET" && url.pathname === "/voice") {
         // Stylistic, not topical — a scoped client still gets it (it's how you
