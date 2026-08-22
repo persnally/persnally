@@ -8,7 +8,7 @@
 import { z } from "zod";
 import { newEvent, type Provenance } from "./events.js";
 import type { LlmExtract } from "./llm.js";
-import type { Category } from "./permissions.js";
+import { type Category, readsNothing } from "./permissions.js";
 import { overlapScore, queryTokens } from "./search.js";
 import type { EventStore } from "./store.js";
 import { projectLabel } from "./importers/claude-code.js";
@@ -112,6 +112,7 @@ const TOPIC_CANDIDATES = 1000;
     or assertions) — the same boundary the daemon enforces on /profile. */
 function buildMaterial(store: EventStore, question: string, allowed: Category[] | null, project?: string): { content: string; knownIds: Set<string> } {
   const knownIds = new Set<string>();
+  if (readsNothing(allowed)) return { content: "", knownIds };
   const lines: string[] = [];
   const q = queryTokens(question);
 

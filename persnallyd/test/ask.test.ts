@@ -235,8 +235,9 @@ test("the ask path sees the conventions of the project it is asked about", async
   // disclosure in the product went blind to which package manager, test runner
   // or merge strategy the user uses. A benchmark caught it; this keeps it caught.
   const dir = mkdtempSync(join(tmpdir(), "ask-project-"));
+  let store: EventStore | undefined;
   try {
-    const store = new EventStore(join(dir, "t.db"));
+    store = new EventStore(join(dir, "t.db"));
     const conv = (pattern: string, project: string) =>
       newEvent("signal.style", "import:claude-code",
         { dimension: "convention", pattern, polarity: "prefers", confidence: 0.8, evidence: "observed", basis: "stylometry" },
@@ -278,6 +279,9 @@ test("the ask path sees the conventions of the project it is asked about", async
     assert.match(seen[1]!, /prefers pnpm over npm/);
     assert.doesNotMatch(seen[1]!, /prefers npm over pnpm/);
   } finally {
+    // Closed before the fixture is removed: an open SQLite handle (plus its WAL
+    // and SHM files) makes cleanup fail on platforms that cannot delete open files.
+    store?.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });
