@@ -18,13 +18,61 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 
-/** Competing tools, matched word-bounded against a command string. */
+/**
+ * Competing tools, matched against the **executable being invoked** — never the
+ * whole command string. `rg pnpm package.json` runs ripgrep and mentions pnpm;
+ * substring matching counted it as pnpm usage and corrupted the answer key.
+ * A wrong answer key is the worst defect a benchmark can have: the flagship
+ * long-term-memory benchmark ships with 6.4% of its goldens wrong, and grading
+ * a correct product answer against a bad key is indistinguishable from a
+ * product bug.
+ *
+ * Each entry is [executable, subcommand or null, label].
+ */
 const FAMILIES = {
-  "package manager": [[/\bpnpm\b/, "pnpm"], [/\bnpm\b/, "npm"], [/\byarn\b/, "yarn"], [/\bbun\b/, "bun"]],
-  "git integration": [[/\bgit\s+rebase\b/, "rebase"], [/\bgit\s+merge(?![-\w])/, "merge"]],
-  "test runner": [[/\bvitest\b/, "vitest"], [/\bjest\b/, "jest"], [/\bpytest\b/, "pytest"], [/\bgo\s+test\b/, "go test"]],
-  "search tool": [[/(^|[|&;]\s*)rg\s/, "ripgrep"], [/(^|[|&;]\s*)grep\s/, "grep"]],
+  "package manager": [["pnpm", null, "pnpm"], ["npm", null, "npm"], ["yarn", null, "yarn"], ["bun", null, "bun"]],
+  "git integration": [["git", "rebase", "rebase"], ["git", "merge", "merge"]],
+  "test runner": [["vitest", null, "vitest"], ["jest", null, "jest"], ["pytest", null, "pytest"], ["go", "test", "go test"]],
+  "search tool": [["rg", null, "ripgrep"], ["grep", null, "grep"]],
 };
+
+/** Wrappers that delegate to the tool that follows them. */
+const WRAPPERS = new Set(["sudo", "time", "env", "npx", "bunx", "command", "nohup", "xargs"]);
+
+/**
+ * Runners that delegate only in front of a specific token: `python -m pytest`
+ * invokes pytest, `python script.py` invokes python. Without this, every
+ * `python -m pytest` and `uv run pytest` reads as a Python invocation and the
+ * project loses its test runner.
+ */
+const DELEGATORS = { python: "-m", python3: "-m", uv: "run", poetry: "run", pipenv: "run", pdm: "run" };
+
+/**
+ * The (executable, subcommand) pairs a command line actually invokes — one per
+ * pipeline or compound segment. Arguments are ignored by construction, which is
+ * the whole point.
+ */
+export function invocations(command) {
+  const out = [];
+  for (const seg of command.split(/\|\||&&|[|;&\n]/)) {
+    const tokens = seg.trim().split(/\s+/).filter(Boolean);
+    let i = 0;
+    for (;;) {
+      // Leading env assignments (FOO=bar cmd) and wrappers delegate rightwards.
+      while (i < tokens.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i]) || WRAPPERS.has(tokens[i]))) i++;
+      const d = DELEGATORS[tokens[i]];
+      if (d && tokens[i + 1] === d) { i += 2; continue; }
+      break;
+    }
+    const exe = tokens[i];
+    if (!exe) continue;
+    const base = exe.split("/").pop();
+    // The first token that is not a flag is the subcommand.
+    const sub = tokens.slice(i + 1).find((t) => !t.startsWith("-"));
+    out.push({ exe: base, sub });
+  }
+  return out;
+}
 
 /** Below this, the "winner" is noise rather than a habit. */
 const MIN_EVIDENCE = 10;
@@ -61,8 +109,12 @@ export function commandsByProject(root = join(homedir(), ".claude", "projects"))
 
 /** The one defensible answer for a family in a project, or null when there isn't one. */
 function decide(cmds, rules) {
+  const invs = cmds.flatMap(invocations);
   const counts = rules
-    .map(([re, label]) => ({ label, n: cmds.filter((c) => re.test(c)).length }))
+    .map(([exe, sub, label]) => ({
+      label,
+      n: invs.filter((i) => i.exe === exe && (sub === null || i.sub === sub)).length,
+    }))
     .filter((x) => x.n > 0)
     .sort((a, b) => b.n - a.n);
   const top = counts[0];
@@ -91,7 +143,7 @@ export function buildPairs(root) {
 
   const pairs = [];
   for (const [family, found] of answers) {
-    const options = FAMILIES[family].map(([, l]) => l);
+    const options = FAMILIES[family].map(([, , l]) => l);
     for (let i = 0; i < found.length; i++) {
       for (let j = i + 1; j < found.length; j++) {
         if (found[i].answer === found[j].answer) continue;

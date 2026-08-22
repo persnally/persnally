@@ -26,7 +26,24 @@ function locate(text, options) {
   return hits.sort((a, b) => a.at - b.at);
 }
 
-const REFUSAL = /\b(ask (the user|them|him|her)|can'?t answer|cannot answer|don'?t (know|have)|no (evidence|record|data)|not enough|unclear|unsure)\b/i;
+/**
+ * A refusal in any of the phrasings models actually use. "I do not know" was
+ * missing while "don't know" was present, so the no-context control — which
+ * refuses honestly on almost every question — was scored `unparseable`. That
+ * would have reported the baseline as incoherent rather than as correctly
+ * ignorant, which is a materially different claim about what this product adds.
+ */
+const REFUSAL = new RegExp([
+  "ask (the user|them|him|her)",
+  "(can'?t|cannot|could not|couldn'?t|unable to) (answer|determine|tell|say|know)",
+  "(do|does|did) not (know|have)",
+  "don'?t (know|have)",
+  "no (idea|evidence|record|data|information|indication)",
+  "not (enough|specified|provided|available|clear)",
+  "insufficient",
+  "unclear",
+  "unsure",
+].map((p) => `\\b(?:${p})`).join("|"), "i");
 
 /**
  * One of: correct | wrong | refused | unparseable.
@@ -36,7 +53,9 @@ const REFUSAL = /\b(ask (the user|them|him|her)|can'?t answer|cannot answer|don'
  * folding it into `wrong` would punish exactly the honesty it sells.
  */
 export function grade(text, expected, options) {
-  const body = (text ?? "").trim();
+  // U+2019 is what models actually emit; matching only ASCII apostrophes scored
+  // "can’t answer" as unparseable and moved the honesty figure.
+  const body = (text ?? "").trim().replace(/[\u2018\u2019\u02BC]/g, "'");
   if (!body) return { verdict: "unparseable" };
   const hits = locate(body, options);
   if (hits.length === 0) {
