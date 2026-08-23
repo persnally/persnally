@@ -59,15 +59,15 @@ const VALUE_FLAGS = new Set([
 /** Heredoc bodies are data being written, not commands being run. */
 function stripHeredocBodies(command) {
   const kept = [];
-  let delimiter = null;
+  // FIFO: one line may declare several, read in declaration order.
+  const pending = [];
   for (const line of command.split("\n")) {
-    if (delimiter !== null) {
-      if (line.trim() === delimiter) delimiter = null;
+    if (pending.length) {
+      if (line.trim() === pending[0]) pending.shift();
       continue;
     }
     kept.push(line);
-    const m = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(line);
-    if (m) delimiter = m[2];
+    for (const m of line.matchAll(/<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/g)) pending.push(m[2]);
   }
   return kept.join("\n");
 }

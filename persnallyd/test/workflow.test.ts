@@ -246,6 +246,14 @@ describe("prose is not a command", () => {
     assert.deepEqual(patterns(rep(cmd, 20)).filter((p) => /Make/.test(p)), []);
   });
 
+  test("every heredoc declared on a line is tracked, in order", () => {
+    // The shell reads bodies in declaration order. Tracking one delimiter ended
+    // the strip at FIRST and parsed the second body as commands.
+    const cmd = "cat <<FIRST <<SECOND\nalpha\nFIRST\nnpm ci\nSECOND";
+    assert.deepEqual(patterns(rep(cmd, 20)).filter((p) => /npm/.test(p)), [],
+      "a tool named only inside the second body was counted as run");
+  });
+
   test("an unterminated heredoc treats the rest as body", () => {
     assert.deepEqual(patterns(rep("cat <<'EOF'\nnpm ci\nnpm ci", 20)).filter((p) => /npm/.test(p)), []);
   });

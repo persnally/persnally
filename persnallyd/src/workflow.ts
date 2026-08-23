@@ -93,16 +93,18 @@ export interface Invocation {
  */
 function stripHeredocBodies(command: string): string {
   const kept: string[] = [];
-  let delimiter: string | null = null;
+  // One line may declare several (`cat <<FIRST <<SECOND`), and the shell reads
+  // their bodies in declaration order. Tracking a single delimiter ended the
+  // strip at the first terminator and parsed the second body as commands.
+  const pending: string[] = [];
   for (const line of command.split("\n")) {
-    if (delimiter !== null) {
-      if (line.trim() === delimiter) delimiter = null;
+    if (pending.length) {
+      if (line.trim() === pending[0]) pending.shift();
       continue;
     }
     kept.push(line);
     // An unterminated heredoc means the rest of the capture is body.
-    const m = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(line);
-    if (m) delimiter = m[2]!;
+    for (const m of line.matchAll(/<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/g)) pending.push(m[2]!);
   }
   return kept.join("\n");
 }
