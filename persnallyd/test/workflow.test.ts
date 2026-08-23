@@ -218,3 +218,55 @@ describe("shell shapes that fooled the first rewrite", () => {
     assert.deepEqual(patterns(rep("git commit -m wip", 5)).filter((p) => /amend/.test(p)), []);
   });
 });
+
+/**
+ * Both defects here were found by auditing what the product actually derived
+ * for this repo, and both were self-inflicted by the work in #234.
+ *
+ * They pull in opposite directions and had been cancelling out: heredoc bodies
+ * invented tools that were never run, while an apostrophe in prose swallowed
+ * tools that were.
+ */
+describe("prose is not a command", () => {
+  test("a heredoc body is data, not commands", () => {
+    const cmd = "cat >> notes.md <<'EOF'\nnpm ci\npnpm install\nEOF\nnpm test";
+    // Only the real invocations: cat, and the npm test after the delimiter.
+    assert.deepEqual(patterns(rep(cmd, 5)).filter((p) => /npm|pnpm/.test(p)), ["uses npm"]);
+  });
+
+  test("a PR description cannot manufacture a convention", () => {
+    // Four mentions clear MIN_USES, which is how this repo came to "prefer"
+    // a test runner it has never once invoked.
+    const cmd = "gh pr edit 1 --body-file - <<'BODY'\nwe should use pytest here\nBODY";
+    assert.deepEqual(patterns(rep(cmd, 20)).filter((p) => /pytest/.test(p)), []);
+  });
+
+  test("\"make sure\" in prose is not the Make build tool", () => {
+    const cmd = "gh pr edit 1 --body-file - <<'BODY'\nmake sure to run the tests\nBODY";
+    assert.deepEqual(patterns(rep(cmd, 20)).filter((p) => /Make/.test(p)), []);
+  });
+
+  test("every heredoc declared on a line is tracked, in order", () => {
+    // The shell reads bodies in declaration order. Tracking one delimiter ended
+    // the strip at FIRST and parsed the second body as commands.
+    const cmd = "cat <<FIRST <<SECOND\nalpha\nFIRST\nnpm ci\nSECOND";
+    assert.deepEqual(patterns(rep(cmd, 20)).filter((p) => /npm/.test(p)), [],
+      "a tool named only inside the second body was counted as run");
+  });
+
+  test("an unterminated heredoc treats the rest as body", () => {
+    assert.deepEqual(patterns(rep("cat <<'EOF'\nnpm ci\nnpm ci", 20)).filter((p) => /npm/.test(p)), []);
+  });
+
+  test("an apostrophe in a comment does not swallow the next command", () => {
+    // Quote state crossing a newline lost segments in 34% of multi-line
+    // commands: everything after an unbalanced quote became quoted text.
+    const cmd = "echo start\n// the daemon's timer wrapper\nnpm ci";
+    assert.ok(patterns(rep(cmd, 5)).includes("uses npm"),
+      "an unbalanced apostrophe hid every command after it");
+  });
+
+  test("a path-only token yields nothing", () => {
+    assert.deepEqual(patterns(rep("// comment", 20)), []);
+  });
+});
