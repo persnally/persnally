@@ -493,6 +493,36 @@ describe("revoked means revoked", () => {
     assert.equal(store.voice().items.length, before, "the pattern survived");
   });
 
+  test("the context pack is not served to a revoked client", async () => {
+    const token = revoked();
+    // The route had no revocation check of its own. The pack gated only its
+    // category-tagged sections on the grant, so style and conventions — the
+    // most prescriptive things we hold — went out to a revoked client.
+    const r = await fetch(BASE + "/context", { headers: asBearer(token) });
+
+    assert.equal(r.status, 200);
+    const body = (await r.json()) as { text: string; items: number };
+    assert.equal(body.text, "", "served the pack to a client promised it reads nothing");
+    assert.equal(body.items, 0);
+  });
+
+  test("an ask from a revoked client discloses nothing, even naming a project", async () => {
+    const token = revoked();
+    // Naming a project is the widest disclosure the ask path has: it selects
+    // that project's conventions specifically.
+    const r = await fetch(BASE + "/ask", {
+      method: "POST",
+      headers: { ...asBearer(token), "content-type": "application/json" },
+      body: JSON.stringify({ question: "Which package manager do I use here?", project: "/tmp/whatever" }),
+    });
+
+    assert.equal(r.status, 200);
+    const body = (await r.json()) as { deferred: boolean; answer: string; evidence: unknown[] };
+    assert.equal(body.deferred, true, "answered a revoked client from the owner's conventions");
+    assert.deepEqual(body.evidence ?? [], [], "and cited the owner's events while doing it");
+    assert.doesNotMatch(body.answer, /terse imperatives/);
+  });
+
   test("a revoked client gets no counts", async () => {
     const token = revoked();
     assert.ok(store.stats().total > 0, "the owner has events to leak");

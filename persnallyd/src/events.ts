@@ -61,6 +61,10 @@ export const PAYLOAD_SCHEMAS = {
     answer: z.string(),
     confidence: z.number().min(0).max(1),
     deferred: z.boolean(),
+    // What the answer rested on. Without this the audit trail can't show the
+    // evidence the answer claimed at the time; defaulted so answers recorded
+    // before it existed still parse.
+    evidence_event_ids: z.array(z.string()).default([]),
   }),
   "feedback.signal": z.object({
     subject_id: z.string(),
@@ -94,13 +98,28 @@ export const provenanceSchema = z.discriminatedUnion("kind", [
     file: z.string(),
     conversation_uuid: z.string().optional(),
     message_uuid: z.string().optional(),
+    /** Which workspace this came from. The same person works differently per
+        project — pnpm in one repo, npm in another — and both claims are true
+        only with this attached. Optional: events predate it. */
+    project: z.string().optional(),
   }),
   z.object({ kind: z.literal("git"), repo: z.string(), ref: z.string().optional(), batch: z.string().optional() }),
   z.object({ kind: z.literal("derived"), from: z.array(z.string()).min(1) }),
-  z.object({ kind: z.literal("local"), surface: z.enum(["cli", "dashboard"]) }),
+  z.object({
+    kind: z.literal("local"),
+    surface: z.enum(["cli", "dashboard", "hook"]),
+    /** Who consumed it. A SessionStart hook read is performed by the CLI but
+        injected into a client's session, so the mechanism and the consumer are
+        different facts and both are recorded. */
+    client: z.string().optional(),
+  }),
 ]);
 
-const sourcePattern = /^(mcp:[a-z0-9._-]+|import:(claude-code|claude|chatgpt|git)|cli|dashboard|system)$/;
+// Sources are an enumerated namespace, not free text — a new read channel has
+// to be declared here. `hook:` is a context injection performed by the CLI on
+// behalf of a client's session, which is neither an MCP call nor the owner's own
+// `cli` read.
+const sourcePattern = /^(mcp:[a-z0-9._-]+|hook:[a-z0-9._-]+|import:(claude-code|claude|chatgpt|git)|cli|dashboard|system)$/;
 
 export const eventSchema = z.object({
   id: z.string().uuid(),

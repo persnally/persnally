@@ -12,7 +12,14 @@ export class DaemonUnreachable extends Error {
   constructor() { super(DAEMON_HINT); }
 }
 
-async function request(path: string, init?: RequestInit): Promise<Response> {
+/**
+ * `timeoutMs` is opt-in rather than global: an ask can legitimately take minutes
+ * on a local model, so a blanket deadline would abort real work. It matters for
+ * callers that must not wait — a daemon that accepts the connection and never
+ * answers is indistinguishable from a slow one, and only a deadline separates
+ * them.
+ */
+async function request(path: string, init?: RequestInit, timeoutMs?: number): Promise<Response> {
   // Identity token from connect — proves to the daemon which client this is.
   const token = process.env.PERSNALLY_CLIENT_TOKEN;
   const headers = {
@@ -20,7 +27,11 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
     ...(token ? { authorization: `Bearer ${token}` } : {}),
   };
   try {
-    return await fetch(BASE + path, { ...init, headers });
+    return await fetch(BASE + path, {
+      ...init,
+      headers,
+      ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
+    });
   } catch {
     throw new DaemonUnreachable();
   }
@@ -37,8 +48,8 @@ async function fail(path: string, r: Response): Promise<never> {
   throw new Error(`daemon ${path}: ${r.status} ${text}`);
 }
 
-export async function daemonGet<T>(path: string): Promise<T | null> {
-  const r = await request(path);
+export async function daemonGet<T>(path: string, timeoutMs?: number): Promise<T | null> {
+  const r = await request(path, undefined, timeoutMs);
   // 404 = not present yet; 403 = scoped out for this client. Both mean "no data", not an error.
   if (r.status === 404 || r.status === 403) return null;
   if (!r.ok) await fail(path, r);
