@@ -156,7 +156,7 @@ describe("only the invoked executable counts, never the arguments", () => {
   });
 
   test("python -m pytest is pytest, python script.py is not", () => {
-    assert.ok(patterns(rep("python -m pytest tests/", 5)).includes("uses pytest"));
+    assert.ok(patterns(rep("python -m pytest tests/", 5)).includes("pytest"));
     assert.deepEqual(patterns(rep("python manage.py migrate", 5)).filter((p) => /pytest/.test(p)), []);
   });
 
@@ -208,7 +208,7 @@ describe("shell shapes that fooled the first rewrite", () => {
   });
 
   test("an option is never the executable", () => {
-    assert.ok(patterns(rep("uv run --with pytest pytest -q", 5)).includes("uses pytest"),
+    assert.ok(patterns(rep("uv run --with pytest pytest -q", 5)).includes("pytest"),
       "`--with` was classified as the invoked tool");
   });
 
@@ -268,5 +268,67 @@ describe("prose is not a command", () => {
 
   test("a path-only token yields nothing", () => {
     assert.deepEqual(patterns(rep("// comment", 20)), []);
+  });
+});
+
+/**
+ * Coverage beyond the original rule set. The gap was concrete: this repo's test
+ * runner is `node --test`, and the convention layer could not see it at all —
+ * so the one question it should answer best about itself had no answer.
+ */
+describe("wider tool coverage", () => {
+  test("node --test is a test runner, plain node is not", () => {
+    assert.ok(patterns(rep("node --test build/test/x.js", 5)).includes("uses node --test"));
+    assert.deepEqual(patterns(rep("node script.js", 5)).filter((p) => /node/.test(p)), []);
+  });
+
+  test("it competes with the other JS runners", () => {
+    const cmds = [...rep("node --test build/test/x.js", 20), ...rep("vitest run", 3)];
+    assert.ok(patterns(cmds).includes("prefers node --test over vitest"));
+  });
+
+  test("tools from different ecosystems are never framed as a preference", () => {
+    // eslint and ruff both lint, but not the same language. "prefers ESLint over
+    // Ruff" would state a choice the user never made.
+    const both = [...rep("eslint .", 20), ...rep("ruff check .", 20)];
+    const p = patterns(both);
+    assert.ok(p.includes("uses ESLint") || p.includes("ESLint"), "ESLint should be reported");
+    assert.ok(p.includes("uses Ruff") || p.includes("Ruff"), "Ruff should be reported");
+    assert.deepEqual(p.filter((x) => /prefers (ESLint|Ruff)/.test(x)), []);
+  });
+
+  test("interchangeable tools do compete", () => {
+    const cmds = [...rep("tsx script.ts", 20), ...rep("ts-node script.ts", 3)];
+    assert.ok(patterns(cmds).includes("prefers tsx over ts-node"));
+  });
+});
+
+/**
+ * A family means *interchangeable for the same task in the same context*. The
+ * looser reading ("same job") let the rules state choices nobody made, which is
+ * worse than saying nothing: it gets injected into every AI the user connects.
+ */
+describe("preference is claimed only between interchangeable tools", () => {
+  const bothOf = (a: string, b: string) => [...rep(a, 20), ...rep(b, 5)];
+
+  test("two clouds are not a preference", () => {
+    assert.deepEqual(patterns(bothOf("aws s3 ls", "az account show")), ["AWS CLI", "Azure CLI"]);
+  });
+
+  test("two hosts are not a preference", () => {
+    assert.deepEqual(patterns(bothOf("vercel deploy", "fly deploy")), ["Vercel", "Fly.io"]);
+  });
+
+  test("the SQL client is decided by the datastore, not by taste", () => {
+    assert.deepEqual(patterns(bothOf("sqlite3 t.db .tables", "psql -c x")).sort(), ["psql", "sqlite3"]);
+  });
+
+  test("test runners from different languages are not a preference", () => {
+    // A Rust+Python monorepo does not "prefer" cargo test over pytest.
+    assert.deepEqual(patterns(bothOf("cargo test", "python -m pytest")).sort(), ["cargo test", "pytest"]);
+  });
+
+  test("but runners for the same language are", () => {
+    assert.deepEqual(patterns(bothOf("node --test x.js", "vitest run")), ["prefers node --test over vitest"]);
   });
 });
