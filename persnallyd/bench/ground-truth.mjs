@@ -56,6 +56,22 @@ const VALUE_FLAGS = new Set([
   "-C", "-c", "--git-dir", "--work-tree", "--with", "--python", "--directory", "-f", "--file",
 ]);
 
+/** Heredoc bodies are data being written, not commands being run. */
+function stripHeredocBodies(command) {
+  const kept = [];
+  let delimiter = null;
+  for (const line of command.split("\n")) {
+    if (delimiter !== null) {
+      if (line.trim() === delimiter) delimiter = null;
+      continue;
+    }
+    kept.push(line);
+    const m = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(line);
+    if (m) delimiter = m[2];
+  }
+  return kept.join("\n");
+}
+
 /** Segments as token lists. Quote-aware: a separator inside quotes is text. */
 function segments(command) {
   const segs = [];
@@ -63,9 +79,12 @@ function segments(command) {
   const endToken = () => { if (cur) { tokens.push(cur); cur = ""; } };
   const endSegment = () => { endToken(); if (tokens.length) segs.push(tokens); tokens = []; };
   for (const c of command) {
+    // Quote state never crosses a line: an apostrophe in prose would otherwise
+    // swallow every command after it.
+    if (c === "\n") { endSegment(); quote = null; continue; }
     if (quote) { if (c === quote) quote = null; else cur += c; }
     else if (c === '"' || c === "'") quote = c;
-    else if (c === "|" || c === ";" || c === "&" || c === "\n") endSegment();
+    else if (c === "|" || c === ";" || c === "&") endSegment();
     else if (/\s/.test(c)) endToken();
     else cur += c;
   }
@@ -81,7 +100,7 @@ function segments(command) {
  */
 export function invocations(command) {
   const out = [];
-  for (const tokens of segments(command)) {
+  for (const tokens of segments(stripHeredocBodies(command))) {
     let i = 0;
     for (;;) {
       while (i < tokens.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i]) || WRAPPERS.has(tokens[i]))) i++;
@@ -90,14 +109,14 @@ export function invocations(command) {
       if (tokens[i]?.startsWith("-")) { i += VALUE_FLAGS.has(tokens[i]) ? 2 : 1; continue; }
       break;
     }
-    const exe = tokens[i];
+    const exe = tokens[i]?.split("/").pop();
     if (!exe) continue;
     let sub;
     for (let j = i + 1; j < tokens.length; j++) {
       if (tokens[j].startsWith("-")) { if (VALUE_FLAGS.has(tokens[j])) j++; continue; }
       if (sub === undefined) sub = tokens[j];
     }
-    out.push({ exe: exe.split("/").pop(), sub });
+    out.push({ exe, sub });
   }
   return out;
 }

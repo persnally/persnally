@@ -86,6 +86,28 @@ export interface Invocation {
 }
 
 /**
+ * Heredoc bodies are data being written, not commands being run. A PR
+ * description passed through `gh pr edit --body-file - <<'BODY'` counted every
+ * tool it merely *mentioned*, and four such mentions clear MIN_USES and
+ * manufacture a convention that is simply false.
+ */
+function stripHeredocBodies(command: string): string {
+  const kept: string[] = [];
+  let delimiter: string | null = null;
+  for (const line of command.split("\n")) {
+    if (delimiter !== null) {
+      if (line.trim() === delimiter) delimiter = null;
+      continue;
+    }
+    kept.push(line);
+    // An unterminated heredoc means the rest of the capture is body.
+    const m = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(line);
+    if (m) delimiter = m[2]!;
+  }
+  return kept.join("\n");
+}
+
+/**
  * Command segments as token lists, quote-aware: a separator inside quotes is
  * text, not a boundary. Splitting the raw string made
  * `echo 'npm test; pnpm install'` report a pnpm invocation.
@@ -98,12 +120,17 @@ function segments(command: string): string[][] {
   const endToken = (): void => { if (cur) { tokens.push(cur); cur = ""; } };
   const endSegment = (): void => { endToken(); if (tokens.length) segs.push(tokens); tokens = []; };
   for (const c of command) {
+    // A newline ends the segment *and* any open quote. Quote state must not
+    // cross a line: an apostrophe in prose ("the daemon's timer") otherwise
+    // opens a quote that never closes and swallows every command after it —
+    // it cost segments in 34% of this corpus's multi-line commands.
+    if (c === "\n") { endSegment(); quote = null; continue; }
     if (quote) {
       if (c === quote) quote = null;
       else cur += c;
     } else if (c === '"' || c === "'") {
       quote = c;
-    } else if (c === "|" || c === ";" || c === "&" || c === "\n") {
+    } else if (c === "|" || c === ";" || c === "&") {
       endSegment();
     } else if (/\s/.test(c)) {
       endToken();
@@ -128,7 +155,8 @@ function classify(tokens: string[]): Invocation | null {
     if (t?.startsWith("-")) { i += VALUE_FLAGS.has(t) ? 2 : 1; continue; }
     break;
   }
-  const exe = tokens[i];
+  const exe = tokens[i]?.split("/").pop();
+  // A path-only token ("//", "./") leaves nothing nameable behind.
   if (!exe) return null;
 
   const flags: string[] = [];
@@ -142,7 +170,7 @@ function classify(tokens: string[]): Invocation | null {
       sub = t;
     }
   }
-  return { exe: exe.split("/").pop()!, sub, flags };
+  return { exe, sub, flags };
 }
 
 /**
@@ -156,7 +184,7 @@ function classify(tokens: string[]): Invocation | null {
  * only because the key was rewritten, and that difference is what exposed it.
  */
 export function invocations(command: string): Invocation[] {
-  return segments(command).map(classify).filter((x): x is Invocation => x !== null);
+  return segments(stripHeredocBodies(command)).map(classify).filter((x): x is Invocation => x !== null);
 }
 
 // A handful of uses is noise (one-off experiment, a suggestion the user
