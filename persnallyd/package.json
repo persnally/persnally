@@ -2,7 +2,7 @@
   "name": "persnally",
   "version": "3.1.0",
   "license": "FSL-1.1-MIT",
-  "description": "Your own context engine — local-first, across every AI. So every AI finally knows you.",
+  "description": "Your own context engine \u2014 local-first, across every AI. So every AI finally knows you.",
   "type": "module",
   "bin": {
     "persnally": "build/src/cli.js",
@@ -16,7 +16,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "node scripts/check-node.mjs && tsc && npm run build:ui && node scripts/copy-html.mjs",
+    "build": "node scripts/check-node.mjs && tsc && npm run build:ui && node scripts/copy-html.mjs && node scripts/mark-bins-executable.mjs",
     "lint": "eslint .",
     "test": "npm run build && node --test build/test/*.test.js && node test-mcp-e2e.mjs",
     "serve": "npm run build && node build/src/cli.js serve",

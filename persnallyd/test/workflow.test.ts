@@ -332,3 +332,21 @@ describe("preference is claimed only between interchangeable tools", () => {
     assert.deepEqual(patterns(bothOf("node --test x.js", "vitest run")), ["prefers node --test over vitest"]);
   });
 });
+
+describe("a command substitution contains a real command", () => {
+  test("the tool inside $() is the invocation", () => {
+    // `out=$(gh pr checks 1)` matched the env-assignment skip on `out=$(gh`,
+    // consuming the command name and leaving `pr` as the executable — which then
+    // showed up as one of this repo's most-used "tools".
+    assert.ok(patterns(rep("out=$(gh pr checks 1 --repo x)", 5))
+      .includes("works through GitHub PRs from the CLI"));
+  });
+
+  test("backticks too", () => {
+    assert.ok(patterns(rep("v=`npm --version`", 5)).includes("uses npm"));
+  });
+
+  test("and the assignment itself is not a tool", () => {
+    assert.deepEqual(patterns(rep("SHA=$(git rev-parse HEAD)", 20)).filter((p) => /rev-parse/.test(p)), []);
+  });
+});
