@@ -189,3 +189,32 @@ describe("a convention states how much behaviour backs it", () => {
       "wants approval before force-push");
   });
 });
+
+/**
+ * Cases from review of #234, each of which the first rewrite got wrong. The
+ * amend rule is the one that mattered most: dropping it would have deleted an
+ * existing signal from every store on the next refresh, unrecoverably, because
+ * nothing else can re-derive it.
+ */
+describe("shell shapes that fooled the first rewrite", () => {
+  test("a separator inside quotes is text, not a command boundary", () => {
+    assert.deepEqual(patterns(rep("echo 'npm test; pnpm install'", 20)), [],
+      "the quoted string was split and counted as a pnpm invocation");
+  });
+
+  test("an option's value is not the subcommand", () => {
+    assert.ok(patterns(rep("git -C /repo merge main", 20)).includes("uses merge"),
+      "`git -C <path> merge` read /repo as the subcommand and missed the merge");
+  });
+
+  test("an option is never the executable", () => {
+    assert.ok(patterns(rep("uv run --with pytest pytest -q", 5)).includes("uses pytest"),
+      "`--with` was classified as the invoked tool");
+  });
+
+  test("git commit --amend is still a workflow signal", () => {
+    // Option-qualified: `git commit` alone says nothing about how they work.
+    assert.ok(patterns(rep("git commit --amend --no-edit", 5)).includes("amends commits"));
+    assert.deepEqual(patterns(rep("git commit -m wip", 5)).filter((p) => /amend/.test(p)), []);
+  });
+});

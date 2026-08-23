@@ -47,37 +47,70 @@ const WRAPPERS = new Set(["sudo", "time", "env", "npx", "bunx", "command", "nohu
 
 /**
  * Runners that delegate only in front of a specific token: `python -m pytest`
- * invokes pytest, `python script.py` invokes python. Without this, every
- * `python -m pytest` and `uv run pytest` reads as a Python invocation and the
- * project loses its test runner.
+ * invokes pytest, `python script.py` invokes python.
  */
 const DELEGATORS = { python: "-m", python3: "-m", uv: "run", poetry: "run", pipenv: "run", pdm: "run" };
 
+/** Options that consume the next token, so a value is never read as a command. */
+const VALUE_FLAGS = new Set([
+  "-C", "-c", "--git-dir", "--work-tree", "--with", "--python", "--directory", "-f", "--file",
+]);
+
+/** Segments as token lists. Quote-aware: a separator inside quotes is text. */
+function segments(command) {
+  const segs = [];
+  let tokens = [], cur = "", quote = null;
+  const endToken = () => { if (cur) { tokens.push(cur); cur = ""; } };
+  const endSegment = () => { endToken(); if (tokens.length) segs.push(tokens); tokens = []; };
+  for (const c of command) {
+    if (quote) { if (c === quote) quote = null; else cur += c; }
+    else if (c === '"' || c === "'") quote = c;
+    else if (c === "|" || c === ";" || c === "&" || c === "\n") endSegment();
+    else if (/\s/.test(c)) endToken();
+    else cur += c;
+  }
+  endSegment();
+  return segs;
+}
+
 /**
- * The (executable, subcommand) pairs a command line actually invokes — one per
- * pipeline or compound segment. Arguments are ignored by construction, which is
- * the whole point.
+ * The (executable, subcommand, options) a command line invokes, one per
+ * segment. Written separately from the product's `src/workflow.ts` on purpose:
+ * a shared parser would let one bug set both the product's answer and the key
+ * it is graded against.
  */
 export function invocations(command) {
   const out = [];
-  for (const seg of command.split(/\|\||&&|[|;&\n]/)) {
-    const tokens = seg.trim().split(/\s+/).filter(Boolean);
+  for (const tokens of segments(command)) {
     let i = 0;
     for (;;) {
-      // Leading env assignments (FOO=bar cmd) and wrappers delegate rightwards.
       while (i < tokens.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i]) || WRAPPERS.has(tokens[i]))) i++;
-      const d = DELEGATORS[tokens[i]];
-      if (d && tokens[i + 1] === d) { i += 2; continue; }
+      const delegate = DELEGATORS[tokens[i]];
+      if (delegate && tokens[i + 1] === delegate) { i += 2; continue; }
+      if (tokens[i]?.startsWith("-")) { i += VALUE_FLAGS.has(tokens[i]) ? 2 : 1; continue; }
       break;
     }
     const exe = tokens[i];
     if (!exe) continue;
-    const base = exe.split("/").pop();
-    // The first token that is not a flag is the subcommand.
-    const sub = tokens.slice(i + 1).find((t) => !t.startsWith("-"));
-    out.push({ exe: base, sub });
+    let sub;
+    for (let j = i + 1; j < tokens.length; j++) {
+      if (tokens[j].startsWith("-")) { if (VALUE_FLAGS.has(tokens[j])) j++; continue; }
+      if (sub === undefined) sub = tokens[j];
+    }
+    out.push({ exe: exe.split("/").pop(), sub });
   }
   return out;
+}
+
+/**
+ * The closed answer set a family is graded against. Every question and every
+ * grading call must come from here: the withheld check had its own hardcoded
+ * copy, which silently omitted `cargo test` once the family gained it.
+ */
+export function familyOptions(family) {
+  const rules = FAMILIES[family];
+  if (!rules) throw new Error(`unknown family: ${family}`);
+  return rules.map(([, , label]) => label);
 }
 
 /** Below this, the "winner" is noise rather than a habit. */
@@ -149,7 +182,7 @@ export function buildPairs(root) {
 
   const pairs = [];
   for (const [family, found] of answers) {
-    const options = FAMILIES[family].map(([, , l]) => l);
+    const options = familyOptions(family);
     for (let i = 0; i < found.length; i++) {
       for (let j = i + 1; j < found.length; j++) {
         if (found[i].answer === found[j].answer) continue;

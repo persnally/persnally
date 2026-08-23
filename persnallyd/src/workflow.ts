@@ -23,6 +23,9 @@ interface ToolRule {
       pnpm. Optional `sub` additionally requires a subcommand (`git rebase`). */
   exe: string;
   sub?: string;
+  /** Required option, for rules the executable alone cannot express:
+      `git commit --amend` is a habit, `git commit` is not. */
+  flag?: string;
   /** Competing tools are compared within a family; a lone tool still counts. */
   family: string;
   label: string;
@@ -50,6 +53,7 @@ const RULES: ToolRule[] = [
   { exe: "git", sub: "rebase", family: "git-integrate", label: "rebase", dimension: "workflow" },
   { exe: "git", sub: "merge", family: "git-integrate", label: "merge", dimension: "workflow" },
   // Standalone workflow habits (no competitor — presence is the signal).
+  { exe: "git", sub: "commit", flag: "--amend", family: "amend", label: "amends commits", dimension: "workflow" },
   { exe: "gh", sub: "pr", family: "gh-pr", label: "works through GitHub PRs from the CLI", dimension: "workflow" },
   { exe: "docker", family: "docker", label: "Docker", dimension: "convention" },
   { exe: "kubectl", family: "k8s", label: "kubectl", dimension: "convention" },
@@ -67,32 +71,92 @@ const DELEGATORS: Record<string, string> = {
 };
 
 /**
- * The (executable, subcommand) pairs a command line invokes — one per pipeline
- * or compound segment, with arguments ignored by construction.
+ * Options that consume the next token, so a value is never mistaken for the
+ * command or its subcommand: `git -C /repo merge` is a merge, and
+ * `uv run --with pytest pytest` invokes pytest, not `--with`.
+ */
+const VALUE_FLAGS = new Set([
+  "-C", "-c", "--git-dir", "--work-tree", "--with", "--python", "--directory", "-f", "--file",
+]);
+
+export interface Invocation {
+  exe: string;
+  sub?: string;
+  flags: string[];
+}
+
+/**
+ * Command segments as token lists, quote-aware: a separator inside quotes is
+ * text, not a boundary. Splitting the raw string made
+ * `echo 'npm test; pnpm install'` report a pnpm invocation.
+ */
+function segments(command: string): string[][] {
+  const segs: string[][] = [];
+  let tokens: string[] = [];
+  let cur = "";
+  let quote: '"' | "'" | null = null;
+  const endToken = (): void => { if (cur) { tokens.push(cur); cur = ""; } };
+  const endSegment = (): void => { endToken(); if (tokens.length) segs.push(tokens); tokens = []; };
+  for (const c of command) {
+    if (quote) {
+      if (c === quote) quote = null;
+      else cur += c;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === "|" || c === ";" || c === "&" || c === "\n") {
+      endSegment();
+    } else if (/\s/.test(c)) {
+      endToken();
+    } else {
+      cur += c;
+    }
+  }
+  endSegment();
+  return segs;
+}
+
+/** What one segment invokes, or null when it invokes nothing nameable. */
+function classify(tokens: string[]): Invocation | null {
+  let i = 0;
+  for (;;) {
+    // Env assignments and wrappers delegate rightwards.
+    while (i < tokens.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i]!) || WRAPPERS.has(tokens[i]!))) i++;
+    const delegate = DELEGATORS[tokens[i] ?? ""];
+    if (delegate && tokens[i + 1] === delegate) { i += 2; continue; }
+    // An option here belongs to whatever was skipped, not to the tool.
+    const t = tokens[i];
+    if (t?.startsWith("-")) { i += VALUE_FLAGS.has(t) ? 2 : 1; continue; }
+    break;
+  }
+  const exe = tokens[i];
+  if (!exe) return null;
+
+  const flags: string[] = [];
+  let sub: string | undefined;
+  for (let j = i + 1; j < tokens.length; j++) {
+    const t = tokens[j]!;
+    if (t.startsWith("-")) {
+      flags.push(t.split("=")[0]!);
+      if (VALUE_FLAGS.has(t)) j++;
+    } else if (sub === undefined) {
+      sub = t;
+    }
+  }
+  return { exe: exe.split("/").pop()!, sub, flags };
+}
+
+/**
+ * What a command line invokes — one entry per pipeline or compound segment,
+ * with arguments ignored by construction.
  *
  * This is deliberately a second implementation of the same idea as the
  * benchmark's `bench/ground-truth.mjs`. Sharing one parser would let a single
  * bug decide both the product's answer and the answer key it is graded
- * against — which is how this defect survived here in the first place: the two
- * differed only because the key was rewritten, and the difference is what
- * exposed it.
+ * against — which is how the original defect survived here: the two differed
+ * only because the key was rewritten, and that difference is what exposed it.
  */
-export function invocations(command: string): { exe: string; sub?: string }[] {
-  const out: { exe: string; sub?: string }[] = [];
-  for (const seg of command.split(/\|\||&&|[|;&\n]/)) {
-    const tokens = seg.trim().split(/\s+/).filter(Boolean);
-    let i = 0;
-    for (;;) {
-      while (i < tokens.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i]!) || WRAPPERS.has(tokens[i]!))) i++;
-      const delegate = DELEGATORS[tokens[i] ?? ""];
-      if (delegate && tokens[i + 1] === delegate) { i += 2; continue; }
-      break;
-    }
-    const exe = tokens[i];
-    if (!exe) continue;
-    out.push({ exe: exe.split("/").pop()!, sub: tokens.slice(i + 1).find((t) => !t.startsWith("-")) });
-  }
-  return out;
+export function invocations(command: string): Invocation[] {
+  return segments(command).map(classify).filter((x): x is Invocation => x !== null);
 }
 
 // A handful of uses is noise (one-off experiment, a suggestion the user
@@ -112,7 +176,9 @@ export function toolConventions(commands: string[]): StyleSignal[] {
   for (const raw of commands) {
     for (const inv of invocations(raw)) {
       for (const rule of RULES) {
-        if (inv.exe === rule.exe && (rule.sub === undefined || inv.sub === rule.sub)) {
+        if (inv.exe === rule.exe
+          && (rule.sub === undefined || inv.sub === rule.sub)
+          && (rule.flag === undefined || inv.flags.includes(rule.flag))) {
           counts.set(rule.label, (counts.get(rule.label) ?? 0) + 1);
         }
       }
