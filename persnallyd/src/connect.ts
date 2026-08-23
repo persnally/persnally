@@ -188,7 +188,7 @@ export function connectClient(client: Client): string | null {
 }
 
 // The hook self-renders the SessionStart envelope (`context --hook`), so no jq dependency.
-const SESSION_START_COMMAND = "persnallyd context --hook 2>/dev/null";
+const SESSION_START_COMMAND = "persnallyd context --hook --client=claude-code 2>/dev/null";
 
 interface HookEntry { type?: string; command?: string; timeout?: number; statusMessage?: string }
 interface HookGroup { hooks?: HookEntry[] }

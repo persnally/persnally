@@ -11,7 +11,7 @@ export default tseslint.config(
   // against, so they'd otherwise fail to parse rather than fail to lint.
   // Standalone .mjs outside the TypeScript project — the type-aware parser
   // cannot resolve them, same as the two already listed.
-  { ignores: ["build/**", "node_modules/**", "eslint.config.mjs", "test-mcp-e2e.mjs", "scripts/**"] },
+  { ignores: ["build/**", "node_modules/**", "eslint.config.mjs", "test-mcp-e2e.mjs", "scripts/**", "dashboard-ui/dist/**", "e2e/seed-daemon.mjs", "bench/**", "test-results/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   security.configs.recommended,
@@ -55,6 +55,18 @@ export default tseslint.config(
       // Codebase-wide convention: unused args prefixed `_` are deliberate
       // (interface conformance, destructuring for a later param).
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+    },
+  },
+  {
+    // Preact UI: async event handlers passed to JSX attributes (onClick etc.)
+    // are the normal pattern — the checksVoidReturn escape hatch covers
+    // attributes the same way it covers Node callback arguments above.
+    files: ["dashboard-ui/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-misused-promises": [
+        "error",
+        { checksVoidReturn: { arguments: false, attributes: false } },
+      ],
     },
   },
   {
