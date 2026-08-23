@@ -59,6 +59,34 @@ const RULES: ToolRule[] = [
   { exe: "kubectl", family: "k8s", label: "kubectl", dimension: "convention" },
   { exe: "terraform", family: "terraform", label: "Terraform", dimension: "convention" },
   { exe: "make", family: "make", label: "Make", dimension: "convention" },
+
+  // A "family" is tools that do the same job in the same ecosystem, because the
+  // output is phrased as a preference. eslint and ruff both lint, but they lint
+  // different languages — reporting "prefers eslint over ruff" would state a
+  // choice the user never made. Cross-ecosystem tools get their own family and
+  // are reported as plain usage.
+  { exe: "node", flag: "--test", family: "test-runner", label: "node --test", dimension: "convention" },
+  { exe: "eslint", family: "lint-js", label: "ESLint", dimension: "convention" },
+  { exe: "biome", family: "lint-js", label: "Biome", dimension: "convention" },
+  { exe: "ruff", family: "lint-py", label: "Ruff", dimension: "convention" },
+  { exe: "flake8", family: "lint-py", label: "flake8", dimension: "convention" },
+  { exe: "pylint", family: "lint-py", label: "Pylint", dimension: "convention" },
+  { exe: "prettier", family: "format-js", label: "Prettier", dimension: "convention" },
+  { exe: "tsc", family: "typecheck-ts", label: "tsc", dimension: "convention" },
+  { exe: "mypy", family: "typecheck-py", label: "mypy", dimension: "convention" },
+  { exe: "tsx", family: "ts-runner", label: "tsx", dimension: "convention" },
+  { exe: "ts-node", family: "ts-runner", label: "ts-node", dimension: "convention" },
+  { exe: "psql", family: "db-client", label: "psql", dimension: "convention" },
+  { exe: "mysql", family: "db-client", label: "mysql", dimension: "convention" },
+  { exe: "sqlite3", family: "db-client", label: "sqlite3", dimension: "convention" },
+  { exe: "mongosh", family: "db-client", label: "mongosh", dimension: "convention" },
+  { exe: "aws", family: "cloud-cli", label: "AWS CLI", dimension: "convention" },
+  { exe: "az", family: "cloud-cli", label: "Azure CLI", dimension: "convention" },
+  { exe: "gcloud", family: "cloud-cli", label: "gcloud", dimension: "convention" },
+  { exe: "vercel", family: "deploy", label: "Vercel", dimension: "convention" },
+  { exe: "fly", family: "deploy", label: "Fly.io", dimension: "convention" },
+  { exe: "wrangler", family: "deploy", label: "Cloudflare Workers", dimension: "convention" },
+  { exe: "netlify", family: "deploy", label: "Netlify", dimension: "convention" },
 ];
 
 /** Wrappers that delegate to the tool that follows them. */

@@ -27,7 +27,7 @@ import { basename, join } from "node:path";
  * a correct product answer against a bad key is indistinguishable from a
  * product bug.
  *
- * Each entry is [executable, subcommand or null, label].
+ * Each entry is [executable, subcommand or null, label, required option or null].
  */
 const FAMILIES = {
   "package manager": [["pnpm", null, "pnpm"], ["npm", null, "npm"], ["yarn", null, "yarn"], ["bun", null, "bun"]],
@@ -38,7 +38,10 @@ const FAMILIES = {
   // An incomplete option set is a wrong answer key: the omitted tool cannot be
   // named, so a truthful model is forced into an error.
   "test runner": [["vitest", null, "vitest"], ["jest", null, "jest"], ["pytest", null, "pytest"],
-                  ["cargo", "test", "cargo test"], ["go", "test", "go test"]],
+                  ["cargo", "test", "cargo test"], ["go", "test", "go test"],
+                  ["node", null, "node --test", "--test"]],
+  "db client": [["psql", null, "psql"], ["mysql", null, "mysql"], ["sqlite3", null, "sqlite3"],
+                ["mongosh", null, "mongosh"]],
   "search tool": [["rg", null, "ripgrep"], ["grep", null, "grep"]],
 };
 
@@ -112,11 +115,16 @@ export function invocations(command) {
     const exe = tokens[i]?.split("/").pop();
     if (!exe) continue;
     let sub;
+    const flags = [];
     for (let j = i + 1; j < tokens.length; j++) {
-      if (tokens[j].startsWith("-")) { if (VALUE_FLAGS.has(tokens[j])) j++; continue; }
+      if (tokens[j].startsWith("-")) {
+        flags.push(tokens[j].split("=")[0]);
+        if (VALUE_FLAGS.has(tokens[j])) j++;
+        continue;
+      }
       if (sub === undefined) sub = tokens[j];
     }
-    out.push({ exe, sub });
+    out.push({ exe, sub, flags });
   }
   return out;
 }
@@ -169,9 +177,11 @@ export function commandsByProject(root = join(homedir(), ".claude", "projects"))
 function decide(cmds, rules) {
   const invs = cmds.flatMap(invocations);
   const counts = rules
-    .map(([exe, sub, label]) => ({
+    .map(([exe, sub, label, flag]) => ({
       label,
-      n: invs.filter((i) => i.exe === exe && (sub === null || i.sub === sub)).length,
+      n: invs.filter((i) => i.exe === exe
+        && (sub === null || i.sub === sub)
+        && (!flag || i.flags.includes(flag))).length,
     }))
     .filter((x) => x.n > 0)
     .sort((a, b) => b.n - a.n);

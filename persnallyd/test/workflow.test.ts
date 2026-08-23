@@ -270,3 +270,35 @@ describe("prose is not a command", () => {
     assert.deepEqual(patterns(rep("// comment", 20)), []);
   });
 });
+
+/**
+ * Coverage beyond the original rule set. The gap was concrete: this repo's test
+ * runner is `node --test`, and the convention layer could not see it at all —
+ * so the one question it should answer best about itself had no answer.
+ */
+describe("wider tool coverage", () => {
+  test("node --test is a test runner, plain node is not", () => {
+    assert.ok(patterns(rep("node --test build/test/x.js", 5)).includes("uses node --test"));
+    assert.deepEqual(patterns(rep("node script.js", 5)).filter((p) => /node/.test(p)), []);
+  });
+
+  test("it competes with the other JS runners", () => {
+    const cmds = [...rep("node --test build/test/x.js", 20), ...rep("vitest run", 3)];
+    assert.ok(patterns(cmds).includes("prefers node --test over vitest"));
+  });
+
+  test("tools from different ecosystems are never framed as a preference", () => {
+    // eslint and ruff both lint, but not the same language. "prefers ESLint over
+    // Ruff" would state a choice the user never made.
+    const both = [...rep("eslint .", 20), ...rep("ruff check .", 20)];
+    const p = patterns(both);
+    assert.ok(p.includes("uses ESLint") || p.includes("ESLint"), "ESLint should be reported");
+    assert.ok(p.includes("uses Ruff") || p.includes("Ruff"), "Ruff should be reported");
+    assert.deepEqual(p.filter((x) => /prefers (ESLint|Ruff)/.test(x)), []);
+  });
+
+  test("same-job tools do compete", () => {
+    const cmds = [...rep("sqlite3 db.sqlite .tables", 20), ...rep("psql -c 'select 1'", 3)];
+    assert.ok(patterns(cmds).includes("prefers sqlite3 over psql"));
+  });
+});
