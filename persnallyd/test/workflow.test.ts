@@ -156,7 +156,7 @@ describe("only the invoked executable counts, never the arguments", () => {
   });
 
   test("python -m pytest is pytest, python script.py is not", () => {
-    assert.ok(patterns(rep("python -m pytest tests/", 5)).includes("uses pytest"));
+    assert.ok(patterns(rep("python -m pytest tests/", 5)).includes("pytest"));
     assert.deepEqual(patterns(rep("python manage.py migrate", 5)).filter((p) => /pytest/.test(p)), []);
   });
 
@@ -208,7 +208,7 @@ describe("shell shapes that fooled the first rewrite", () => {
   });
 
   test("an option is never the executable", () => {
-    assert.ok(patterns(rep("uv run --with pytest pytest -q", 5)).includes("uses pytest"),
+    assert.ok(patterns(rep("uv run --with pytest pytest -q", 5)).includes("pytest"),
       "`--with` was classified as the invoked tool");
   });
 
@@ -297,8 +297,38 @@ describe("wider tool coverage", () => {
     assert.deepEqual(p.filter((x) => /prefers (ESLint|Ruff)/.test(x)), []);
   });
 
-  test("same-job tools do compete", () => {
-    const cmds = [...rep("sqlite3 db.sqlite .tables", 20), ...rep("psql -c 'select 1'", 3)];
-    assert.ok(patterns(cmds).includes("prefers sqlite3 over psql"));
+  test("interchangeable tools do compete", () => {
+    const cmds = [...rep("tsx script.ts", 20), ...rep("ts-node script.ts", 3)];
+    assert.ok(patterns(cmds).includes("prefers tsx over ts-node"));
+  });
+});
+
+/**
+ * A family means *interchangeable for the same task in the same context*. The
+ * looser reading ("same job") let the rules state choices nobody made, which is
+ * worse than saying nothing: it gets injected into every AI the user connects.
+ */
+describe("preference is claimed only between interchangeable tools", () => {
+  const bothOf = (a: string, b: string) => [...rep(a, 20), ...rep(b, 5)];
+
+  test("two clouds are not a preference", () => {
+    assert.deepEqual(patterns(bothOf("aws s3 ls", "az account show")), ["AWS CLI", "Azure CLI"]);
+  });
+
+  test("two hosts are not a preference", () => {
+    assert.deepEqual(patterns(bothOf("vercel deploy", "fly deploy")), ["Vercel", "Fly.io"]);
+  });
+
+  test("the SQL client is decided by the datastore, not by taste", () => {
+    assert.deepEqual(patterns(bothOf("sqlite3 t.db .tables", "psql -c x")).sort(), ["psql", "sqlite3"]);
+  });
+
+  test("test runners from different languages are not a preference", () => {
+    // A Rust+Python monorepo does not "prefer" cargo test over pytest.
+    assert.deepEqual(patterns(bothOf("cargo test", "python -m pytest")).sort(), ["cargo test", "pytest"]);
+  });
+
+  test("but runners for the same language are", () => {
+    assert.deepEqual(patterns(bothOf("node --test x.js", "vitest run")), ["prefers node --test over vitest"]);
   });
 });

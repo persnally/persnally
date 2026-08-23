@@ -39,11 +39,11 @@ const RULES: ToolRule[] = [
   { exe: "yarn", family: "package-manager", label: "yarn", dimension: "convention" },
   { exe: "bun", family: "package-manager", label: "bun", dimension: "convention" },
   // Test runners.
-  { exe: "vitest", family: "test-runner", label: "vitest", dimension: "convention" },
-  { exe: "jest", family: "test-runner", label: "jest", dimension: "convention" },
-  { exe: "pytest", family: "test-runner", label: "pytest", dimension: "convention" },
-  { exe: "cargo", sub: "test", family: "test-runner", label: "cargo test", dimension: "convention" },
-  { exe: "go", sub: "test", family: "test-runner", label: "go test", dimension: "convention" },
+  { exe: "vitest", family: "test-runner-js", label: "vitest", dimension: "convention" },
+  { exe: "jest", family: "test-runner-js", label: "jest", dimension: "convention" },
+  { exe: "pytest", family: "test-runner-py", label: "pytest", dimension: "convention" },
+  { exe: "cargo", sub: "test", family: "test-runner-rust", label: "cargo test", dimension: "convention" },
+  { exe: "go", sub: "test", family: "test-runner-go", label: "go test", dimension: "convention" },
   // Search tools.
   { exe: "rg", family: "search", label: "ripgrep", dimension: "convention" },
   { exe: "grep", family: "search", label: "grep", dimension: "convention" },
@@ -60,12 +60,14 @@ const RULES: ToolRule[] = [
   { exe: "terraform", family: "terraform", label: "Terraform", dimension: "convention" },
   { exe: "make", family: "make", label: "Make", dimension: "convention" },
 
-  // A "family" is tools that do the same job in the same ecosystem, because the
-  // output is phrased as a preference. eslint and ruff both lint, but they lint
-  // different languages — reporting "prefers eslint over ruff" would state a
-  // choice the user never made. Cross-ecosystem tools get their own family and
-  // are reported as plain usage.
-  { exe: "node", flag: "--test", family: "test-runner", label: "node --test", dimension: "convention" },
+  // A "family" is tools that are *interchangeable for the same task in the same
+  // context*, because the output is phrased as a preference. That test is
+  // stricter than "same job": psql and sqlite3 are both SQL clients, but which
+  // one you run is decided by the datastore, not by taste, so "prefers sqlite3
+  // over psql" states a choice nobody made. Same for two clouds, two hosts, and
+  // two test runners from different languages. Anything not interchangeable gets
+  // its own family and is reported as plain usage.
+  { exe: "node", flag: "--test", family: "test-runner-js", label: "node --test", dimension: "convention" },
   { exe: "eslint", family: "lint-js", label: "ESLint", dimension: "convention" },
   { exe: "biome", family: "lint-js", label: "Biome", dimension: "convention" },
   { exe: "ruff", family: "lint-py", label: "Ruff", dimension: "convention" },
@@ -76,17 +78,17 @@ const RULES: ToolRule[] = [
   { exe: "mypy", family: "typecheck-py", label: "mypy", dimension: "convention" },
   { exe: "tsx", family: "ts-runner", label: "tsx", dimension: "convention" },
   { exe: "ts-node", family: "ts-runner", label: "ts-node", dimension: "convention" },
-  { exe: "psql", family: "db-client", label: "psql", dimension: "convention" },
-  { exe: "mysql", family: "db-client", label: "mysql", dimension: "convention" },
-  { exe: "sqlite3", family: "db-client", label: "sqlite3", dimension: "convention" },
-  { exe: "mongosh", family: "db-client", label: "mongosh", dimension: "convention" },
-  { exe: "aws", family: "cloud-cli", label: "AWS CLI", dimension: "convention" },
-  { exe: "az", family: "cloud-cli", label: "Azure CLI", dimension: "convention" },
-  { exe: "gcloud", family: "cloud-cli", label: "gcloud", dimension: "convention" },
-  { exe: "vercel", family: "deploy", label: "Vercel", dimension: "convention" },
-  { exe: "fly", family: "deploy", label: "Fly.io", dimension: "convention" },
-  { exe: "wrangler", family: "deploy", label: "Cloudflare Workers", dimension: "convention" },
-  { exe: "netlify", family: "deploy", label: "Netlify", dimension: "convention" },
+  { exe: "psql", family: "db-postgres", label: "psql", dimension: "convention" },
+  { exe: "mysql", family: "db-mysql", label: "mysql", dimension: "convention" },
+  { exe: "sqlite3", family: "db-sqlite", label: "sqlite3", dimension: "convention" },
+  { exe: "mongosh", family: "db-mongo", label: "mongosh", dimension: "convention" },
+  { exe: "aws", family: "cloud-aws", label: "AWS CLI", dimension: "convention" },
+  { exe: "az", family: "cloud-az", label: "Azure CLI", dimension: "convention" },
+  { exe: "gcloud", family: "cloud-gcloud", label: "gcloud", dimension: "convention" },
+  { exe: "vercel", family: "deploy-vercel", label: "Vercel", dimension: "convention" },
+  { exe: "fly", family: "deploy-fly", label: "Fly.io", dimension: "convention" },
+  { exe: "wrangler", family: "deploy-cf", label: "Cloudflare Workers", dimension: "convention" },
+  { exe: "netlify", family: "deploy-netlify", label: "Netlify", dimension: "convention" },
 ];
 
 /** Wrappers that delegate to the tool that follows them. */
