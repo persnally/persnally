@@ -162,7 +162,10 @@ function segments(command: string): string[][] {
       else cur += c;
     } else if (c === '"' || c === "'") {
       quote = c;
-    } else if (c === "|" || c === ";" || c === "&") {
+    } else if (c === "|" || c === ";" || c === "&" || c === "(" || c === ")" || c === "`") {
+      // A command substitution contains a real command. `out=$(gh pr checks 1)`
+      // otherwise matched the env-assignment skip on `out=$(gh`, consuming the
+      // command name and leaving `pr` as the executable.
       endSegment();
     } else if (/\s/.test(c)) {
       endToken();
@@ -217,6 +220,15 @@ function classify(tokens: string[]): Invocation | null {
  */
 export function invocations(command: string): Invocation[] {
   return segments(stripHeredocBodies(command)).map(classify).filter((x): x is Invocation => x !== null);
+}
+
+/**
+ * The executables the rule table covers. Exported so the benchmark can label
+ * which of its questions fall outside what this file can see at all — a score
+ * built only from questions we already model reports nothing about coverage.
+ */
+export function modelledExecutables(): Set<string> {
+  return new Set(RULES.map((r) => r.exe));
 }
 
 // A handful of uses is noise (one-off experiment, a suggestion the user

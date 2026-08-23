@@ -20,7 +20,8 @@
 import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { buildPairs, familyOptions, majorityBaseline } from "./ground-truth.mjs";
+import { buildPairs, commandsByProject, familyOptions, majorityBaseline } from "./ground-truth.mjs";
+import { corpusPairs } from "./corpus-questions.mjs";
 import { grade, gradePair, tally } from "./grade.mjs";
 
 const { EventStore } = await import("../build/src/store.js");
@@ -39,6 +40,10 @@ const forced = args.find((a) => a.startsWith("--engine="))?.slice(9);
 // relocates config resolution, which silently drops the API key and falls back
 // to whatever local engine is installed — a different measurement entirely.
 const dbOverride = args.find((a) => a.startsWith("--db="))?.slice(5);
+// Build and print every question without calling a model. The question set is
+// derived from the corpus, so it is worth being able to inspect it on its own —
+// and it makes the harness verifiable when no engine is reachable.
+const dryRun = args.includes("--dry-run");
 
 // A zod schema, matching what the extractors actually parse against. A plain
 // JSON Schema silently threw on every call and scored the control as 18
@@ -62,14 +67,53 @@ function ask(project) {
   return `Which one does this user use in the "${basename(project)}" project?`;
 }
 
+/** One question, in the form both question sets share. */
+function question(family, project, options) {
+  return `${family}: Which one does this user use in the "${basename(project)}" project? Options: ${options.join(", ")}.`;
+}
+
 async function main() {
   applyApiKey();
   const { pairs, answers, excluded } = buildPairs();
+
+  // Questions derived from the corpus rather than from our own rule table. The
+  // family questions above can only ask about tools `src/workflow.ts` already
+  // models, so on their own they report precision and say nothing about
+  // coverage (#235). `blindSpot` marks the ones the rules cannot answer at all.
+  const { modelledExecutables } = await import("../build/src/workflow.js");
+  const corpus = corpusPairs(commandsByProject(), { modelled: modelledExecutables() });
+  if (corpus.dropped) {
+    console.log(`note: ${corpus.dropped} corpus question(s) capped away (limit per project pair)`);
+  }
+
+  if (dryRun) {
+    console.log(`\nfamily questions (${pairs.length} pairs):`);
+    for (const p of pairs) {
+      console.log(`  ${question(p.family, p.a.project, p.options)}  -> ${p.a.answer}`);
+      console.log(`  ${question(p.family, p.b.project, p.options)}  -> ${p.b.answer}`);
+    }
+    const blind = corpus.pairs.filter((p) => p.blindSpot).length;
+    console.log(`\ncorpus questions (${corpus.pairs.length} pairs, ${blind} of them outside the rule table):`);
+    for (const p of corpus.pairs) {
+      console.log(`  ${p.blindSpot ? "[blind] " : "        "}${question(p.family, p.a.project, p.options)}  -> ${p.a.answer}`);
+      console.log(`  ${p.blindSpot ? "[blind] " : "        "}${question(p.family, p.b.project, p.options)}  -> ${p.b.answer}`);
+    }
+    return;
+  }
   if (!pairs.length) {
     console.error("No contrastive pairs found — not enough per-project tool evidence yet.");
     process.exit(1);
   }
-  const engine = await chooseExtractor("extract", forced).catch(() => null);
+  // A deterministic engine for exercising the harness itself — no network, no
+  // model. It answers with the first option every time, which lands some halves
+  // correct and some wrong, so every verdict branch and both report blocks get
+  // executed. It says nothing whatsoever about answer quality.
+  const engine = forced === "stub"
+    ? { model: "stub", extract: (opts) => Promise.resolve({
+        answer: /Options: ([^,.]+)/.exec(opts.content)?.[1] ?? "unknown",
+        confidence: 0.9, evidence_event_ids: [],
+      }) }
+    : await chooseExtractor("extract", forced).catch(() => null);
   if (!engine) {
     console.error("No extraction engine available (set a key or pull a local model).");
     process.exit(1);
@@ -87,44 +131,56 @@ async function main() {
   console.log(`model: ${engine.model}   pairs: ${selected.length}/${pairs.length}   excluded families: ${excluded.join(", ") || "none"}`);
   console.log(`majority-guess baseline on singletons: ${(baseline.rate * 100).toFixed(0)}% — the number a model that knows nothing scores\n`);
 
-  const rows = [];
-  for (const [i, p] of selected.entries()) {
-    const halves = [];
-    for (const side of [p.a, p.b]) {
-      const q = `${p.family}: ${ask(side.project)} Options: ${p.options.join(", ")}.`;
+  /**
+   * Score a list of contrastive pairs under all three conditions. Shared by the
+   * family questions and the corpus-derived ones so a difference between the two
+   * sets can only come from the questions, never from how they were scored.
+   */
+  async function scorePairs(list, label) {
+    const scored = [];
+    for (const [i, p] of list.entries()) {
+      const halves = [];
+      for (const side of [p.a, p.b]) {
+        const q = question(p.family, side.project, p.options);
 
-      // A — the real path
-      const withCtx = await askUserModel(store, {
-        question: q, asker: "bench", source: "cli",
-        provenance: { kind: "local", surface: "cli" }, allowed: null,
-        project: side.project, // conventions are project-scoped
-      }, engine);
+        // A — the real path
+        const withCtx = await askUserModel(store, {
+          question: q, asker: "bench", source: "cli",
+          provenance: { kind: "local", surface: "cli" }, allowed: null,
+          project: side.project, // conventions are project-scoped
+        }, engine);
 
-      // B — the counterfactual: same model, no knowledge of this user
-      let bare = "";
-      try {
-        const raw = await engine.extract({
-          model: engine.model, instruction: BARE_INSTRUCTION,
-          schema: ANSWER_SCHEMA, content: q, maxTokens: 300,
+        // B — the counterfactual: same model, no knowledge of this user
+        let bare = "";
+        try {
+          const raw = await engine.extract({
+            model: engine.model, instruction: BARE_INSTRUCTION,
+            schema: ANSWER_SCHEMA, content: q, maxTokens: 300,
+          });
+          bare = typeof raw?.answer === "string" ? raw.answer : JSON.stringify(raw ?? "");
+        } catch { bare = ""; }
+
+        halves.push({
+          project: basename(side.project), expected: side.answer, evidence: side.evidence,
+          a: { ...grade(withCtx.answer, side.answer, p.options), confidence: withCtx.confidence, deferred: withCtx.deferred },
+          b: grade(bare, side.answer, p.options),
         });
-        bare = typeof raw?.answer === "string" ? raw.answer : JSON.stringify(raw ?? "");
-      } catch { bare = ""; }
-
-      halves.push({
-        project: side.label, expected: side.answer, evidence: side.evidence,
-        a: { ...grade(withCtx.answer, side.answer, p.options), confidence: withCtx.confidence, deferred: withCtx.deferred },
-        b: grade(bare, side.answer, p.options),
-      });
+      }
+      const pairA = gradePair(halves[0].a, halves[1].a);
+      const pairB = gradePair(halves[0].b, halves[1].b);
+      scored.push({ family: p.family, blindSpot: p.blindSpot ?? false, halves, pairA, pairB });
+      console.log(
+        `${label} ${String(i + 1).padStart(2)}. ${p.blindSpot ? "[blind] " : ""}` +
+        `${halves[0].project}=${halves[0].expected} / ${halves[1].project}=${halves[1].expected}   ` +
+        `persnally:${pairA ? "PASS" : "fail"}  no-context:${pairB ? "PASS" : "fail"}`,
+      );
     }
-    const pairA = gradePair(halves[0].a, halves[1].a);
-    const pairB = gradePair(halves[0].b, halves[1].b);
-    rows.push({ family: p.family, halves, pairA, pairB });
-    console.log(
-      `${String(i + 1).padStart(2)}. ${p.family.padEnd(16)} ` +
-      `${halves[0].project}=${halves[0].expected} / ${halves[1].project}=${halves[1].expected}   ` +
-      `persnally:${pairA ? "PASS" : "fail"}  no-context:${pairB ? "PASS" : "fail"}`,
-    );
+    return scored;
   }
+
+  const rows = await scorePairs(selected, "fam");
+  const corpusLimited = corpus.pairs.slice(0, limit === Infinity ? corpus.pairs.length : limit);
+  const corpusRows = corpusLimited.length ? await scorePairs(corpusLimited, "cor") : [];
 
   // C — withheld: a project the store has never seen. A refusal is the only
   // correct answer, and a confident guess here is the product lying.
@@ -158,6 +214,16 @@ async function main() {
     majorityBaseline: baseline,
     withheld: { total: withheld.length, honest: withheld.filter((w) => w.honest).length, detail: withheld },
     excludedFamilies: excluded,
+    corpus: {
+      total: corpusRows.length,
+      persnally: corpusRows.filter((r) => r.pairA).length,
+      noContext: corpusRows.filter((r) => r.pairB).length,
+      blindSpots: {
+        total: corpusRows.filter((r) => r.blindSpot).length,
+        persnally: corpusRows.filter((r) => r.blindSpot && r.pairA).length,
+      },
+      cappedAway: corpus.dropped,
+    },
     // Per-half detail: a score says how it did, this says where it failed.
     rows: rows.map((r) => ({
       family: r.family,
@@ -175,6 +241,11 @@ async function main() {
   console.log(`PAIR ACCURACY   with Persnally  ${pct(report.pairs.persnally, report.pairs.total)}  (${report.pairs.persnally}/${report.pairs.total})`);
   console.log(`                no context     ${pct(report.pairs.noContext, report.pairs.total)}  (${report.pairs.noContext}/${report.pairs.total})`);
   console.log(`HONESTY         refused when it had no evidence  ${pct(report.withheld.honest, report.withheld.total)}  (${report.withheld.honest}/${report.withheld.total})`);
+  if (report.corpus.total) {
+    console.log(`\nCORPUS QUESTIONS (derived from the command log, not from our rule table)`);
+    console.log(`                with Persnally  ${pct(report.corpus.persnally, report.corpus.total)}  (${report.corpus.persnally}/${report.corpus.total})`);
+    console.log(`                of which outside the rule table  ${pct(report.corpus.blindSpots.persnally, report.corpus.blindSpots.total)}  (${report.corpus.blindSpots.persnally}/${report.corpus.blindSpots.total})`);
+  }
   const unanswered = report.rows.flatMap((r) => r.halves
     .filter((h) => h.persnally.verdict !== "correct")
     .map((h) => `${r.family}/${h.project} (${h.persnally.verdict}, expected ${h.expected}, ${h.evidence} invocations)`));

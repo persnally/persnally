@@ -87,7 +87,8 @@ function segments(command) {
     if (c === "\n") { endSegment(); quote = null; continue; }
     if (quote) { if (c === quote) quote = null; else cur += c; }
     else if (c === '"' || c === "'") quote = c;
-    else if (c === "|" || c === ";" || c === "&") endSegment();
+    // A command substitution contains a real command, so its boundaries split.
+    else if (c === "|" || c === ";" || c === "&" || c === "(" || c === ")" || c === "`") endSegment();
     else if (/\s/.test(c)) endToken();
     else cur += c;
   }
