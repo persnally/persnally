@@ -12,7 +12,7 @@ import { type Category, readsNothing } from "./permissions.js";
 import { overlapScore, queryTokens } from "./search.js";
 import type { EventStore } from "./store.js";
 import { projectLabel } from "./importers/claude-code.js";
-import { assemblePack } from "./stylometry.js";
+import { assemblePack, statedConvention } from "./stylometry.js";
 
 // Below this, a wrong answer costs more trust than a deferral saves time.
 export const CONFIDENCE_THRESHOLD = 0.7;
@@ -137,6 +137,21 @@ function buildMaterial(store: EventStore, question: string, allowed: Category[] 
     }
   }
 
+  // Project-scoped facts have to say what they are scoped to. Serving "prefers
+  // npm over pnpm" unlabelled leaves a model unable to tell whether it applies
+  // to the repo being asked about — the evidence was present and unusable.
+  const voice = store.voice(project);
+  const scoped = voice.items.filter((i) => i.dimension === "convention" || i.dimension === "workflow");
+  const tone = voice.items.filter((i) => !scoped.includes(i));
+  if (tone.length) {
+    lines.push("", "## How the user writes", assemblePack(tone));
+  }
+  if (scoped.length) {
+    lines.push("", `## How the user works${project ? ` in ${projectLabel(project)}` : ""}` + " (observed behaviour — outranks the general claims above)");
+    for (const s of scoped) lines.push(`- ${statedConvention(s)}`);
+  }
+
+
   if (!allowed) {
     const profile = store.getProfile();
     if (profile) {
@@ -155,7 +170,7 @@ function buildMaterial(store: EventStore, question: string, allowed: Category[] 
       .sort((a, b) => b.score - a.score)
       .slice(0, ASSERTION_BUDGET);
     if (assertions.length) {
-      lines.push("", "## Extracted assertions");
+      lines.push("", "## Claims extracted from conversation prose (a model's reading, and may be stale — the observed counts above take precedence on tooling)");
       for (const { e, p } of assertions) {
         knownIds.add(e.id);
         lines.push(`- [${e.id}] (${p.kind}, conf ${p.confidence}) ${p.claim}`);
@@ -178,20 +193,6 @@ function buildMaterial(store: EventStore, question: string, allowed: Category[] 
       lines.push("", "## Past answers the user marked wrong (do not repeat these mistakes)");
       for (const r of rejected) lines.push(`- Q: ${r.question} → rejected answer: ${r.answer}`);
     }
-  }
-
-  // Project-scoped facts have to say what they are scoped to. Serving "prefers
-  // npm over pnpm" unlabelled leaves a model unable to tell whether it applies
-  // to the repo being asked about — the evidence was present and unusable.
-  const voice = store.voice(project);
-  const scoped = voice.items.filter((i) => i.dimension === "convention" || i.dimension === "workflow");
-  const tone = voice.items.filter((i) => !scoped.includes(i));
-  if (tone.length) {
-    lines.push("", "## How the user writes", assemblePack(tone));
-  }
-  if (scoped.length) {
-    lines.push("", `## How the user works${project ? ` in ${projectLabel(project)}` : ""}`);
-    for (const s of scoped) lines.push(`- ${s.pattern}`);
   }
 
   return { content: lines.join("\n").trim(), knownIds };

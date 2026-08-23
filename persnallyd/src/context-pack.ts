@@ -20,6 +20,7 @@
 import { newEvent } from "./events.js";
 import { projectLabel } from "./importers/claude-code.js";
 import { type Category, readsNothing } from "./permissions.js";
+import { statedConvention } from "./stylometry.js";
 import { scopeKey } from "./profile.js";
 import type { EventStore } from "./store.js";
 
@@ -79,8 +80,8 @@ export function buildContextPack(store: EventStore, opts: PackOptions = {}): Con
   const local = voice.items.filter((i) => i.dimension === "convention" || i.dimension === "workflow");
   if (local.length) {
     const label = opts.project ? projectLabel(opts.project) : "";
-    out.push(`# How they work${label ? ` in ${label}` : ""}`);
-    for (const s of local.slice(0, 8)) out.push(`- ${s.pattern}`);
+    out.push(`# How they work${label ? ` in ${label}` : ""}` + " (observed behaviour — outranks the general claims above)");
+    for (const s of local.slice(0, 8)) out.push(`- ${statedConvention(s)}`);
     out.push("");
   }
 

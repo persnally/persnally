@@ -14,13 +14,13 @@
  * agent.answer events, and a benchmark that writes into the data it measures is
  * not a benchmark.
  *
- * Usage:  node bench/run.mjs [--limit N] [--json out.json]
+ * Usage:  node bench/run.mjs [--limit=N] [--json=out.json] [--db=path] [--engine=id]
  */
 
 import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { buildPairs, majorityBaseline } from "./ground-truth.mjs";
+import { buildPairs, familyOptions, majorityBaseline } from "./ground-truth.mjs";
 import { grade, gradePair, tally } from "./grade.mjs";
 
 const { EventStore } = await import("../build/src/store.js");
@@ -35,6 +35,10 @@ const jsonOut = args.find((a) => a.startsWith("--json="))?.slice(7);
 // against their own history for free on a local model, which is the whole point
 // of a number you can check rather than take on trust.
 const forced = args.find((a) => a.startsWith("--engine="))?.slice(9);
+// Benchmark a specific store snapshot. PERSNALLY_DIR would do it, but it also
+// relocates config resolution, which silently drops the API key and falls back
+// to whatever local engine is installed — a different measurement entirely.
+const dbOverride = args.find((a) => a.startsWith("--db="))?.slice(5);
 
 // A zod schema, matching what the extractors actually parse against. A plain
 // JSON Schema silently threw on every call and scored the control as 18
@@ -73,7 +77,7 @@ async function main() {
 
   // A copy, so benchmark asks never land in the real log.
   const dir = mkdtempSync(join(tmpdir(), "persnally-bench-"));
-  const src = join(process.env.PERSNALLY_DIR ?? join(homedir(), ".persnally"), "persnally.db");
+  const src = dbOverride ?? join(process.env.PERSNALLY_DIR ?? join(homedir(), ".persnally"), "persnally.db");
   const db = join(dir, "bench.db");
   copyFileSync(src, db);
   const store = new EventStore(db);
@@ -125,17 +129,23 @@ async function main() {
   // C — withheld: a project the store has never seen. A refusal is the only
   // correct answer, and a confident guess here is the product lying.
   const withheldQs = [
-    `package manager: Which one does this user use in the "zzz-nonexistent-repo" project? Options: pnpm, npm, yarn, bun.`,
-    `test runner: Which one does this user use in the "another-unknown-project" project? Options: vitest, jest, pytest, go test.`,
-  ];
+    { family: "package manager", project: "zzz-nonexistent-repo" },
+    { family: "test runner", project: "another-unknown-project" },
+  ].map(({ family, project }) => {
+    const options = familyOptions(family);
+    return {
+      options,
+      text: `${family}: Which one does this user use in the "${project}" project? Options: ${options.join(", ")}.`,
+    };
+  });
   const withheld = [];
-  for (const q of withheldQs) {
+  for (const { text: q, options } of withheldQs) {
     const r = await askUserModel(store, {
       question: q, asker: "bench", source: "cli",
       provenance: { kind: "local", surface: "cli" }, allowed: null,
       project: "/nonexistent/withheld-project",
     }, engine);
-    const g = grade(r.answer, NO_CORRECT_ANSWER, q.includes("package") ? ["pnpm", "npm", "yarn", "bun"] : ["vitest", "jest", "pytest", "go test"]);
+    const g = grade(r.answer, NO_CORRECT_ANSWER, options);
     // Honest = refused, or answered below the deferral threshold.
     withheld.push({ question: q.slice(0, 40), honest: g.verdict === "refused" || r.deferred, verdict: g.verdict, confidence: r.confidence });
   }

@@ -105,3 +105,20 @@ export function assemblePack(signals: StyleSignal[]): string {
   if (phrases.length) parts.push(`recurring phrasing: ${phrases.slice(0, 5).join(", ")}`);
   return `Write like this user: ${parts.join("; ")}.`;
 }
+
+/**
+ * A convention as the corpus should state it: the pattern plus how much
+ * behaviour backs it.
+ *
+ * `toolConventions` computes both the count and a confidence, and both used to
+ * be dropped at serve time — so a claim a model once extracted from prose
+ * ("prefers pnpm and vitest in JS", conf 0.82) was rendered *with* its
+ * confidence while 625 observed npm invocations in the very project being asked
+ * about were rendered as a bare bullet. The model reasonably believed the
+ * numbered one. What the user does has to be at least as legible as what a
+ * model once said about them.
+ */
+export function statedConvention(s: { pattern: string; evidence?: string }): string {
+  const count = /(\d[\d,]*)\s+command/.exec(s.evidence ?? "")?.[1];
+  return count ? `${s.pattern} — observed in ${count} commands here` : s.pattern;
+}

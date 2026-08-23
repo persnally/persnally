@@ -131,3 +131,90 @@ describe("the signals reach the event stream, not just the function", () => {
       "and a workflow signal — these two dimensions previously had no producer at all");
   });
 });
+
+/**
+ * The rules used to be matched against the whole command string, so a command
+ * that merely *mentioned* a tool counted as using it. `rg pnpm package.json`
+ * searches for the text "pnpm" with ripgrep; it credited pnpm. In one real
+ * workspace that inverted a family outright, and the same defect in the
+ * benchmark's answer key survived only because the two were written separately.
+ */
+describe("only the invoked executable counts, never the arguments", () => {
+  test("searching for a tool's name is not using it", () => {
+    const cmds = [...rep("rg pnpm package.json", 20), ...rep("npm test", 5)];
+    assert.deepEqual(patterns(cmds).filter((p) => /pnpm|npm/.test(p)), ["uses npm"],
+      "a ripgrep search for 'pnpm' was counted as pnpm usage");
+  });
+
+  test("a quoted argument is not an invocation", () => {
+    assert.deepEqual(patterns(rep('grep -r "npm install" .', 20)).filter((p) => /npm/.test(p)), []);
+  });
+
+  test("wrappers delegate to the tool they run", () => {
+    assert.ok(patterns(rep("npx vitest run", 5)).includes("uses vitest"), "npx should delegate");
+    assert.ok(patterns(rep("sudo docker ps", 5)).includes("Docker"), "sudo should delegate");
+  });
+
+  test("python -m pytest is pytest, python script.py is not", () => {
+    assert.ok(patterns(rep("python -m pytest tests/", 5)).includes("uses pytest"));
+    assert.deepEqual(patterns(rep("python manage.py migrate", 5)).filter((p) => /pytest/.test(p)), []);
+  });
+
+  test("each pipeline segment is classified separately", () => {
+    // The tool actually invoked on each side, so `cat | grep` is one grep use.
+    assert.ok(patterns(rep("cat package.json | grep pnpm", 20)).includes("uses grep"));
+    assert.deepEqual(patterns(rep("cat package.json | grep pnpm", 20)).filter((p) => /pnpm/.test(p)), []);
+  });
+
+  test("a subcommand rule needs its subcommand", () => {
+    assert.deepEqual(patterns(rep("git merge-base main HEAD", 20)).filter((p) => /merge/.test(p)), [],
+      "merge-base is a plumbing lookup, not an integration choice");
+    assert.ok(patterns(rep("git merge --no-ff main", 20)).includes("uses merge"));
+  });
+});
+
+describe("a convention states how much behaviour backs it", () => {
+  test("the observed count survives into what is served", async () => {
+    const { statedConvention } = await import("../src/stylometry.js");
+    const [signal] = toolConventions(rep("npm ci", 12));
+    assert.ok(signal, "expected a signal");
+    // The count is the whole reason to trust this over a claim a model once
+    // extracted from prose; it used to be dropped at serve time.
+    assert.match(statedConvention(signal), /observed in 12 commands here/);
+  });
+
+  test("a signal with no count is served unchanged", async () => {
+    const { statedConvention } = await import("../src/stylometry.js");
+    assert.equal(statedConvention({ pattern: "wants approval before force-push" }),
+      "wants approval before force-push");
+  });
+});
+
+/**
+ * Cases from review of #234, each of which the first rewrite got wrong. The
+ * amend rule is the one that mattered most: dropping it would have deleted an
+ * existing signal from every store on the next refresh, unrecoverably, because
+ * nothing else can re-derive it.
+ */
+describe("shell shapes that fooled the first rewrite", () => {
+  test("a separator inside quotes is text, not a command boundary", () => {
+    assert.deepEqual(patterns(rep("echo 'npm test; pnpm install'", 20)), [],
+      "the quoted string was split and counted as a pnpm invocation");
+  });
+
+  test("an option's value is not the subcommand", () => {
+    assert.ok(patterns(rep("git -C /repo merge main", 20)).includes("uses merge"),
+      "`git -C <path> merge` read /repo as the subcommand and missed the merge");
+  });
+
+  test("an option is never the executable", () => {
+    assert.ok(patterns(rep("uv run --with pytest pytest -q", 5)).includes("uses pytest"),
+      "`--with` was classified as the invoked tool");
+  });
+
+  test("git commit --amend is still a workflow signal", () => {
+    // Option-qualified: `git commit` alone says nothing about how they work.
+    assert.ok(patterns(rep("git commit --amend --no-edit", 5)).includes("amends commits"));
+    assert.deepEqual(patterns(rep("git commit -m wip", 5)).filter((p) => /amend/.test(p)), []);
+  });
+});

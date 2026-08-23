@@ -285,3 +285,52 @@ test("the ask path sees the conventions of the project it is asked about", async
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("observed behaviour is served before, and above, claims extracted from prose", async () => {
+  // A prose-derived assertion claiming this user "prefers pnpm and vitest in JS"
+  // outranked 625 observed npm invocations in the project being asked about,
+  // because the assertion was rendered with its confidence and the convention
+  // was rendered as a bare bullet. Both halves of that are fixed here: the
+  // convention carries its count, and the claim says where it came from.
+  const dir = mkdtempSync(join(tmpdir(), "ask-precedence-"));
+  let store: EventStore | undefined;
+  try {
+    store = new EventStore(join(dir, "t.db"));
+    store.append([
+      newEvent("signal.style", "import:claude-code", {
+        dimension: "convention", pattern: "prefers npm over pnpm", polarity: "prefers",
+        confidence: 0.85, evidence: "observed in 625 command(s) across Claude Code sessions",
+        basis: "stylometry",
+      }, { kind: "import", batch: "b", file: "f", project: "/repos/alpha" }),
+      newEvent("signal.assertion", "import:claude", {
+        claim: "User prefers pnpm and vitest in JS projects", kind: "behavior",
+        confidence: 0.82, evidence: "stated across sessions",
+      }, { kind: "import", batch: "b", file: "conversations.json" }),
+    ]);
+    store.rebuild();
+
+    let corpus = "";
+    const engine = {
+      model: "test",
+      extract: (opts: { content: string }) => {
+        corpus = opts.content;
+        return Promise.resolve({ answer: "npm", confidence: 0.9, evidence_event_ids: [] });
+      },
+    };
+    await askUserModel(store, {
+      question: "which package manager?", asker: "t", source: "cli",
+      provenance: { kind: "local", surface: "cli" }, project: "/repos/alpha",
+    }, engine);
+
+    assert.match(corpus, /prefers npm over pnpm — observed in 625 commands here/,
+      "the count was computed and stored, then dropped at serve time");
+    const observed = corpus.indexOf("## How the user works");
+    const claimed = corpus.indexOf("## Claims extracted from conversation prose");
+    assert.ok(observed >= 0 && claimed >= 0, "both sections should be present");
+    assert.ok(observed < claimed, "a model weighs what it reads first; counted evidence goes first");
+    assert.match(corpus, /may be stale/, "an extracted claim must not read as ground truth");
+  } finally {
+    store?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
