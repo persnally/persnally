@@ -15,8 +15,8 @@
  * A question the product is guaranteed to fail is the one worth asking.
  */
 
-import { readdirSync } from "node:fs";
-import { basename } from "node:path";
+import { readdirSync, statSync } from "node:fs";
+import { basename, join } from "node:path";
 
 import { invocations } from "./ground-truth.mjs";
 
@@ -55,10 +55,25 @@ const PLAUSIBLE = /^[a-z][a-z0-9._+-]{1,20}$/;
 function executablesOnPath() {
   const names = new Set();
   for (const dir of (process.env.PATH ?? "").split(":")) {
+    let entries = [];
     try {
-      for (const entry of readdirSync(dir)) names.add(entry);
+      entries = readdirSync(dir);
     } catch {
       // A PATH entry that does not exist is normal, not an error.
+      continue;
+    }
+    for (const entry of entries) {
+      // Must resolve to a regular file: statSync follows symlinks, so this drops
+      // dangling ones (an uninstalled `code` still leaves its link behind) and
+      // directories. The execute bit is deliberately *not* required — measured on
+      // this machine, the only names it would have excluded were real tools whose
+      // npm bin is a symlink to a mode-0644 .js file, this project's own CLI
+      // among them.
+      try {
+        if (statSync(join(dir, entry)).isFile()) names.add(entry);
+      } catch {
+        continue;
+      }
     }
   }
   return names;

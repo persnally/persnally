@@ -110,7 +110,7 @@ async function main() {
   // executed. It says nothing whatsoever about answer quality.
   const engine = forced === "stub"
     ? { model: "stub", extract: (opts) => Promise.resolve({
-        answer: /Options: ([^,.]+)/.exec(opts.content)?.[1] ?? "unknown",
+        answer: (/Options: (.+)\.\s*$/m.exec(opts.content)?.[1]?.split(", ")[0]) ?? "unknown",
         confidence: 0.9, evidence_event_ids: [],
       }) }
     : await chooseExtractor("extract", forced).catch(() => null);
