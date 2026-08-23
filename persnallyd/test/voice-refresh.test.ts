@@ -25,8 +25,11 @@ const style = (pattern: string, source: string) => {
   const provenance = source.startsWith("import:")
     ? { kind: "import" as const, batch: "b1", file: "conversations.json" }
     : { kind: "local" as const, surface: "cli" as const };
+  // `voice` rather than `emphasis`: stylometry no longer mines phrases, so an
+  // emphasis+stylometry signal is exactly what serving drops. This test is
+  // about which corpus a refresh may replace, not about that.
   return newEvent("signal.style", source, {
-    dimension: "emphasis", pattern, polarity: "insists",
+    dimension: "voice", pattern, polarity: "does",
     confidence: 0.9, evidence: "seen repeatedly", basis: "stylometry",
   }, provenance);
 };

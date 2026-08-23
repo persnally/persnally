@@ -1,3 +1,4 @@
+import Image, { type StaticImageData } from "next/image";
 import { CopyCommand } from "./_components/CopyCommand";
 import { Nav } from "./_components/Nav";
 import { EngravedSelf } from "./_components/EngravedSelf";
@@ -5,13 +6,32 @@ import { SetupTabs } from "./_components/SetupTabs";
 import { RepetitionFeed } from "./_components/RepetitionFeed";
 import { ProCard } from "./_components/ProCard";
 import { GithubIcon, NpmIcon, ProductHuntIcon, Glyph, TOOLS, brand } from "@/components/ui/logos";
+import { GITHUB, NPM, PRODUCT_HUNT } from "@/lib/links";
 import { ArrowUpRight, Check, Cpu, Minus, X } from "lucide-react";
+import { SIZES } from "./_sizes";
+
+// The plates are imported, not referenced by URL, so the optimizer knows each
+// one's intrinsic size and can hash it into an immutable asset.
+import armillary from "./_art/armillary.webp";
+import author from "./_art/author.webp";
+import bonfire from "./_art/bonfire.webp";
+import cards from "./_art/cards.webp";
+import compositors from "./_art/compositors.webp";
+import ecorche from "./_art/ecorche.webp";
+import fountain from "./_art/fountain.webp";
+import justice from "./_art/justice.webp";
+import lock from "./_art/lock.webp";
+import loom from "./_art/loom.webp";
+import mapSlice1 from "./_art/map-slice-1.webp";
+import mapSlice2 from "./_art/map-slice-2.webp";
+import mapSlice3 from "./_art/map-slice-3.webp";
+import mercury from "./_art/mercury.webp";
+import microscope from "./_art/microscope.webp";
+import mirror from "./_art/mirror.webp";
+import press from "./_art/press.webp";
+import specimen from "./_art/specimen.webp";
 
 const EXT = { target: "_blank", rel: "noopener noreferrer" } as const;
-
-const GITHUB = "https://github.com/persnally/persnally";
-const NPM = "https://www.npmjs.com/package/persnally";
-const PRODUCT_HUNT = "https://www.producthunt.com/products/persnally";
 
 export default function Home() {
   return (
@@ -207,13 +227,18 @@ function Wedge() {
           <figure className="mt-10">
             <div className="grid grid-cols-3 items-center gap-4">
               {[
-                { src: "/art/map-slice-1.webp", tool: "Claude sees" },
-                { src: "/art/map-slice-2.webp", tool: "ChatGPT sees" },
-                { src: "/art/map-slice-3.webp", tool: "Cursor sees" },
+                { src: mapSlice1, tool: "Claude sees" },
+                { src: mapSlice2, tool: "ChatGPT sees" },
+                { src: mapSlice3, tool: "Cursor sees" },
               ].map((h) => (
-                <div key={h.src} className="text-center">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={h.src} alt="" aria-hidden width={480} height={480} className="mx-auto w-full max-w-[168px] mix-blend-multiply" />
+                <div key={h.tool} className="text-center">
+                  <Image
+                    src={h.src}
+                    alt=""
+                    aria-hidden
+                    sizes={SIZES.mapSlice}
+                    className="mx-auto h-auto w-full max-w-[168px] mix-blend-multiply"
+                  />
                   <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.1em] text-mute">{h.tool}</p>
                 </div>
               ))}
@@ -235,11 +260,14 @@ function Wedge() {
 function Vignette({
   src,
   cap,
+  sizes,
   h = "h-44",
   natural = false,
 }: {
-  src: string;
+  src: StaticImageData;
   cap: string;
+  /* the plate's widest rendered width in this slot — see SIZES */
+  sizes: string;
   h?: string;
   /* true for near-square/circular plates (medallions) — shown at their own
      aspect, centered and modestly sized, instead of stretched to card width
@@ -248,14 +276,16 @@ function Vignette({
 }) {
   return (
     <figure className={`mt-5 ${natural ? "flex flex-col items-center" : ""}`}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src={src}
         alt=""
         aria-hidden
-        width={640}
-        height={540}
-        className={natural ? "w-full max-w-[320px] mix-blend-multiply" : `w-full ${h} object-contain mix-blend-multiply`}
+        sizes={sizes}
+        className={
+          natural
+            ? "h-auto w-full max-w-[320px] mix-blend-multiply"
+            : `w-full ${h} object-contain mix-blend-multiply`
+        }
       />
       <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
         {cap}
@@ -271,7 +301,7 @@ function HowItWorks() {
       label: "Import",
       t: "Import your history",
       d: "One command finds your Claude & ChatGPT exports, your Claude Code sessions, and your git repos, and reads them.",
-      art: <Vignette src="/art/press.webp" cap="the press — your history, taken in" h="h-[265px]" />,
+      art: <Vignette src={press} cap="the press — your history, taken in" h="h-[265px]" sizes={SIZES.step} />,
       visual: <ImportViz />,
     },
     {
@@ -279,7 +309,14 @@ function HowItWorks() {
       label: "Learn · local",
       t: "It learns, on your machine",
       d: "A local daemon turns that history into an evidence-linked model of you — never our cloud.",
-      art: <Vignette src="/art/compositors.webp" cap="the compositors — studied, locally" h="h-[265px]" />,
+      art: (
+        <Vignette
+          src={compositors}
+          cap="the compositors — studied, locally"
+          h="h-[265px]"
+          sizes={SIZES.step}
+        />
+      ),
       visual: <LearnViz />,
     },
     {
@@ -287,7 +324,14 @@ function HowItWorks() {
       label: "Serve · MCP",
       t: "Every AI reads it",
       d: "Over MCP — the protocol your tools already speak. Claude Code pulls it in the moment a session starts; Claude, Cursor, and your agents read it whenever they need you.",
-      art: <Vignette src="/art/mercury.webp" cap="the messenger — served to every tool" h="h-[265px]" />,
+      art: (
+        <Vignette
+          src={mercury}
+          cap="the messenger — served to every tool"
+          h="h-[265px]"
+          sizes={SIZES.step}
+        />
+      ),
       visual: <ServeViz />,
     },
   ];
@@ -382,14 +426,12 @@ function ServeViz() {
 function CorrectionLedger() {
   return (
     <figure className="mt-5">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/art/author.webp"
+      <Image
+        src={author}
         alt=""
         aria-hidden
-        width={640}
-        height={435}
-        className="w-full mix-blend-multiply"
+        sizes={SIZES.half}
+        className="h-auto w-full mix-blend-multiply"
       />
       <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
         written in your own hand — outranks everything inferred
@@ -495,7 +537,12 @@ function AskProof() {
             Your agent asks Persnally instead of interrupting you. Below its confidence bar, it
             sends the agent back to you — never a made-up answer.
           </p>
-          <Vignette src="/art/justice.webp" cap="the evidence, weighed — below the bar, it defers to you" natural />
+          <Vignette
+            src={justice}
+            cap="the evidence, weighed — below the bar, it defers to you"
+            sizes={SIZES.medallion}
+            natural
+          />
           <div className="mt-auto">
             <Terminal>
               <p className="font-mono text-[12px] opacity-75">
@@ -581,7 +628,12 @@ function Engine() {
         <div className="plate flex flex-col p-6">
           <Eyebrow>Cross-vendor · MCP</Eyebrow>
           <h3 className="font-display mt-4 text-2xl text-ink">One context, every tool reads it.</h3>
-          <Vignette src="/art/fountain.webp" cap="the well — one source, every tool draws" h="h-[205px]" />
+          <Vignette
+            src={fountain}
+            cap="the well — one source, every tool draws"
+            h="h-[205px]"
+            sizes={SIZES.well}
+          />
           <div className="mt-5 flex flex-1 flex-col justify-evenly space-y-0 border-t border-ink/20">
             {[
               { icon: <Glyph icon={claudeIcon} className="size-4" />, name: "Claude", method: "persnally_context" },
@@ -610,8 +662,9 @@ function Engine() {
           <Eyebrow>Provenance</Eyebrow>
           <h3 className="font-display mt-4 text-2xl text-ink">Every claim cites its evidence.</h3>
           <Vignette
-            src="/art/specimen.webp"
+            src={specimen}
             cap="the specimen — every part numbered, keyed to its source"
+            sizes={SIZES.medallion}
             natural
           />
           <div className="mt-5 border border-ink/25 p-4">
@@ -642,7 +695,12 @@ function Engine() {
           <Eyebrow>Per-client scopes</Eyebrow>
           <h3 className="font-display mt-4 text-2xl text-ink">Decide exactly what each AI can see.</h3>
           <div className="mt-5 grid items-center gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-            <Vignette src="/art/cards.webp" cap="the card table — each player sees only its own hand" h="h-[242px]" />
+            <Vignette
+              src={cards}
+              cap="the card table — each player sees only its own hand"
+              h="h-[242px]"
+              sizes={SIZES.cardTable}
+            />
             <div className="grid gap-x-8 gap-y-0 sm:grid-cols-1">
             {[
               { name: "Claude", icon: <Glyph icon={claudeIcon} className="size-4" />, state: "allowed" },
@@ -752,7 +810,7 @@ function Trust() {
   const pillars = [
     {
       t: "Local-first",
-      art: "/art/lock.webp",
+      art: lock,
       d: "Your context lives in ~/.persnally — not our cloud, not any vendor's silo.",
       viz: (
         <Terminal>
@@ -767,7 +825,7 @@ function Trust() {
     },
     {
       t: "Truly deletable",
-      art: "/art/bonfire.webp",
+      art: bonfire,
       d: "Forget a topic and everything derived from it is erased, then rebuilt.",
       viz: (
         <Terminal>
@@ -784,7 +842,7 @@ function Trust() {
     },
     {
       t: "Provenance-complete",
-      art: "/art/microscope.webp",
+      art: microscope,
       d: "“Why does it think this?” is a real lookup, never a guess.",
       viz: (
         <Terminal>
@@ -800,7 +858,7 @@ function Trust() {
     },
     {
       t: "Source-available",
-      art: "/art/ecorche.webp",
+      art: ecorche,
       d: "Read the engine, audit the claims, run it yourself. The schema and MCP interface are an open spec.",
       viz: (
         <a href={GITHUB} {...EXT} className="group block">
@@ -830,8 +888,13 @@ function Trust() {
           <div key={p.t} className="plate flex flex-col overflow-hidden p-6">
             <h3 className="font-display text-2xl text-ink">{p.t}</h3>
             <p className="mt-2.5 text-[15px] leading-relaxed text-mute">{p.d}</p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.art} alt="" aria-hidden width={900} height={474} className="mt-5 w-full mix-blend-multiply" />
+            <Image
+              src={p.art}
+              alt=""
+              aria-hidden
+              sizes={SIZES.half}
+              className="mt-5 h-auto w-full mix-blend-multiply"
+            />
             <div className="mt-auto pt-5">{p.viz}</div>
           </div>
         ))}
@@ -868,13 +931,11 @@ function Positioning() {
     <Section className="py-24">
       <SectionHead n="08" eyebrow="The difference" title={<></>} center />
       <figure className="mx-auto -mt-2 w-fit text-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/art/armillary.webp"
+        <Image
+          src={armillary}
           alt="Engraving of an armillary sphere — a measured model of a world"
-          width={460}
-          height={500}
-          className="mx-auto w-[220px] mix-blend-multiply"
+          sizes={SIZES.armillary}
+          className="mx-auto h-auto w-[220px] mix-blend-multiply"
         />
         <figcaption className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
           Fig. 3 — the model of you, measured.
@@ -954,8 +1015,13 @@ function Pricing() {
               $0 <span className="text-lg text-faint">forever</span>
             </p>
             <figure className="mt-5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/art/loom.webp" alt="" aria-hidden width={900} height={360} className="w-full mix-blend-multiply" />
+              <Image
+                src={loom}
+                alt=""
+                aria-hidden
+                sizes={SIZES.pricing}
+                className="h-auto w-full mix-blend-multiply"
+              />
               <figcaption className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
                 the loom — the whole engine, at home
               </figcaption>
@@ -1051,13 +1117,11 @@ function GetStarted() {
       />
 
       <figure className="mx-auto mt-12 w-fit text-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/art/mirror.webp"
+        <Image
+          src={mirror}
           alt="Engraving of a woman studying her own reflection in a hand-mirror, an eagle at her side"
-          width={900}
-          height={1001}
-          className="mx-auto w-[420px] max-w-full mix-blend-multiply"
+          sizes={SIZES.mirror}
+          className="mx-auto h-auto w-[420px] max-w-full mix-blend-multiply"
         />
         <figcaption className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-mute">
           Fig. 4 — the mirror. It shows you what it learned.
@@ -1122,13 +1186,17 @@ async function Footer() {
         </div>
         <div className="flex flex-col items-start gap-4 sm:items-end">
           <div className="flex max-w-sm items-center gap-3">
-            {/* Same 30px as the nav — one mark, one size, wherever it appears. */}
+            {/* Same 30px as the nav — one mark, one size, wherever it appears.
+                Vector: nothing for the optimizer to resize, so it stays a raw
+                <img> and only defers its own fetch. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/brand/persnally-mark.svg"
               alt="The Context Knot: four loops drawn in one continuous line"
               width={30}
               height={30}
+              loading="lazy"
+              decoding="async"
               className="size-[30px] shrink-0"
             />
             <p className="text-[13px] leading-relaxed text-mute">

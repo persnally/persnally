@@ -6,7 +6,6 @@
 
 import { z } from "zod";
 import { PAYLOAD_SCHEMAS } from "./events.js";
-import { MACHINE_LINE } from "./prose.js";
 
 export type StyleSignal = z.infer<(typeof PAYLOAD_SCHEMAS)["signal.style"]>;
 
@@ -27,7 +26,6 @@ const median = (xs: number[]): number => {
   const s = [...xs].sort((a, b) => a - b), m = s.length >> 1;
   return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
 };
-const allStop = (g: string): boolean => g.split(" ").every((w) => STOP.has(w) || /^\d+$/.test(w));
 
 export interface VoiceProfile {
   signals: StyleSignal[];
@@ -39,7 +37,7 @@ export interface VoiceProfile {
 /** Compute a voice profile from prose messages (each may be multi-line). */
 export function analyzeVoice(messages: string[]): VoiceProfile {
   if (!messages.length) return { signals: [], words: [], pack: "", prompts: 0 };
-  const uni = new Map<string, number>(), tri = new Map<string, number>(), quad = new Map<string, number>();
+  const uni = new Map<string, number>();
   const sentLens: number[] = [];
   const wordSet = new Set<string>();
   let sent = 0, dir = 0, hedge = 0, emoji = 0, lowerI = 0, upperI = 0, please = 0, bulletLines = 0;
@@ -55,8 +53,6 @@ export function analyzeVoice(messages: string[]): VoiceProfile {
       wordSet.add(w);
       if (!STOP.has(w) && w.length >= 4 && !/^\d+$/.test(w)) uni.set(w, (uni.get(w) || 0) + 1);
     });
-    for (let i = 0; i < words.length - 2; i++) { const g = words.slice(i, i + 3).join(" "); tri.set(g, (tri.get(g) || 0) + 1); }
-    for (let i = 0; i < words.length - 3; i++) { const g = words.slice(i, i + 4).join(" "); quad.set(g, (quad.get(g) || 0) + 1); }
 
     for (const raw of msg.match(/[^.!?\n]+[.!?]*/g) || []) {
       const s = raw.trim(); if (!s) continue;
@@ -73,19 +69,6 @@ export function analyzeVoice(messages: string[]): VoiceProfile {
   const minP = Math.max(3, Math.round(messages.length * 0.01));
   const rate = (n: number) => n / sent;
 
-  // distinctive repeated phrases — rank by frequency (tiebreak longer); collapse
-  // overlapping windows of the same phrase by shared-token overlap, not just substring.
-  const phrases: { phrase: string; count: number }[] = [];
-  const keptTokens: Set<string>[] = [];
-  for (const [g, c] of [...quad.entries(), ...tri.entries()]
-    .filter(([g, c]) => c >= minP && !allStop(g) && !MACHINE_LINE.test(g))
-    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)) {
-    const gt = g.split(" ");
-    if (keptTokens.some((k) => gt.filter((w) => k.has(w)).length >= 2)) continue; // same phrase, different window
-    phrases.push({ phrase: g, count: c }); keptTokens.push(new Set(gt));
-    if (phrases.length >= 8) break;
-  }
-
   const signals: StyleSignal[] = [];
   const med = median(sentLens);
   const add = (dimension: StyleSignal["dimension"], pattern: string, polarity: StyleSignal["polarity"], confidence: number, evidence: string) =>
@@ -101,8 +84,13 @@ export function analyzeVoice(messages: string[]): VoiceProfile {
   if (please < messages.length * 0.05) add("voice", "skips pleasantries", "does", 0.6, `${please} please/thanks across ${messages.length} prompts`);
   if (bulletLines > messages.length * 0.25) add("format", "structures answers with bullet points", "prefers", 0.65, `${bulletLines} bulleted lines`);
 
-  // recurring phrasing → emphasis (these tend to be the user's repeated instructions/values)
-  for (const { phrase, count } of phrases) add("emphasis", phrase, "insists", Math.min(0.9, 0.5 + count / (minP * 6)), `${count}×`);
+  // No repeated-phrase mining. It was emitting raw 3- and 4-grams as things the
+  // user "insists" on, and on a real 3,199-event store all 23 it produced were
+  // subject matter, not preference: "monitor event ci review", "prs 123 and
+  // 124", "the dev registry deployment". Repeated wording says what someone
+  // works on — which signal.topic already captures, 1,953 times over — not how
+  // they want to be treated. The `emphasis` dimension is still populated, by
+  // the extractor that can tell an instruction from a noun phrase.
 
   const words = [...uni.entries()].filter(([, c]) => c >= minP).sort((a, b) => b[1] - a[1]).slice(0, 18).map(([word, count]) => ({ word, count }));
   return { signals, words, pack: assemblePack(signals), prompts: messages.length };
@@ -116,4 +104,21 @@ export function assemblePack(signals: StyleSignal[]): string {
   const parts = [...tone];
   if (phrases.length) parts.push(`recurring phrasing: ${phrases.slice(0, 5).join(", ")}`);
   return `Write like this user: ${parts.join("; ")}.`;
+}
+
+/**
+ * A convention as the corpus should state it: the pattern plus how much
+ * behaviour backs it.
+ *
+ * `toolConventions` computes both the count and a confidence, and both used to
+ * be dropped at serve time — so a claim a model once extracted from prose
+ * ("prefers pnpm and vitest in JS", conf 0.82) was rendered *with* its
+ * confidence while 625 observed npm invocations in the very project being asked
+ * about were rendered as a bare bullet. The model reasonably believed the
+ * numbered one. What the user does has to be at least as legible as what a
+ * model once said about them.
+ */
+export function statedConvention(s: { pattern: string; evidence?: string }): string {
+  const count = /(\d[\d,]*)\s+command/.exec(s.evidence ?? "")?.[1];
+  return count ? `${s.pattern} — observed in ${count} commands here` : s.pattern;
 }
