@@ -136,6 +136,10 @@ persnallyd/LICENSE
 persnallyd/CHANGELOG.md
 .gstack/
 
+# Playwright e2e artifacts
+test-results/
+playwright-report/
+
 # Internal strategy docs — kept local, never published
 /CLAUDE.md
 /PIVOT.md

@@ -105,11 +105,28 @@ export const ollamaExtract: LlmExtract = async ({ model, instruction, schema, co
   return schema.parse(JSON.parse(body.message?.content ?? "{}"));
 };
 
-async function localModel(): Promise<string | null> {
+/** Preference order, not Ollama's listing order — the two rarely agree. */
+export function pickLocalModel(tags: string[] | null): string | null {
   if (process.env.PERSNALLY_LOCAL_MODEL) return process.env.PERSNALLY_LOCAL_MODEL;
-  const tags = await ollamaTags();
   if (!tags) return null;
   return LOCAL_MODEL_PREFERENCE.find((p) => tags.some((t) => t === p || t === `${p}:latest`)) ?? tags[0] ?? null;
+}
+
+/**
+ * The model each job would actually run on. The dashboard names these, and a
+ * surface that names a model it only guessed at (Ollama's first tag, or a
+ * hardcoded default that ignores PERSNALLY_MODEL) is stating a fact it cannot
+ * see — so resolution lives here and is reported, never re-derived.
+ */
+export function resolvedModels(hasKey: boolean, tags: string[] | null): { extract: string | null; profile: string | null } {
+  if (hasKey) return { extract: DEFAULT_EXTRACT_MODEL, profile: DEFAULT_PROFILE_MODEL };
+  const local = pickLocalModel(tags);
+  return { extract: local, profile: local };
+}
+
+async function localModel(): Promise<string | null> {
+  if (process.env.PERSNALLY_LOCAL_MODEL) return process.env.PERSNALLY_LOCAL_MODEL;
+  return pickLocalModel(await ollamaTags());
 }
 
 export interface ChosenExtractor {

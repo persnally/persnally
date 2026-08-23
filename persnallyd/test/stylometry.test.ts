@@ -31,24 +31,40 @@ test("proseLines drops machine/agent noise (rate-limit notices, tool output)", (
   assert.deepEqual(lines, ["lets ship the launch today"]);
 });
 
-test("analyzeVoice never surfaces machine noise as a recurring phrase", () => {
-  // 20 prompts each carrying the rate-limit/exit-code lines: high frequency, but not the user's voice.
-  const msgs = Array.from({ length: 20 }, () =>
-    proseLines("review the diff carefully before merging\ncompleted exit code 0\nyour session limit resets").join("\n"),
+test("analyzeVoice never claims subject matter is a preference", () => {
+  // Repeated wording says what someone works on, not how they want to be
+  // treated. These are verbatim from a real store, where the old phrase miner
+  // emitted every one of them as something the user "insists" on.
+  const msgs = Array.from({ length: 30 }, () =>
+    "monitor event ci review comments for prs 123 and 124. check the dev registry deployment. and try to be quick.",
   );
   const v = analyzeVoice(msgs);
-  const phrases = v.signals.filter((s) => s.dimension === "emphasis").map((s) => s.pattern).join(" | ");
-  assert.doesNotMatch(phrases, /exit code|session limit|resets/);
+  const emphasis = v.signals.filter((s) => s.dimension === "emphasis");
+  assert.deepEqual(emphasis, [], "subject-matter n-grams came back as preferences");
+  // The tone signals it can actually justify still land.
+  assert.ok(v.signals.some((s) => s.dimension === "voice" || s.dimension === "format"));
 });
 
-test("analyzeVoice surfaces a repeated phrase + terse tone and builds a valid pack", () => {
+
+test("analyzeVoice surfaces terse tone and builds a valid pack", () => {
   const msgs = Array.from({ length: 20 }, () => "be 100% sure about the analysis. fix it now.");
   const v = analyzeVoice(msgs);
-  assert.ok(v.signals.some((s) => s.dimension === "emphasis"), "extracts a recurring phrase as emphasis");
   assert.ok(v.signals.some((s) => /terse/.test(s.pattern)), "detects terse short sentences");
   assert.match(v.pack, /^Write like this user:/);
   for (const s of v.signals) PAYLOAD_SCHEMAS["signal.style"].parse(s); // every signal is schema-valid
 });
+
+test("an extractor-observed emphasis still reaches the voice pack", () => {
+  // Removing the n-gram miner must not close the dimension: the extractor's
+  // judged instructions are the ones worth serving.
+  const pack = assemblePack([
+    { dimension: "voice", pattern: "terse — short, declarative sentences", polarity: "does", confidence: 0.85, evidence: "median 8", basis: "stylometry" },
+    { dimension: "emphasis", pattern: "wants the actual culprit identified with evidence", polarity: "insists", confidence: 0.9, evidence: "recurring", basis: "observed" },
+  ]);
+  assert.match(pack, /recurring phrasing/);
+  assert.match(pack, /actual culprit/);
+});
+
 
 test("assemblePack lists tone first, then recurring phrasing", () => {
   const pack = assemblePack([
@@ -85,7 +101,9 @@ test("store.voice dedups by pattern (newest wins) and orders richest first", () 
 test("forgetStyle deletes the pattern and tombstones it so it never resurfaces", () => {
   const store = new EventStore(join(dir, "forget.db"));
   const sig = newEvent("signal.style", "import:claude-code",
-    { dimension: "emphasis", pattern: "be 100% sure", polarity: "insists", confidence: 0.9, evidence: "10x", basis: "stylometry" },
+    // basis "observed": an emphasis signal from stylometry is what serving now
+    // filters out, and this test is about the tombstone, not that filter.
+    { dimension: "emphasis", pattern: "be 100% sure", polarity: "insists", confidence: 0.9, evidence: "10x", basis: "observed" },
     { kind: "import", batch: "b", file: "f" });
   store.append([sig]);
   assert.equal(store.voice().items.length, 1);

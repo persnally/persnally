@@ -19,7 +19,45 @@ import { getClient, logEvent, setClient } from "./telemetry.js";
 
 // Handshake version tracks package.json — same rule as the daemon's VERSION.
 const pkg = JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf-8")) as { version: string };
-const server = new McpServer({ name: "persnally", version: pkg.version });
+/**
+ * Context at session start, for every client, without a per-client integration.
+ *
+ * Claude Code has a SessionStart hook; Cursor, Desktop and the rest do not, and
+ * building one mechanism per client means a new integration for every client
+ * that ships. MCP already has the answer: `instructions` is returned in the
+ * initialize response, so any client that reads it gets the user's context
+ * before the first message. Verified consumed by Cursor (its MCPService threads
+ * `serverUseInstructions`); a client that ignores the field is unharmed.
+ *
+ * Fetched here rather than lazily because the field is part of the initialize
+ * result, so it must exist before the transport connects. Same serving path as
+ * every other channel, so it cannot drift or skip its receipt. A slow or absent
+ * daemon must not stop the server from starting — the tools still work, and
+ * the fetch carries its own deadline so a hung daemon cannot block startup.
+ */
+async function sessionInstructions(): Promise<string | undefined> {
+  try {
+    const q = new URLSearchParams({
+      detail: "brief",
+      client: getClient(),
+      purpose: "session start (server instructions)",
+    });
+    // Deadline, not just error handling: this blocks the server's own startup,
+    // so a daemon that accepts the connection and never answers would stop MCP
+    // initialising at all rather than merely delaying it.
+    const pack = await daemonGet<{ text: string; items: number }>(`/context?${q.toString()}`, 2000);
+    if (!pack?.text) return undefined;
+    return `${pack.text}\n\n---\nThe context above is this user's own, served by Persnally from data on their machine. Use it to fit your answers to them. Call persnally_context to refresh it, and persnally_ask before interrupting them with a question about their preferences.`;
+  } catch {
+    return undefined; // daemon down: start anyway, the tools report it themselves
+  }
+}
+
+// Top-level await: the initialize result carries this, so it has to be resolved
+// before the server exists.
+const server = new McpServer({ name: "persnally", version: pkg.version }, {
+  instructions: await sessionInstructions(),
+});
 
 interface TopicRow {
   topic: string;
@@ -29,12 +67,6 @@ interface TopicRow {
   dominant_intent: string;
   sentiment_balance: number;
   entities: string[];
-}
-
-interface Profile {
-  headline: string;
-  sections: { title: string; body: string }[];
-  generated_at: string;
 }
 
 function text(s: string) {
@@ -57,14 +89,11 @@ function clientSlug(): string {
 /** The north-star metric (context reads/user/week) is measured from these events.
     Recording must never break the read itself — failures only log to stderr. */
 async function recordRead(scope: string, purpose: string | undefined, items: number): Promise<void> {
-  const client = clientSlug();
+  // POST /reads rather than /events: the daemon derives source and provenance
+  // from the verified token, so a caller cannot declare its own identity. This
+  // process constructs no context.read events at all.
   try {
-    await daemonPost("/events", [{
-      type: "context.read",
-      source: `mcp:${client}`,
-      payload: { scope, client_purpose: purpose ?? "", items },
-      provenance: { kind: "mcp", client },
-    }]);
+    await daemonPost("/reads", { scope, purpose: purpose ?? "", items });
   } catch (e) {
     console.error("persnally: context.read not recorded:", e instanceof Error ? e.message : e);
   }
@@ -146,42 +175,19 @@ Call this at the START of a conversation (or when personalization would improve 
   async ({ detail, purpose }) =>
     guarded(async () => {
       logEvent("tool_call", { tool: "persnally_context", detail });
-      const client = encodeURIComponent(getClient());
-      const [profile, topics, voice, skills] = await Promise.all([
-        daemonGet<Profile>(`/profile?client=${client}`),
-        daemonGet<TopicRow[]>(`/topics?limit=${detail === "full" ? 25 : 10}&client=${client}`),
-        daemonGet<{ pack: string; items: unknown[] }>("/voice"),
-        daemonGet<{ skill: string; domain: string; proficiency: number; sources: number }[]>("/skills?limit=15"),
-      ]);
-      if (!profile && !topics?.length && !voice?.pack) {
+      // One serving path, shared with the CLI hook: the daemon renders and
+      // records together, so this tool cannot disclose context without a
+      // receipt and cannot drift from what other channels serve.
+      const q = new URLSearchParams({ detail, client: getClient() });
+      if (purpose) q.set("purpose", purpose);
+      // Deadline, not just error handling: this blocks the server's own startup,
+    // so a daemon that accepts the connection and never answers would stop MCP
+    // initialising at all rather than merely delaying it.
+    const pack = await daemonGet<{ text: string; items: number }>(`/context?${q.toString()}`, 2000);
+      if (!pack?.text) {
         return text("No context yet — the user hasn't imported data or tracked any signals.");
       }
-      let out = "";
-      let items = topics?.length ?? 0;
-      if (profile) {
-        out += `# About this user\n${profile.headline}\n\n`;
-        const sections = detail === "full" ? profile.sections : profile.sections.slice(0, 3);
-        items += sections.length;
-        out += sections.map((s) => `## ${s.title}\n${s.body}`).join("\n\n");
-      }
-      // The prescriptive layer: how to write/answer so it fits this user, not a generic one.
-      if (voice?.pack) {
-        out += `${out ? "\n\n" : ""}# How to write for this user\n${voice.pack}`;
-        items += voice.items?.length ?? 0;
-      }
-      // Demonstrated skills, from repos they actually commit to — evidence of
-      // what they can do, distinct from what they've been talking about.
-      if (skills?.length) {
-        out += `${out ? "\n\n" : ""}# Demonstrated skills (from their own repos)\n`;
-        out += skills.map((k) => `- ${k.skill}${k.domain && k.domain !== "other" ? ` (${k.domain})` : ""}`).join("\n");
-        items += skills.length;
-      }
-      if (topics?.length) {
-        out += `\n\n# Current interests (decay-weighted)\n`;
-        out += topics.map((t) => `- ${t.topic} (${t.category}, ${t.dominant_intent}, weight ${t.weight.toFixed(2)})`).join("\n");
-      }
-      await recordRead(detail, purpose, items);
-      return text(out);
+      return text(pack.text);
     }),
 );
 
@@ -235,6 +241,11 @@ Persnally answers from the user's accumulated history with a confidence score. I
     guarded(async () => {
       logEvent("tool_call", { tool: "persnally_ask" });
       const r = await daemonPost<AskResult>("/ask", { question, client: getClient(), asker: getClient() });
+      // The ask path ships profile, assertions, corrections and voice into a
+      // model — the richest disclosure of all, and it recorded nothing, so it
+      // was absent from both the receipts feed and the north-star metric. A
+      // deferral still disclosed the corpus it reasoned over.
+      await recordRead("ask", `asked: ${question.slice(0, 120)}`, r.evidence_event_ids.length);
       if (r.deferred) return text(r.answer);
       return text(
         `${r.answer}\n\n(confidence ${r.confidence.toFixed(2)} · ${r.evidence_event_ids.length} evidence event(s) · answered by the user's Persnally model — the user can audit this at http://127.0.0.1:4983)`,
@@ -256,6 +267,7 @@ server.tool(
         daemonGet<TopicRow[]>("/topics?limit=20"),
       ]);
       if (!topics?.length) return text("Nothing tracked yet. Chat naturally, or import your AI history with `persnallyd import`.");
+      await recordRead("interests", "showed the user their own interest profile", topics.length);
       let out = `## Your interest profile\n${stats?.total ?? 0} events, ${topics.length} top topics. Dashboard: http://127.0.0.1:4983\n\n`;
       for (const t of topics) {
         const sentiment = t.sentiment_balance > 0.2 ? "+" : t.sentiment_balance < -0.2 ? "−" : "·";
