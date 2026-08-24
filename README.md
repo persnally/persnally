@@ -44,6 +44,7 @@ persnally start                      # the local daemon
 persnally import claude ~/Downloads/<your-claude-export>
 persnally import claude-code         # your local Claude Code sessions
 persnally import cursor              # your local Cursor chat history
+persnally import codex               # your local Codex session transcripts
 persnally import git ~/Projects      # offline, no API needed
 persnally profile                    # synthesize who you are
 persnally dashboard                  # see it, with evidence for every claim
@@ -52,7 +53,7 @@ persnally dashboard                  # see it, with evidence for every claim
 ## How it works
 
 ```
-  Your AI clients (Claude, Cursor, agents…)   Importers (claude · claude-code · chatgpt · cursor · git)
+  Your AI clients (Claude, Cursor, agents…)   Importers (claude · claude-code · chatgpt · cursor · codex · git)
         │  MCP: context out, signals in                  │  your history → events
         ▼                                                ▼
   ┌──────────────────────── persnallyd (local daemon) ────────────────────────┐
@@ -119,7 +120,7 @@ persnally doctor [--json]               # check the install end to end; exit 1 i
 persnally start | stop | status         # daemon lifecycle
 persnally autostart [--remove]          # run at login (macOS)
 persnally connect [client|--all]        # claude-code · claude-desktop · cursor · codex · gemini-cli · windsurf · zed · vscode
-persnally import claude|claude-code|chatgpt|cursor|git <path>
+persnally import claude|claude-code|chatgpt|cursor|codex|git <path>
 persnally scope <client> <categories>   # limit what a client can read
 persnally profile                       # synthesize the profile
 persnally consolidate                   # reflect now: refresh decay, add behavior patterns
@@ -134,7 +135,7 @@ persnally config set-key <sk-ant-…>     # key for the background daemon
 
 ## Status
 
-Early and moving fast — see [ROADMAP.md](https://github.com/persnally/persnally/blob/main/ROADMAP.md). Today: import from Claude, ChatGPT, Claude Code, Cursor, and git; a decay-weighted interest graph; an evidence-linked profile; a voice & convention layer so connected tools answer the way you write; a local dashboard with full provenance and one-click deletion; per-client permission scoping; nightly consolidation; and the MCP layer that serves it all. Next: cross-tool context everywhere, then a behavior model that can answer *what would I do here?*
+Early and moving fast — see [ROADMAP.md](https://github.com/persnally/persnally/blob/main/ROADMAP.md). Today: import from Claude, ChatGPT, Claude Code, Cursor, Codex, and git; a decay-weighted interest graph; an evidence-linked profile; a voice & convention layer so connected tools answer the way you write; a local dashboard with full provenance and one-click deletion; per-client permission scoping; nightly consolidation; and the MCP layer that serves it all. Next: cross-tool context everywhere, then a behavior model that can answer *what would I do here?*
 
 ## License
 
