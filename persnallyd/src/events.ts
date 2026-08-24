@@ -119,7 +119,13 @@ export const provenanceSchema = z.discriminatedUnion("kind", [
 // to be declared here. `hook:` is a context injection performed by the CLI on
 // behalf of a client's session, which is neither an MCP call nor the owner's own
 // `cli` read.
-const sourcePattern = /^(mcp:[a-z0-9._-]+|hook:[a-z0-9._-]+|import:(claude-code|claude|chatgpt|git)|cli|dashboard|system)$/;
+//
+// `import:` is the one open slot: it names an *importer module*
+// (src/importers/<name>.ts), not a fixed list. The list used to be enumerated
+// here (claude-code|claude|chatgpt|git), so every new source needed a schema
+// edit before its own importer could write a single event — the wrong file to
+// touch when adding Cursor or Codex support has nothing to do with validation.
+const sourcePattern = /^(mcp:[a-z0-9._-]+|hook:[a-z0-9._-]+|import:[a-z][a-z0-9-]*|cli|dashboard|system)$/;
 
 export const eventSchema = z.object({
   id: z.string().uuid(),
