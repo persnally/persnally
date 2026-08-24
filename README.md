@@ -134,7 +134,7 @@ persnally config set-key <sk-ant-…>     # key for the background daemon
 
 ## Status
 
-Early and moving fast — see [ROADMAP.md](https://github.com/persnally/persnally/blob/main/ROADMAP.md). Today: import from Claude, ChatGPT, Claude Code, and git; a decay-weighted interest graph; an evidence-linked profile; a voice & convention layer so connected tools answer the way you write; a local dashboard with full provenance and one-click deletion; per-client permission scoping; nightly consolidation; and the MCP layer that serves it all. Next: cross-tool context everywhere, then a behavior model that can answer *what would I do here?*
+Early and moving fast — see [ROADMAP.md](https://github.com/persnally/persnally/blob/main/ROADMAP.md). Today: import from Claude, ChatGPT, Claude Code, Cursor, and git; a decay-weighted interest graph; an evidence-linked profile; a voice & convention layer so connected tools answer the way you write; a local dashboard with full provenance and one-click deletion; per-client permission scoping; nightly consolidation; and the MCP layer that serves it all. Next: cross-tool context everywhere, then a behavior model that can answer *what would I do here?*
 
 ## License
 

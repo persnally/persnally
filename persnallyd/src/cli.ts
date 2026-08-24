@@ -653,7 +653,7 @@ async function main(): Promise<void> {
       // Imports made by an older pipeline can be re-run for better signals —
       // the whole point of stamping a version is that the user gets told.
       const stale = new Map<string, number>();
-      for (const importer of ["claude", "claude-code", "chatgpt"]) {
+      for (const importer of ["claude", "claude-code", "chatgpt", "cursor"]) {
         const old = store2.importBatchVersions(importer)
           .filter((b) => (b.version ?? 0) < EXTRACTOR_VERSION);
         if (old.length) stale.set(importer, old.reduce((n, b) => n + b.events, 0));

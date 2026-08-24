@@ -18,6 +18,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { anthropicExtract, DEFAULT_EXTRACT_MODEL, type LlmExtract } from "../llm.js";
+import { safeIso } from "../events.js";
 import { extractEvents, type ImportResult, type ParsedConversation, type ParsedExport } from "./extract.js";
 import { projectKey } from "./claude-code.js";
 
@@ -142,17 +143,24 @@ export function parseCursorHistory(
       try { bubbleById.set(row.key.slice("bubbleId:".length), JSON.parse(row.value)); } catch { /* skip */ }
     }
 
+    // Nothing here has a published schema, so a value that JSON.parse accepted as
+    // syntax can still be the wrong *shape* — Cursor's own bug, a version this
+    // was never tested against, or a row half-written mid-crash. One composer
+    // that does not match what this code expects must not cost every other
+    // composer its import: skip that composer (or that one malformed reference)
+    // and keep going, the same principle claude-code.ts applies per JSONL line.
     const conversations: ParsedConversation[] = [];
     for (const h of kept) {
       const data = composerData.get(h.composerId);
-      const order = data?.fullConversationHeadersOnly ?? [];
+      const order = Array.isArray(data?.fullConversationHeadersOnly) ? data.fullConversationHeadersOnly : [];
       const userMessages: string[] = [];
       const assistantMessages: string[] = [];
       const toolCommands: string[] = [];
       for (const ref of order) {
-        const b = bubbleById.get(`${h.composerId}:${ref.bubbleId}`);
+        if (!ref || typeof ref !== "object" || typeof (ref as { bubbleId?: unknown }).bubbleId !== "string") continue;
+        const b = bubbleById.get(`${h.composerId}:${(ref as { bubbleId: string }).bubbleId}`);
         if (!b) continue;
-        const text = (b.text ?? "").trim();
+        const text = typeof b.text === "string" ? b.text.trim() : "";
         if (b.type === 1 && text) userMessages.push(text);
         else if (b.type === 2 && text) assistantMessages.push(text);
         const cmd = terminalCommand(b);
@@ -161,12 +169,13 @@ export function parseCursorHistory(
       if (userMessages.length < MIN_USER_MESSAGES) continue;
 
       const project = resolveProjectPath(home, h.workspaceId);
+      const name = typeof data?.name === "string" ? data.name.trim() : "";
       conversations.push({
         uuid: h.composerId,
-        name: data?.name?.trim() || (project ? `Cursor session in ${project.split("/").pop()}` : "Cursor session"),
+        name: name || (project ? `Cursor session in ${project.split("/").pop()}` : "Cursor session"),
         project: project ? projectKey(project) : undefined,
         summary: "",
-        created_at: new Date(h.createdAt).toISOString(),
+        created_at: safeIso(h.createdAt),
         userMessages,
         assistantMessages,
         toolCommands,

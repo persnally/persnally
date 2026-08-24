@@ -159,3 +159,85 @@ test("defaultCursorDb resolves per-platform without touching a real filesystem p
 test("the cap is a real constant, not a magic number duplicated at call sites", () => {
   assert.equal(DEFAULT_MAX_COMPOSERS, 200);
 });
+
+/**
+ * Nothing here has a published schema, so JSON.parse accepting a value as
+ * *syntax* says nothing about whether it's the *shape* this code expects. One
+ * malformed composer used to throw out of the whole loop and abort every other
+ * composer's import along with it — found by review, reproduced against a real
+ * fixture before being fixed.
+ */
+test("a structurally malformed composer does not abort the ones around it", () => {
+  const home = join(root, "malformed-shapes");
+  mkdirSync(join(cursorUserDir(home), "globalStorage"), { recursive: true });
+  const dbPath = join(cursorUserDir(home), "globalStorage", "state.vscdb");
+  const db = new Database(dbPath);
+  db.exec(`
+    CREATE TABLE cursorDiskKV (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB);
+    CREATE TABLE composerHeaders (composerId TEXT PRIMARY KEY, workspaceId TEXT, createdAt INTEGER, lastUpdatedAt INTEGER);
+  `);
+  const put = db.prepare("INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)");
+  const head = db.prepare("INSERT INTO composerHeaders (composerId, workspaceId, createdAt, lastUpdatedAt) VALUES (?, ?, ?, ?)");
+
+  // A real, well-formed composer — this is what must survive the others being broken.
+  head.run("good", "w1", 1_700_000_000_000, 1_700_000_000_000);
+  put.run("composerData:good", JSON.stringify({ name: "a real chat", fullConversationHeadersOnly: [{ bubbleId: "b1", type: 1 }, { bubbleId: "b2", type: 1 }] }));
+  put.run("bubbleId:good:b1", JSON.stringify({ type: 1, text: "first message" }));
+  put.run("bubbleId:good:b2", JSON.stringify({ type: 1, text: "second message" }));
+
+  // fullConversationHeadersOnly is an object, not an array — `for...of` on it throws.
+  head.run("bad-headers-shape", "w1", 1_700_000_001_000, 1_700_000_001_000);
+  put.run("composerData:bad-headers-shape", JSON.stringify({ name: "x", fullConversationHeadersOnly: {} }));
+
+  // name is a number, not a string — `.trim()` on it throws.
+  head.run("bad-name-type", "w1", 1_700_000_002_000, 1_700_000_002_000);
+  put.run("composerData:bad-name-type", JSON.stringify({ name: 12345, fullConversationHeadersOnly: [{ bubbleId: "c1", type: 1 }, { bubbleId: "c2", type: 1 }] }));
+  put.run("bubbleId:bad-name-type:c1", JSON.stringify({ type: 1, text: "one" }));
+  put.run("bubbleId:bad-name-type:c2", JSON.stringify({ type: 1, text: "two" }));
+
+  // createdAt is not a valid timestamp — new Date(...).toISOString() throws RangeError.
+  head.run("bad-created-at", "w1", NaN, NaN);
+  put.run("composerData:bad-created-at", JSON.stringify({ name: "y", fullConversationHeadersOnly: [{ bubbleId: "d1", type: 1 }, { bubbleId: "d2", type: 1 }] }));
+  put.run("bubbleId:bad-created-at:d1", JSON.stringify({ type: 1, text: "three" }));
+  put.run("bubbleId:bad-created-at:d2", JSON.stringify({ type: 1, text: "four" }));
+
+  // A bubble reference whose bubbleId is missing entirely.
+  head.run("bad-ref-shape", "w1", 1_700_000_004_000, 1_700_000_004_000);
+  put.run("composerData:bad-ref-shape", JSON.stringify({ name: "z", fullConversationHeadersOnly: [{ notABubbleId: true }, { bubbleId: "e1", type: 1 }, { bubbleId: "e2", type: 1 }] }));
+  put.run("bubbleId:bad-ref-shape:e1", JSON.stringify({ type: 1, text: "five" }));
+  put.run("bubbleId:bad-ref-shape:e2", JSON.stringify({ type: 1, text: "six" }));
+
+  // A bubble whose text is not a string. Two good messages alongside it so the
+  // composer clears MIN_USER_MESSAGES on its own — the point under test is that
+  // the malformed one doesn't crash, not that it counts.
+  head.run("bad-text-type", "w1", 1_700_000_005_000, 1_700_000_005_000);
+  put.run("composerData:bad-text-type", JSON.stringify({ name: "w", fullConversationHeadersOnly: [{ bubbleId: "f1", type: 1 }, { bubbleId: "f2", type: 1 }, { bubbleId: "f3", type: 1 }] }));
+  put.run("bubbleId:bad-text-type:f1", JSON.stringify({ type: 1, text: 999 }));
+  put.run("bubbleId:bad-text-type:f2", JSON.stringify({ type: 1, text: "seven" }));
+  put.run("bubbleId:bad-text-type:f3", JSON.stringify({ type: 1, text: "eight" }));
+
+  db.close();
+
+  const { parsed, composersFound } = parseCursorHistory(dbPath, home);
+  assert.equal(composersFound, 6, "all six rows exist in the database");
+  const byId = new Map(parsed.conversations.map((c) => [c.uuid, c]));
+
+  assert.ok(byId.has("good"), "a well-formed composer must survive its neighbors being malformed");
+  assert.deepEqual(byId.get("good")!.userMessages, ["first message", "second message"]);
+
+  // Empty headers -> zero messages -> below MIN_USER_MESSAGES -> correctly
+  // dropped as noise. The point is that it is *dropped*, not *thrown*.
+  assert.ok(!byId.has("bad-headers-shape"));
+
+  assert.ok(byId.has("bad-name-type"), "a non-string name falls back to the generated label instead of throwing");
+  assert.match(byId.get("bad-name-type")!.name, /Cursor session|^$/);
+
+  assert.ok(byId.has("bad-created-at"), "an unparseable createdAt falls back to a valid timestamp instead of throwing");
+  assert.doesNotThrow(() => new Date(byId.get("bad-created-at")!.created_at));
+
+  assert.ok(byId.has("bad-ref-shape"), "one malformed reference in the list is skipped, the rest of that composer still parses");
+  assert.deepEqual(byId.get("bad-ref-shape")!.userMessages, ["five", "six"]);
+
+  assert.ok(byId.has("bad-text-type"), "a non-string bubble text is treated as empty, not thrown on");
+  assert.deepEqual(byId.get("bad-text-type")!.userMessages, ["seven", "eight"]);
+});
