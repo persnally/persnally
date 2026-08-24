@@ -24,6 +24,7 @@ import {
 } from "./setup.js";
 import { autoImportNewSessions, DEFAULT_PORT, startDaemon, VERSION } from "./daemon.js";
 import { extractChatGPTEvents, parseChatGPTExport } from "./importers/chatgpt.js";
+import { defaultCursorDb, extractCursorEvents, parseCursorHistory } from "./importers/cursor.js";
 import { extractClaudeEvents, parseClaudeExport } from "./importers/claude.js";
 import {
   DEFAULT_TRANSCRIPTS_DIR, extractClaudeCodeEvents, parseClaudeCodeTranscripts,
@@ -60,6 +61,7 @@ Usage:
   persnally import claude <dir>    Import a Claude data export (needs ANTHROPIC_API_KEY)
   persnally import claude-code [dir]  Import Claude Code session transcripts (default ~/.claude/projects)
   persnally import chatgpt <path>  Import a ChatGPT export dir or conversations.json (needs ANTHROPIC_API_KEY)
+  persnally import cursor [db]     Import Cursor chat history (default: Cursor's own state.vscdb, needs ANTHROPIC_API_KEY)
   persnally import git <path> [--author <email>]   Import repo activity (offline, no LLM); path = repo or folder of repos
   persnally import <source> <path> --reextract   Re-extract already-imported conversations with the current extractor
   persnally profile                Synthesize your profile from the store
@@ -362,7 +364,7 @@ async function main(): Promise<void> {
     }
     case "import": {
       const [kind, path] = args;
-      const usage = "usage: persnally import claude|claude-code|chatgpt|git <path> [--reextract]";
+      const usage = "usage: persnally import claude|claude-code|chatgpt|cursor|git <path> [--reextract]";
       if (!kind) return die(usage);
       // Re-run extraction over conversations already on file. The store keeps
       // no raw text (structured signals only), so this reads the source again —
@@ -411,8 +413,15 @@ async function main(): Promise<void> {
       } else if (kind === "chatgpt") {
         if (!path) return die(usage);
         parsed = parseChatGPTExport(path);
+      } else if (kind === "cursor") {
+        const db = path ?? defaultCursorDb();
+        file = db;
+        const r = parseCursorHistory(db);
+        if (!r.parsed.conversations.length) return die(`No usable Cursor chats found at ${db}`);
+        parsed = r.parsed;
+        if (r.composersDropped) parseNote = ` (most recent ${r.parsed.conversations.length} of ${r.composersFound})`;
       } else {
-        return die(`unknown import source "${kind}" — use claude, claude-code, chatgpt, or git`);
+        return die(`unknown import source "${kind}" — use claude, claude-code, chatgpt, cursor, or git`);
       }
 
       const store = new EventStore();
@@ -438,6 +447,7 @@ async function main(): Promise<void> {
       const { events, batch } = await (
         kind === "claude-code" ? extractClaudeCodeEvents(toExtract, engine.extract, engine.model, file)
         : kind === "claude" ? extractClaudeEvents(toExtract, engine.extract, engine.model)
+        : kind === "cursor" ? extractCursorEvents(toExtract, engine.extract, engine.model, file)
         : extractChatGPTEvents(toExtract, engine.extract, engine.model)
       );
       // Replace, don't accumulate — and only after extraction succeeded, so a
@@ -643,7 +653,7 @@ async function main(): Promise<void> {
       // Imports made by an older pipeline can be re-run for better signals —
       // the whole point of stamping a version is that the user gets told.
       const stale = new Map<string, number>();
-      for (const importer of ["claude", "claude-code", "chatgpt"]) {
+      for (const importer of ["claude", "claude-code", "chatgpt", "cursor"]) {
         const old = store2.importBatchVersions(importer)
           .filter((b) => (b.version ?? 0) < EXTRACTOR_VERSION);
         if (old.length) stale.set(importer, old.reduce((n, b) => n + b.events, 0));

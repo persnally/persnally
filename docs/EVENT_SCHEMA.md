@@ -64,6 +64,7 @@ re-derives all views from the log.
 | `import:claude` | Claude data export importer |
 | `import:claude-code` | Claude Code local transcripts importer (`~/.claude/projects`) |
 | `import:chatgpt` | ChatGPT data export importer |
+| `import:cursor` | Cursor local chat history importer (`state.vscdb`, reverse-engineered — no published schema) |
 | `import:git` | Git history importer |
 | `cli` | User action via `persnally` CLI |
 | `dashboard` | User action via local dashboard |
