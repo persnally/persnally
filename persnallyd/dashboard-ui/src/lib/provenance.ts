@@ -10,6 +10,8 @@ const IMPORT_TOOL: Record<string, string> = {
   "import:claude": "Claude export",
   "import:chatgpt": "ChatGPT export",
   "import:claude-code": "Claude Code",
+  "import:cursor": "Cursor",
+  "import:codex": "Codex",
 };
 
 const CLIENT_NAMES: Record<string, string> = {

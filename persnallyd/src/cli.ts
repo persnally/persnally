@@ -24,6 +24,7 @@ import {
 } from "./setup.js";
 import { autoImportNewSessions, DEFAULT_PORT, startDaemon, VERSION } from "./daemon.js";
 import { extractChatGPTEvents, parseChatGPTExport } from "./importers/chatgpt.js";
+import { DEFAULT_CODEX_SESSIONS_DIR, extractCodexEvents, parseCodexTranscripts } from "./importers/codex.js";
 import { defaultCursorDb, extractCursorEvents, parseCursorHistory } from "./importers/cursor.js";
 import { extractClaudeEvents, parseClaudeExport } from "./importers/claude.js";
 import {
@@ -62,6 +63,7 @@ Usage:
   persnally import claude-code [dir]  Import Claude Code session transcripts (default ~/.claude/projects)
   persnally import chatgpt <path>  Import a ChatGPT export dir or conversations.json (needs ANTHROPIC_API_KEY)
   persnally import cursor [db]     Import Cursor chat history (default: Cursor's own state.vscdb, needs ANTHROPIC_API_KEY)
+  persnally import codex [dir]     Import Codex session transcripts (default ~/.codex/sessions, needs ANTHROPIC_API_KEY)
   persnally import git <path> [--author <email>]   Import repo activity (offline, no LLM); path = repo or folder of repos
   persnally import <source> <path> --reextract   Re-extract already-imported conversations with the current extractor
   persnally profile                Synthesize your profile from the store
@@ -363,13 +365,12 @@ async function main(): Promise<void> {
       return;
     }
     case "import": {
-      const [kind, path] = args;
-      const usage = "usage: persnally import claude|claude-code|chatgpt|cursor|git <path> [--reextract]";
+      const { kind, path, reextract } = parseImportArgs(args);
+      const usage = "usage: persnally import claude|claude-code|chatgpt|cursor|codex|git <path> [--reextract]";
       if (!kind) return die(usage);
       // Re-run extraction over conversations already on file. The store keeps
       // no raw text (structured signals only), so this reads the source again —
       // which is why it takes the same path argument as a first import.
-      const reextract = args.includes("--reextract");
 
       // Git: offline, deterministic. Dedup by repo so a re-run never doubles the graph.
       if (kind === "git") {
@@ -420,8 +421,15 @@ async function main(): Promise<void> {
         if (!r.parsed.conversations.length) return die(`No usable Cursor chats found at ${db}`);
         parsed = r.parsed;
         if (r.composersDropped) parseNote = ` (most recent ${r.parsed.conversations.length} of ${r.composersFound})`;
+      } else if (kind === "codex") {
+        const dir = path ?? DEFAULT_CODEX_SESSIONS_DIR;
+        file = dir;
+        const r = parseCodexTranscripts(dir);
+        if (!r.parsed.conversations.length) return die(`No usable Codex sessions found at ${dir}`);
+        parsed = r.parsed;
+        if (r.sessionsDropped) parseNote = ` (most recent ${r.parsed.conversations.length} of ${r.sessionsFound})`;
       } else {
-        return die(`unknown import source "${kind}" — use claude, claude-code, chatgpt, cursor, or git`);
+        return die(`unknown import source "${kind}" — use claude, claude-code, chatgpt, cursor, codex, or git`);
       }
 
       const store = new EventStore();
@@ -448,6 +456,7 @@ async function main(): Promise<void> {
         kind === "claude-code" ? extractClaudeCodeEvents(toExtract, engine.extract, engine.model, file)
         : kind === "claude" ? extractClaudeEvents(toExtract, engine.extract, engine.model)
         : kind === "cursor" ? extractCursorEvents(toExtract, engine.extract, engine.model, file)
+        : kind === "codex" ? extractCodexEvents(toExtract, engine.extract, engine.model, file)
         : extractChatGPTEvents(toExtract, engine.extract, engine.model)
       );
       // Replace, don't accumulate — and only after extraction succeeded, so a
@@ -653,7 +662,7 @@ async function main(): Promise<void> {
       // Imports made by an older pipeline can be re-run for better signals —
       // the whole point of stamping a version is that the user gets told.
       const stale = new Map<string, number>();
-      for (const importer of ["claude", "claude-code", "chatgpt", "cursor"]) {
+      for (const importer of ["claude", "claude-code", "chatgpt", "cursor", "codex"]) {
         const old = store2.importBatchVersions(importer)
           .filter((b) => (b.version ?? 0) < EXTRACTOR_VERSION);
         if (old.length) stale.set(importer, old.reduce((n, b) => n + b.events, 0));
@@ -816,6 +825,23 @@ async function main(): Promise<void> {
  * skipped, and a terminal user shouldn't have to find the dashboard to learn
  * that — this is the one failure case setup can actually fix in place.
  */
+export interface ImportArgs {
+  kind: string | undefined;
+  /** Not `args[1]`: for the optional-path sources (claude-code, cursor,
+      codex) that would be "--reextract" itself when it's the only flag
+      given, e.g. `persnally import codex --reextract` — the source would
+      then try to read a directory literally named "--reextract" instead of
+      falling back to its default. */
+  path: string | undefined;
+  reextract: boolean;
+}
+
+export function parseImportArgs(args: string[]): ImportArgs {
+  const [kind] = args;
+  const path = args.slice(1).find((a) => a !== "--reextract");
+  return { kind, path, reextract: args.includes("--reextract") };
+}
+
 /** How setup should obtain an extraction engine without a human present. */
 export interface EngineOptions {
   /** Accept the model download without asking — the agent-driven path. */

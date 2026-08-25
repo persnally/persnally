@@ -431,7 +431,7 @@ function clientOf(ev) {
 }
 const prettyClient = (c) => ({ "claude-code":"Claude Code","claude-desktop":"Claude Desktop","cursor":"Cursor","cli":"CLI" }[c] || c);
 const clientInitials = (c) => prettyClient(c).split(/[\s-]/).map(w=>w[0]).join("").slice(0,2).toUpperCase();
-const IMPORT_TOOL = { "import:claude":"Claude export", "import:chatgpt":"ChatGPT export", "import:claude-code":"Claude Code", "import:cursor":"Cursor" };
+const IMPORT_TOOL = { "import:claude":"Claude export", "import:chatgpt":"ChatGPT export", "import:claude-code":"Claude Code", "import:cursor":"Cursor", "import:codex":"Codex" };
 // Human-readable provenance for the "why?" panel — where a fact actually came from.
 function provLabel(e) {
   const p = e.provenance || {};
