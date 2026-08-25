@@ -15,7 +15,10 @@ import {
 } from "./permissions.js";
 import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Provenance } from "./events.js";
 import { importNewClaudeCodeSessions } from "./importers/claude-code.js";
-import { chooseExtractor, resolvedModels, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
+import { importNewCursorHistory } from "./importers/cursor.js";
+import { importNewCodexSessions } from "./importers/codex.js";
+import type { IncrementalImportResult } from "./importers/incremental.js";
+import { chooseExtractor, resolvedModels, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL, type LlmExtract } from "./llm.js";
 import { refreshScopedProfiles, scopeKey, synthesizeProfile } from "./profile.js";
 import { searchContext } from "./search.js";
 import { importAllSources } from "./setup.js";
@@ -597,11 +600,65 @@ function nextImportBackoff(): number {
   return Math.min(last ? last * 2 : IMPORT_BACKOFF_START_MIN, IMPORT_BACKOFF_MAX_MIN);
 }
 
+export interface AutoImportSource {
+  label: string;
+  run: (store: EventStore, extract: LlmExtract, model: string) => Promise<IncrementalImportResult>;
+}
+
+/** Every local source with an incremental importer, in a fixed order so
+    logging and backoff messages are stable across ticks. */
+const AUTO_IMPORT_SOURCES: AutoImportSource[] = [
+  { label: "Claude Code", run: (s, e, m) => importNewClaudeCodeSessions(s, e, m) },
+  { label: "Cursor", run: (s, e, m) => importNewCursorHistory(s, e, m) },
+  { label: "Codex", run: (s, e, m) => importNewCodexSessions(s, e, m) },
+];
+
+export interface AutoImportOutcome {
+  totalEvents: number;
+  /** The label of the first source whose engine call failed, or null if every
+      source ran clean. */
+  engineFailedAt: string | null;
+  /** Only meaningful when engineFailedAt is set. */
+  itemsLeftUnimported: number;
+}
+
 /**
- * Ingest Claude Code sessions created since the last pass — the daemon's
- * automatic capture of new chats (no user action, no per-session hook). A
- * key-less, Ollama-less machine has no extractor: skip rather than block.
- * Never throws — capture must not take the daemon down.
+ * Runs every source in order, stopping at the first engine failure. All
+ * sources share one engine (there is exactly one `chooseExtractor` call per
+ * tick), so a dead engine is dead for the rest of them too — continuing would
+ * pay fail-fast's cost again for content that already proved the engine
+ * won't answer. Exported so this short-circuit is directly testable with
+ * fake sources, without a real extraction engine or network access: nothing
+ * in `autoImportNewSessions` itself (engine selection, config IO, the
+ * reentrancy lock) is reasonably fakeable, so that behavior stays covered
+ * only by the sources it calls, same as before this existed.
+ */
+export async function runAutoImportSources(
+  sources: AutoImportSource[],
+  store: EventStore,
+  extract: LlmExtract,
+  model: string,
+): Promise<AutoImportOutcome> {
+  let totalEvents = 0;
+  for (const source of sources) {
+    const r = await source.run(store, extract, model);
+    if (r.engineFailed) {
+      return { totalEvents, engineFailedAt: source.label, itemsLeftUnimported: r.newConversations + r.toppedUp };
+    }
+    if (r.events) {
+      totalEvents += r.events;
+      console.error(`auto-import: ${r.newConversations} new + ${r.toppedUp} resumed ${source.label} conversation(s) → ${r.events} events`);
+    }
+  }
+  return { totalEvents, engineFailedAt: null, itemsLeftUnimported: 0 };
+}
+
+/**
+ * Ingest new local chat activity since the last pass — the daemon's automatic
+ * capture across every source with an incremental importer (no user action,
+ * no per-session hook). A key-less, Ollama-less machine has no extractor:
+ * skip rather than block. Never throws — capture must not take the daemon
+ * down.
  */
 export async function autoImportNewSessions(store: EventStore, now: number = Date.now()): Promise<void> {
   if (importing) {
@@ -613,21 +670,19 @@ export async function autoImportNewSessions(store: EventStore, now: number = Dat
   try {
     const engine = await chooseExtractor("extract").catch(() => null);
     if (!engine) return;
-    const r = await importNewClaudeCodeSessions(store, engine.extract, engine.model);
-    if (r.engineFailed) {
-      // A failed extraction leaves the session unmarked so it retries — right for
-      // one bad response, ruinous when the engine is down: the same sessions come
-      // back every tick. Back off, doubling while it stays broken.
+
+    const outcome = await runAutoImportSources(AUTO_IMPORT_SOURCES, store, engine.extract, engine.model);
+    if (outcome.engineFailedAt) {
+      // A failed extraction leaves the content unmarked so it retries — right
+      // for one bad response, ruinous when the engine is down: the same
+      // content comes back every tick. Back off, doubling while it stays broken.
       const minutes = nextImportBackoff();
       saveConfig({ import_backoff_minutes: minutes, import_backoff_until: new Date(now + minutes * 60_000).toISOString() });
-      console.error(`auto-import: extraction engine is failing — pausing imports for ${minutes} min (${r.newSessions + r.toppedUp} session(s) left unimported)`);
+      console.error(`auto-import: extraction engine is failing (${outcome.engineFailedAt}) — pausing imports for ${minutes} min (${outcome.itemsLeftUnimported} item(s) left unimported)`);
       return;
     }
     if (importBackoffActive()) saveConfig({ import_backoff_minutes: 0, import_backoff_until: "" }); // recovered
-    if (r.events) {
-      store.rebuild();
-      console.error(`auto-import: ${r.newSessions} new + ${r.toppedUp} resumed Claude Code session(s) → ${r.events} events`);
-    }
+    if (outcome.totalEvents) store.rebuild();
   } catch (e) {
     console.error("auto-import failed:", e instanceof Error ? e.message : e);
   } finally {

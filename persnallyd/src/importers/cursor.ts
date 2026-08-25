@@ -17,9 +17,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { EventStore } from "../store.js";
 import { anthropicExtract, DEFAULT_EXTRACT_MODEL, type LlmExtract } from "../llm.js";
 import { safeIso } from "../events.js";
-import { extractEvents, type ImportResult, type ParsedConversation, type ParsedExport } from "./extract.js";
+import { extractEvents, type ImportResult, type ParsedExport } from "./extract.js";
+import { runIncrementalImport, type IncrementalImportResult, type WatermarkedConversation } from "./incremental.js";
 import { projectKey } from "./claude-code.js";
 
 /** Exported so tests can build a fixture tree at the exact path this module
@@ -101,7 +103,7 @@ function terminalCommand(b: Bubble): string | undefined {
 }
 
 export interface CursorParse {
-  parsed: ParsedExport;
+  parsed: ParsedExport & { conversations: WatermarkedConversation[] };
   composersFound: number;
   composersDropped: number; // beyond maxComposers — most recent are kept
 }
@@ -149,20 +151,35 @@ export function parseCursorHistory(
     // that does not match what this code expects must not cost every other
     // composer its import: skip that composer (or that one malformed reference)
     // and keep going, the same principle claude-code.ts applies per JSONL line.
-    const conversations: ParsedConversation[] = [];
+    const conversations: WatermarkedConversation[] = [];
     for (const h of kept) {
       const data = composerData.get(h.composerId);
       const order = Array.isArray(data?.fullConversationHeadersOnly) ? data.fullConversationHeadersOnly : [];
       const userMessages: string[] = [];
       const assistantMessages: string[] = [];
       const toolCommands: string[] = [];
+      // Parallel to userMessages — the watermark a resumed composer gets
+      // diffed against. Individual bubbles carry no timestamp of their own
+      // (checked directly against ~2000 real bubbles: none had one), so every
+      // position gets the composer's own lastUpdatedAt — coarser than
+      // claude-code's per-message precision, but honest about what Cursor's
+      // local database actually records.
+      const messageIds: string[] = [];
+      const messageTimestamps: string[] = [];
+      const lastUpdatedIso = safeIso(h.lastUpdatedAt || h.createdAt);
       for (const ref of order) {
         if (!ref || typeof ref !== "object" || typeof (ref as { bubbleId?: unknown }).bubbleId !== "string") continue;
-        const b = bubbleById.get(`${h.composerId}:${(ref as { bubbleId: string }).bubbleId}`);
+        const bubbleId = (ref as { bubbleId: string }).bubbleId;
+        const b = bubbleById.get(`${h.composerId}:${bubbleId}`);
         if (!b) continue;
         const text = typeof b.text === "string" ? b.text.trim() : "";
-        if (b.type === 1 && text) userMessages.push(text);
-        else if (b.type === 2 && text) assistantMessages.push(text);
+        if (b.type === 1 && text) {
+          userMessages.push(text);
+          messageIds.push(bubbleId);
+          messageTimestamps.push(lastUpdatedIso);
+        } else if (b.type === 2 && text) {
+          assistantMessages.push(text);
+        }
         const cmd = terminalCommand(b);
         if (cmd) toolCommands.push(cmd);
       }
@@ -170,6 +187,7 @@ export function parseCursorHistory(
 
       const project = resolveProjectPath(home, h.workspaceId);
       const name = typeof data?.name === "string" ? data.name.trim() : "";
+      const lastId = messageIds[messageIds.length - 1];
       conversations.push({
         uuid: h.composerId,
         name: name || (project ? `Cursor session in ${project.split("/").pop()}` : "Cursor session"),
@@ -179,6 +197,9 @@ export function parseCursorHistory(
         userMessages,
         assistantMessages,
         toolCommands,
+        messageIds,
+        messageTimestamps,
+        ...(lastId ? { lastMessageId: lastId } : {}),
       });
     }
 
@@ -200,4 +221,24 @@ export async function extractCursorEvents(
   onProgress?: (done: number, total: number) => void,
 ): Promise<ImportResult> {
   return extractEvents(parsed, { source: "import:cursor", importer: "cursor", file, onProgress }, extract, model);
+}
+
+/**
+ * Import Cursor chats not already in the store, plus the new tail of any
+ * composer resumed since its last import. Thin wrapper over the shared
+ * incremental engine (see incremental.ts).
+ */
+export async function importNewCursorHistory(
+  store: EventStore,
+  extract: LlmExtract,
+  model = DEFAULT_EXTRACT_MODEL,
+  dbPath: string = defaultCursorDb(),
+  home: string = homedir(),
+): Promise<IncrementalImportResult> {
+  if (!existsSync(dbPath)) return { newConversations: 0, toppedUp: 0, events: 0, skipped: 0, engineFailed: false };
+  return runIncrementalImport(store, {
+    source: "import:cursor",
+    parse: () => parseCursorHistory(dbPath, home).parsed,
+    extract: (jobs) => extractCursorEvents({ conversations: jobs, memoryText: "", projects: [] }, extract, model, dbPath),
+  });
 }

@@ -44,7 +44,7 @@ writeSession("s2");
 
 test("first pass imports every session and records each conversation_uuid", async () => {
   const r = await importNewClaudeCodeSessions(store, extract, "model", root);
-  assert.equal(r.newSessions, 2);
+  assert.equal(r.newConversations, 2);
   assert.equal(r.skipped, 0);
   assert.ok(r.events >= 2, "at least the two topic events landed");
   const topics = store.query({ type: "signal.topic", source: "import:claude-code", limit: 100 });
@@ -55,7 +55,7 @@ test("first pass imports every session and records each conversation_uuid", asyn
 test("second pass skips everything already imported — no extractor calls", async () => {
   const before = extractCalls;
   const r = await importNewClaudeCodeSessions(store, extract, "model", root);
-  assert.equal(r.newSessions, 0);
+  assert.equal(r.newConversations, 0);
   assert.equal(r.skipped, 2);
   assert.equal(r.events, 0);
   assert.equal(extractCalls, before, "extractor was not invoked for already-seen sessions");
@@ -64,7 +64,7 @@ test("second pass skips everything already imported — no extractor calls", asy
 test("only the genuinely new session is imported on a later pass", async () => {
   writeSession("s3");
   const r = await importNewClaudeCodeSessions(store, extract, "model", root);
-  assert.equal(r.newSessions, 1);
+  assert.equal(r.newConversations, 1);
   assert.equal(r.skipped, 2);
   const uuids = new Set(
     store.query({ type: "signal.topic", source: "import:claude-code", limit: 100 })
@@ -75,7 +75,7 @@ test("only the genuinely new session is imported on a later pass", async () => {
 
 test("a missing transcripts directory is a no-op, not an error", async () => {
   const r = await importNewClaudeCodeSessions(store, extract, "model", join(root, "does-not-exist"));
-  assert.deepEqual(r, { newSessions: 0, toppedUp: 0, events: 0, skipped: 0, engineFailed: false });
+  assert.deepEqual(r, { newConversations: 0, toppedUp: 0, events: 0, skipped: 0, engineFailed: false });
 });
 
 test("a session imported before watermarks existed never tops up — re-paying would double its signals", async () => {
@@ -89,7 +89,7 @@ test("a session imported before watermarks existed never tops up — re-paying w
   const r = await importNewClaudeCodeSessions(store, extract, "model", root);
 
   assert.equal(r.toppedUp, 0);
-  assert.equal(r.newSessions, 0);
+  assert.equal(r.newConversations, 0);
   assert.equal(extractCalls, before, "no extraction was paid for");
 });
 
@@ -121,7 +121,7 @@ test("one conversation's malformed extraction is skipped; the rest still import"
     };
   };
   const r = await importNewClaudeCodeSessions(store2, flaky, "model", root2);
-  assert.equal(r.newSessions, 3, "all three were considered new");
+  assert.equal(r.newConversations, 3, "all three were considered new");
   const succeeded = new Set(
     store2.query({ type: "signal.topic", source: "import:claude-code", limit: 100 })
       .map((e) => (e.provenance as { conversation_uuid?: string }).conversation_uuid),
@@ -146,7 +146,7 @@ test("a dead engine is reported as engineFailed, and stops after a few calls", a
   const r = await importNewClaudeCodeSessions(s, dead, "model", dir);
 
   assert.equal(r.engineFailed, true, "an engine that never succeeds must be reported, not silently retried");
-  assert.equal(r.newSessions, 9, "the sessions were seen");
+  assert.equal(r.newConversations, 9, "the sessions were seen");
   assert.ok(calls <= 4, `fail-fast must cap the wasted calls; made ${calls} for 9 conversations`);
   assert.equal(s.importedConversationUuids("import:claude-code").size, 0,
     "nothing marked imported — which is why the caller has to back off");
@@ -158,7 +158,7 @@ test("a working engine reports engineFailed false", async () => {
   after(() => { s.close(); rmSync(dbDir, { recursive: true, force: true }); });
   const r = await importNewClaudeCodeSessions(s, extract, "model", root);
   assert.equal(r.engineFailed, false);
-  assert.ok(r.newSessions > 0);
+  assert.ok(r.newConversations > 0);
 });
 
 // ── Resumed sessions: `claude --continue` appends to the same JSONL ──────────
@@ -200,7 +200,7 @@ test("a resumed session tops up with only the messages past its watermark", asyn
 
   // Pass 1: whole session, watermark lands on the last message.
   const first = await importNewClaudeCodeSessions(store2, spy, "model", root2);
-  assert.equal(first.newSessions, 1);
+  assert.equal(first.newConversations, 1);
   assert.equal(first.toppedUp, 0);
   assert.equal(store2.conversationWatermarks("import:claude-code").get("r1"), "m2");
 
@@ -219,7 +219,7 @@ test("a resumed session tops up with only the messages past its watermark", asyn
 
   const topped = await importNewClaudeCodeSessions(store2, spy, "model", root2);
   assert.equal(topped.toppedUp, 1);
-  assert.equal(topped.newSessions, 0);
+  assert.equal(topped.newConversations, 0);
 
   const delta = seenContents[1]!;
   assert.match(delta, /resumed third prompt/);
