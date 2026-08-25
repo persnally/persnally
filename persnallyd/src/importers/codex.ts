@@ -7,7 +7,7 @@
  * not a clean JSON object) is not something a spec would predict.
  */
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, type Dirent } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { anthropicExtract, DEFAULT_EXTRACT_MODEL, type LlmExtract } from "../llm.js";
@@ -20,19 +20,31 @@ export const DEFAULT_MAX_SESSIONS = 200;
 const MIN_USER_MESSAGES = 2;
 
 /**
- * Synthetic content the app injects into a `user_message` turn under the
- * user's own role — plugin ads, `<environment_context>`, and an attachment
- * wrapper that quotes the user's text back inside a "Files mentioned" header
- * rather than sending it plain. None of it is something the user typed, and
- * unlike Claude Code's `<system-reminder>` blocks these have no closing tag to
- * strip around — the whole message is the injection, so the whole message is
- * dropped rather than partially salvaged.
+ * A `user_message` turn's real text, with app-injected wrapping removed.
+ *
+ * `<recommended_plugins>` and `<environment_context>` blocks carry nothing the
+ * user typed and are dropped whole. The "Files mentioned by the user"
+ * attachment wrapper is different: on real data it always ends with a
+ * `## My request for Codex:` section holding the user's own freshly-typed
+ * instruction for that turn — content that exists nowhere else in the
+ * transcript. An earlier version of this function treated the whole wrapper
+ * as synthetic and dropped it whole, which silently discarded that
+ * instruction every time a user pasted reference material and then said what
+ * they wanted done with it — an ordinary Codex usage pattern, verified
+ * against a real session on this machine (two of four real user turns in one
+ * file were this exact shape, both losing their actual request). Salvaged the
+ * same way Claude Code's `<system-reminder>` stripping salvages real text
+ * around a synthetic wrapper, instead of discarding the whole turn.
  */
-function isInjectedUserText(text: string): boolean {
-  const t = text.trimStart();
-  return t.startsWith("<recommended_plugins")
-    || t.startsWith("<environment_context")
-    || t.startsWith("# Files mentioned by the user:");
+function salvageUserText(text: string): string {
+  const t = text.trim();
+  if (t.startsWith("<recommended_plugins") || t.startsWith("<environment_context")) return "";
+  if (t.startsWith("# Files mentioned by the user:")) {
+    const marker = "## My request for Codex:";
+    const idx = t.indexOf(marker);
+    return idx === -1 ? "" : t.slice(idx + marker.length).trim();
+  }
+  return t;
 }
 
 /**
@@ -75,8 +87,17 @@ function parseSession(path: string): ParsedSession {
     if (!line.trim()) continue;
     let entry: Record<string, unknown>;
     // A session still being written, or crashed mid-line, can leave a
-    // truncated tail — skip it, keep the rest.
-    try { entry = JSON.parse(line) as Record<string, unknown>; } catch { continue; }
+    // truncated tail — skip it, keep the rest. JSON.parse("null") succeeds
+    // and returns null, which the try/catch above does not catch — every
+    // field access below needs entry to actually be an object, or a single
+    // `null` line throws out of this whole session instead of just itself.
+    try {
+      const parsed: unknown = JSON.parse(line);
+      if (!parsed || typeof parsed !== "object") continue;
+      entry = parsed as Record<string, unknown>;
+    } catch {
+      continue;
+    }
 
     const type = entry.type;
     const payload = entry.payload as Record<string, unknown> | undefined;
@@ -100,10 +121,8 @@ function parseSession(path: string): ParsedSession {
 
     if (type === "event_msg" && payload) {
       if (payload.type === "user_message" && typeof payload.message === "string") {
-        if (!isInjectedUserText(payload.message)) {
-          const text = payload.message.trim();
-          if (text) userMessages.push(text);
-        }
+        const text = salvageUserText(payload.message);
+        if (text) userMessages.push(text);
         continue;
       }
       if (payload.type === "agent_message" && typeof payload.message === "string") {
@@ -129,7 +148,11 @@ function parseSession(path: string): ParsedSession {
       name: cwd ? `Codex session in ${basename(cwd)}` : "Codex session",
       project: cwd ? projectKey(cwd) : undefined,
       summary: "",
-      created_at: createdAtMs ? safeIso(createdAtMs) : safeIso(undefined),
+      // safeIso(0) is a valid, finite date (the epoch) — not the "no
+      // timestamp found anywhere in this file" case being mistaken for
+      // *now*, which would hand a stale or malformed-metadata session
+      // false maximum recency in the decay-weighted interest graph.
+      created_at: safeIso(createdAtMs),
       userMessages,
       assistantMessages,
       toolCommands,
@@ -162,11 +185,30 @@ function loadThreadNames(sessionsDir: string): Map<string, string> {
   return names;
 }
 
+/**
+ * Walked by hand, one directory at a time, rather than
+ * `readdirSync(root, { recursive: true })`: that call throws on the first
+ * unreadable nested directory anywhere in the tree (a sandboxing artifact,
+ * a sync-tool placeholder) and returns nothing at all, not a partial list —
+ * killing the entire import from one bad `<year>/<month>/<day>` folder, so
+ * years of otherwise-readable sessions never get a chance to be tried.
+ */
 function findRolloutFiles(root: string): string[] {
   const out: string[] = [];
-  for (const entry of readdirSync(root, { withFileTypes: true, recursive: true })) {
-    if (entry.isFile() && entry.name.endsWith(".jsonl")) out.push(join(entry.parentPath, entry.name));
-  }
+  const walk = (dir: string): void => {
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile() && entry.name.endsWith(".jsonl")) out.push(full);
+    }
+  };
+  walk(root);
   return out;
 }
 

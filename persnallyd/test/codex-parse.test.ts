@@ -185,3 +185,164 @@ test("a missing sessions directory is a clear error, not a stack trace", () => {
 test("the cap is a real constant", () => {
   assert.equal(DEFAULT_MAX_SESSIONS, 200);
 });
+
+/**
+ * The seven tests below were added after a five-dimension adversarial swarm
+ * review of this importer found real defects and coverage gaps — each one
+ * verified against real ~/.codex/sessions data on the reviewing machine
+ * before being fixed, not assumed from the finding alone.
+ */
+
+test("the user's real request is salvaged from inside the attachment wrapper, not dropped with it", () => {
+  // The exact shape found on a real machine: pasting reference material,
+  // then saying what to do with it, produced a user_message that starts
+  // with the synthetic "Files mentioned" header and ends with the user's
+  // own freshly-typed instruction. The earlier version of this importer
+  // dropped the whole message — instruction included — because it only
+  // recognized the header as a prefix, not the request as a suffix.
+  const dir = rolloutDir(join(root, "salvage"));
+  const wrapped = "\n# Files mentioned by the user:\n\n## Some Document (v0.1): "
+    + "/Users/dev/.codex/attachments/abc/pasted-text.txt\n\n## My request for Codex:\n"
+    + "help me build this in the best possible way";
+  writeFileSync(join(dir, "rollout-g.jsonl"), lines(
+    sessionMeta("s7", "/Users/dev/Projects/widget", "2026-08-20T10:35:00.000Z"),
+    userMsg(wrapped),
+    userMsg("a second real message so the session clears the noise floor"),
+  ));
+
+  const { parsed } = parseCodexTranscripts(join(root, "salvage"));
+  assert.deepEqual(parsed.conversations[0]!.userMessages, [
+    "help me build this in the best possible way",
+    "a second real message so the session clears the noise floor",
+  ]);
+});
+
+test("null as a JSONL line does not sink the whole session, only itself", () => {
+  // JSON.parse("null") succeeds and returns null — the per-line try/catch
+  // around JSON.parse does not fire, and accessing .type on the result used
+  // to throw uncaught, which the file-level try/catch in
+  // parseCodexTranscripts then turned into dropping the entire session.
+  const dir = rolloutDir(join(root, "null-line"));
+  const raw = [
+    JSON.stringify(sessionMeta("s8", "/Users/dev/Projects/widget", "2026-08-20T10:40:00.000Z")),
+    JSON.stringify(userMsg("first real message")),
+    "null",
+    JSON.stringify(userMsg("second real message, after the null line")),
+  ].join("\n") + "\n";
+  writeFileSync(join(dir, "rollout-h.jsonl"), raw);
+
+  const { parsed } = parseCodexTranscripts(join(root, "null-line"));
+  assert.deepEqual(parsed.conversations[0]?.userMessages,
+    ["first real message", "second real message, after the null line"],
+    "a null line is skipped like any other unparseable line, not fatal to the session");
+});
+
+test("an unreadable subdirectory does not sink sessions in sibling directories", () => {
+  // readdirSync(root, { recursive: true }) throws on the FIRST unreadable
+  // nested directory anywhere in the tree and returns nothing at all — not
+  // a partial list — which would silently zero out an entire import from
+  // one bad `<year>/<month>/<day>` folder among years of readable ones.
+  const base = join(root, "bad-subdir");
+  const goodDir = rolloutDir(join(base, "good-branch"));
+  writeFileSync(join(goodDir, "rollout-good.jsonl"), lines(
+    sessionMeta("good", "/Users/dev/Projects/widget", "2026-08-20T10:45:00.000Z"),
+    userMsg("one"), userMsg("two"),
+  ));
+  const badDir = join(base, "bad-branch", "2026", "08", "20");
+  mkdirSync(badDir, { recursive: true });
+  writeFileSync(join(badDir, "rollout-unreachable.jsonl"), lines(
+    sessionMeta("unreachable", "/Users/dev/Projects/widget", "2026-08-20T10:46:00.000Z"),
+    userMsg("one"), userMsg("two"),
+  ));
+  chmodSync(join(base, "bad-branch"), 0o000);
+  after(() => { try { chmodSync(join(base, "bad-branch"), 0o755); } catch { /* already gone */ } });
+
+  const { parsed } = parseCodexTranscripts(base);
+  assert.ok(parsed.conversations.some((c) => c.uuid === "good"),
+    "one unreadable directory elsewhere in the tree must not zero out the whole import");
+});
+
+test("a session with no timestamp anywhere gets the epoch, not the moment it happened to be imported", () => {
+  // createdAtMs stays 0 when nothing in the file ever yields a parseable
+  // timestamp. Falling back to "now" would hand a stale or
+  // malformed-metadata session false maximum recency in the decay-weighted
+  // interest graph, silently and with no warning.
+  const dir = rolloutDir(join(root, "no-timestamp"));
+  writeFileSync(join(dir, "rollout-i.jsonl"), lines(
+    { type: "session_meta", payload: { id: "s9", cwd: "/Users/dev/Projects/widget" } },
+    userMsg("one"), userMsg("two"),
+  ));
+
+  const { parsed } = parseCodexTranscripts(join(root, "no-timestamp"));
+  assert.match(parsed.conversations[0]!.created_at, /^1970-01-01T/,
+    "no timestamp found anywhere -> the epoch, an honest 'unknown', not a fabricated 'now'");
+});
+
+test("multiple exec_command calls in one input, including quoted and backslash-escaped commands, are all recovered", () => {
+  const dir = rolloutDir(join(root, "multi-exec"));
+  const input = 'const r = await Promise.all([\n'
+    + '  tools.exec_command({"cmd":"git commit -m \\"fix: handle the edge case\\"","workdir":"/x"}),\n'
+    + '  tools.exec_command({"cmd":"echo \\"a\\\\\\\\b\\"","workdir":"/x"}),\n'
+    + ']);';
+  writeFileSync(join(dir, "rollout-j.jsonl"), lines(
+    sessionMeta("s10", "/Users/dev/Projects/widget", "2026-08-20T10:50:00.000Z"),
+    userMsg("one"), userMsg("two"),
+    { type: "response_item", payload: { type: "custom_tool_call", name: "exec", input } },
+  ));
+
+  const { parsed } = parseCodexTranscripts(join(root, "multi-exec"));
+  assert.deepEqual(parsed.conversations[0]!.toolCommands, [
+    'git commit -m "fix: handle the edge case"',
+    'echo "a\\\\b"',
+  ], "both calls in the same Promise.all recovered, with embedded quotes and a literal backslash intact");
+});
+
+test("a malformed line in session_index.jsonl does not break the fallback to a generated name", () => {
+  const base = join(root, "bad-index");
+  const dir = rolloutDir(base);
+  writeFileSync(join(dir, "rollout-k.jsonl"), lines(
+    sessionMeta("s11", "/Users/dev/Projects/widget", "2026-08-20T10:55:00.000Z"),
+    userMsg("one"), userMsg("two"),
+  ));
+  // A line that is invalid JSON, and a line that is valid JSON but not an
+  // object (loadThreadNames destructures `{ id, thread_name }` off it) —
+  // sandwiched around a genuinely usable entry for a DIFFERENT session, so
+  // the test also proves the malformed lines don't block real entries after them.
+  writeFileSync(join(root, "session_index.jsonl"),
+    "{not valid json\n" + JSON.stringify(null) + "\n" + JSON.stringify({ id: "other-session", thread_name: "Unrelated" }) + "\n");
+
+  const { parsed } = parseCodexTranscripts(base);
+  assert.match(parsed.conversations[0]!.name, /^Codex session in widget$/,
+    "a session_index.jsonl with malformed lines must not crash the import — this session just gets its generated name");
+});
+
+test("a resumed session (two session_meta lines) keeps the first cwd/id/timestamp, and isSubagent stays true once set", () => {
+  // Codex resuming a thread across app launches is ordinary usage that would
+  // append a second session_meta line mid-file. Locking in this file's actual
+  // current behavior: first non-empty id/cwd/timestamp wins, and a subagent
+  // flag seen on ANY meta line excludes the whole session (never reset).
+  const dir = rolloutDir(join(root, "resumed"));
+  writeFileSync(join(dir, "rollout-l.jsonl"), lines(
+    sessionMeta("first-id", "/Users/dev/Projects/first-project", "2026-08-20T11:00:00.000Z"),
+    userMsg("before resuming"),
+    sessionMeta("second-id", "/Users/dev/Projects/second-project", "2026-08-20T12:00:00.000Z"),
+    userMsg("after resuming"),
+  ));
+
+  const { parsed } = parseCodexTranscripts(join(root, "resumed"));
+  const c = parsed.conversations[0]!;
+  assert.equal(c.uuid, "first-id", "the first session_meta's id wins");
+  assert.equal(c.project, "/Users/dev/Projects/first-project", "the first session_meta's cwd wins");
+  assert.deepEqual(c.userMessages, ["before resuming", "after resuming"]);
+
+  const dir2 = rolloutDir(join(root, "resumed-subagent"));
+  writeFileSync(join(dir2, "rollout-m.jsonl"), lines(
+    sessionMeta("normal-first", "/Users/dev/Projects/widget", "2026-08-20T11:05:00.000Z"),
+    userMsg("looks normal at first"),
+    sessionMeta("normal-first", "/Users/dev/Projects/widget", "2026-08-20T11:06:00.000Z", { thread_source: "subagent" }),
+    userMsg("but becomes a subagent thread partway through"),
+  ));
+  const { parsed: parsed2 } = parseCodexTranscripts(join(root, "resumed-subagent"));
+  assert.equal(parsed2.conversations.length, 0,
+    "isSubagent, once set by any session_meta line, is never cleared by an earlier-looking one");
+});
