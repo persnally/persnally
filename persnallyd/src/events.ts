@@ -85,6 +85,21 @@ export const PAYLOAD_SCHEMAS = {
         Optional: batches imported before versioning carry none. */
     extractor_version: z.number().int().positive().optional(),
   }),
+  /**
+   * One per conversation whose extraction call succeeded, written regardless
+   * of how many topics it found. `signal.topic` alone can't mark "this was
+   * looked at" — a conversation that genuinely has nothing topic-worthy
+   * produces zero signal.topic events, which is indistinguishable from
+   * "never attempted." Without this, such a conversation is retried on every
+   * future import, forever, at real token cost, since nothing ever records
+   * that a working engine already looked at it and found nothing.
+   * `conversation_uuid`/`message_uuid` on the event's own provenance carry
+   * the identity and watermark; this payload is only the count that explains
+   * why the event exists.
+   */
+  "system.conversation_processed": z.object({
+    topics_found: z.number().int().nonnegative(),
+  }),
 } as const;
 
 export type EventType = keyof typeof PAYLOAD_SCHEMAS;
