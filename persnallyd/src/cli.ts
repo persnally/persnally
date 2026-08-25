@@ -452,13 +452,20 @@ async function main(): Promise<void> {
         `Parsed ${parsed.conversations.length} conversation(s)${parseNote}${skipped ? ` — ${skipped} already imported` : ""}. ` +
         `Extracting ${toExtract.conversations.length} with ${engine.label}...`,
       );
-      const { events, batch } = await (
+      const { events, batch, extractionsSucceeded, extractionsFailed } = await (
         kind === "claude-code" ? extractClaudeCodeEvents(toExtract, engine.extract, engine.model, file)
         : kind === "claude" ? extractClaudeEvents(toExtract, engine.extract, engine.model)
         : kind === "cursor" ? extractCursorEvents(toExtract, engine.extract, engine.model, file)
         : kind === "codex" ? extractCodexEvents(toExtract, engine.extract, engine.model, file)
         : extractChatGPTEvents(toExtract, engine.extract, engine.model)
       );
+      if (shouldRefuseReextract(reextract, extractionsSucceeded, extractionsFailed)) {
+        store.close();
+        return die(
+          "Extraction failed for every conversation — the engine looks broken (bad key, no credits, "
+          + "or a provider outage), not the transcripts. Nothing was changed. Re-run once it's working again.",
+        );
+      }
       // Replace, don't accumulate — and only after extraction succeeded, so a
       // failed re-run leaves the existing signals intact rather than deleting
       // them and having nothing to put back.
@@ -840,6 +847,23 @@ export function parseImportArgs(args: string[]): ImportArgs {
   const [kind] = args;
   const path = args.slice(1).find((a) => a !== "--reextract");
   return { kind, path, reextract: args.includes("--reextract") };
+}
+
+/**
+ * True when a `--reextract` run's extraction failed across the board — zero
+ * successes with at least one failure, the same signal daemon.ts's own
+ * auto-import already trusts as "the engine is broken" (see `engineFailed`
+ * in claude-code.ts) rather than "these particular conversations were
+ * unusual." `--reextract` deletes the existing batch before writing the new
+ * one, so proceeding here would replace real signal with whatever the
+ * deterministic-only parts of extraction still produced. That already
+ * happened once: 1366 real events became 59. There is no legitimate reason
+ * to intentionally replace good data with a confirmed-broken engine's
+ * output — refuse, leave the store untouched, and let a retry work once the
+ * engine does.
+ */
+export function shouldRefuseReextract(reextract: boolean, extractionsSucceeded: number, extractionsFailed: number): boolean {
+  return reextract && extractionsSucceeded === 0 && extractionsFailed > 0;
 }
 
 /** How setup should obtain an extraction engine without a human present. */
