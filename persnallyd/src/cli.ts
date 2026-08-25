@@ -365,13 +365,12 @@ async function main(): Promise<void> {
       return;
     }
     case "import": {
-      const [kind, path] = args;
+      const { kind, path, reextract } = parseImportArgs(args);
       const usage = "usage: persnally import claude|claude-code|chatgpt|cursor|codex|git <path> [--reextract]";
       if (!kind) return die(usage);
       // Re-run extraction over conversations already on file. The store keeps
       // no raw text (structured signals only), so this reads the source again —
       // which is why it takes the same path argument as a first import.
-      const reextract = args.includes("--reextract");
 
       // Git: offline, deterministic. Dedup by repo so a re-run never doubles the graph.
       if (kind === "git") {
@@ -826,6 +825,23 @@ async function main(): Promise<void> {
  * skipped, and a terminal user shouldn't have to find the dashboard to learn
  * that — this is the one failure case setup can actually fix in place.
  */
+export interface ImportArgs {
+  kind: string | undefined;
+  /** Not `args[1]`: for the optional-path sources (claude-code, cursor,
+      codex) that would be "--reextract" itself when it's the only flag
+      given, e.g. `persnally import codex --reextract` — the source would
+      then try to read a directory literally named "--reextract" instead of
+      falling back to its default. */
+  path: string | undefined;
+  reextract: boolean;
+}
+
+export function parseImportArgs(args: string[]): ImportArgs {
+  const [kind] = args;
+  const path = args.slice(1).find((a) => a !== "--reextract");
+  return { kind, path, reextract: args.includes("--reextract") };
+}
+
 /** How setup should obtain an extraction engine without a human present. */
 export interface EngineOptions {
   /** Accept the model download without asking — the agent-driven path. */

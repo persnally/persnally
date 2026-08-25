@@ -82,6 +82,13 @@ function parseSession(path: string): ParsedSession {
   const userMessages: string[] = [];
   const assistantMessages: string[] = [];
   const toolCommands: string[] = [];
+  // Parallel to userMessages, pushed only when a message is actually kept —
+  // same shape as claude-code.ts's messageIds. Nothing reads this yet (no
+  // importer here does incremental top-up of a resumed session, matching
+  // cursor.ts), but capturing it now means a future top-up implementation
+  // does not need every session re-extracted from scratch just to backfill
+  // watermarks it could have had all along.
+  const messageClientIds: string[] = [];
 
   for (const line of readFileSync(path, "utf-8").split("\n")) {
     if (!line.trim()) continue;
@@ -122,7 +129,10 @@ function parseSession(path: string): ParsedSession {
     if (type === "event_msg" && payload) {
       if (payload.type === "user_message" && typeof payload.message === "string") {
         const text = salvageUserText(payload.message);
-        if (text) userMessages.push(text);
+        if (text) {
+          userMessages.push(text);
+          messageClientIds.push(typeof payload.client_id === "string" ? payload.client_id : "");
+        }
         continue;
       }
       if (payload.type === "agent_message" && typeof payload.message === "string") {
@@ -141,6 +151,10 @@ function parseSession(path: string): ParsedSession {
 
   if (isSubagent || userMessages.length < MIN_USER_MESSAGES) return { conversation: null, createdAtMs };
 
+  // Empty client_ids (a message shape without one) don't make a trustworthy
+  // watermark — only use the last one if it's real.
+  const lastId = messageClientIds[messageClientIds.length - 1];
+
   return {
     createdAtMs,
     conversation: {
@@ -156,6 +170,7 @@ function parseSession(path: string): ParsedSession {
       userMessages,
       assistantMessages,
       toolCommands,
+      ...(lastId ? { lastMessageId: lastId } : {}),
     },
   };
 }

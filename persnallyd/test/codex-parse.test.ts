@@ -25,7 +25,8 @@ const sessionMeta = (id: string, cwd: string, ts: string, extra: Record<string, 
   timestamp: ts, type: "session_meta",
   payload: { id, cwd, timestamp: ts, originator: "Codex CLI", ...extra },
 });
-const userMsg = (message: string) => ({ type: "event_msg", payload: { type: "user_message", message } });
+const userMsg = (message: string, clientId?: string) =>
+  ({ type: "event_msg", payload: { type: "user_message", message, ...(clientId ? { client_id: clientId } : {}) } });
 const agentMsg = (message: string) => ({ type: "event_msg", payload: { type: "agent_message", message } });
 const execCall = (input: string) => ({ type: "response_item", payload: { type: "custom_tool_call", name: "exec", input } });
 
@@ -314,6 +315,47 @@ test("a malformed line in session_index.jsonl does not break the fallback to a g
   const { parsed } = parseCodexTranscripts(base);
   assert.match(parsed.conversations[0]!.name, /^Codex session in widget$/,
     "a session_index.jsonl with malformed lines must not crash the import — this session just gets its generated name");
+});
+
+test("lastMessageId captures the last kept user message's client_id, a watermark for future top-up", () => {
+  // Nothing consumes this yet — no importer here does incremental top-up of a
+  // resumed session (matching cursor.ts, which never sets it either). This
+  // only proves the field is captured correctly, the same way
+  // claude-code.ts's own messageIds/lastMessageId works, so a future top-up
+  // implementation does not need every session re-extracted from scratch to
+  // backfill watermarks it could have had all along.
+  const dir = rolloutDir(join(root, "watermark"));
+  writeFileSync(join(dir, "rollout-n.jsonl"), lines(
+    sessionMeta("s12", "/Users/dev/Projects/widget", "2026-08-20T11:10:00.000Z"),
+    userMsg("first", "client-a"),
+    userMsg("second", "client-b"),
+  ));
+  const { parsed } = parseCodexTranscripts(join(root, "watermark"));
+  assert.equal(parsed.conversations[0]!.lastMessageId, "client-b",
+    "the LAST kept message's client_id, not the first");
+});
+
+test("a message dropped by salvageUserText does not become the watermark", () => {
+  const dir = rolloutDir(join(root, "watermark-dropped"));
+  writeFileSync(join(dir, "rollout-o.jsonl"), lines(
+    sessionMeta("s13", "/Users/dev/Projects/widget", "2026-08-20T11:15:00.000Z"),
+    userMsg("first real message", "client-real-1"),
+    userMsg("second real message", "client-real-2"),
+    userMsg("<environment_context>\n  <cwd>/x</cwd>\n</environment_context>", "client-injected"),
+  ));
+  const { parsed } = parseCodexTranscripts(join(root, "watermark-dropped"));
+  assert.equal(parsed.conversations[0]!.lastMessageId, "client-real-2",
+    "the injected message's client_id must not become the watermark — it was never actually imported");
+});
+
+test("no client_id anywhere leaves the watermark unset, not a fabricated one", () => {
+  const dir = rolloutDir(join(root, "watermark-none"));
+  writeFileSync(join(dir, "rollout-p.jsonl"), lines(
+    sessionMeta("s14", "/Users/dev/Projects/widget", "2026-08-20T11:20:00.000Z"),
+    userMsg("one"), userMsg("two"),
+  ));
+  const { parsed } = parseCodexTranscripts(join(root, "watermark-none"));
+  assert.equal(parsed.conversations[0]!.lastMessageId, undefined);
 });
 
 test("a resumed session (two session_meta lines) keeps the first cwd/id/timestamp, and isSubagent stays true once set", () => {
