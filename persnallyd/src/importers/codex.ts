@@ -10,10 +10,12 @@
 import { existsSync, readdirSync, readFileSync, type Dirent } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import type { EventStore } from "../store.js";
 import { anthropicExtract, DEFAULT_EXTRACT_MODEL, type LlmExtract } from "../llm.js";
 import { safeIso } from "../events.js";
 import { projectKey } from "./claude-code.js";
-import { extractEvents, type ImportResult, type ParsedConversation, type ParsedExport } from "./extract.js";
+import { extractEvents, type ImportResult, type ParsedExport } from "./extract.js";
+import { runIncrementalImport, type IncrementalImportResult, type WatermarkedConversation } from "./incremental.js";
 
 export const DEFAULT_CODEX_SESSIONS_DIR = join(homedir(), ".codex", "sessions");
 export const DEFAULT_MAX_SESSIONS = 200;
@@ -70,7 +72,7 @@ function execCommands(input: string): string[] {
 }
 
 interface ParsedSession {
-  conversation: ParsedConversation | null;
+  conversation: WatermarkedConversation | null;
   createdAtMs: number;
 }
 
@@ -83,12 +85,13 @@ function parseSession(path: string): ParsedSession {
   const assistantMessages: string[] = [];
   const toolCommands: string[] = [];
   // Parallel to userMessages, pushed only when a message is actually kept —
-  // same shape as claude-code.ts's messageIds. Nothing reads this yet (no
-  // importer here does incremental top-up of a resumed session, matching
-  // cursor.ts), but capturing it now means a future top-up implementation
-  // does not need every session re-extracted from scratch just to backfill
-  // watermarks it could have had all along.
-  const messageClientIds: string[] = [];
+  // same shape as claude-code.ts's messageIds/messageTimestamps. Every
+  // user_message line carries both a client_id and an outer timestamp
+  // (checked directly against real rollout files), so Codex gets the same
+  // per-message precision claude-code.ts has, not cursor.ts's coarser
+  // composer-level fallback.
+  const messageIds: string[] = [];
+  const messageTimestamps: string[] = [];
 
   for (const line of readFileSync(path, "utf-8").split("\n")) {
     if (!line.trim()) continue;
@@ -131,7 +134,8 @@ function parseSession(path: string): ParsedSession {
         const text = salvageUserText(payload.message);
         if (text) {
           userMessages.push(text);
-          messageClientIds.push(typeof payload.client_id === "string" ? payload.client_id : "");
+          messageIds.push(typeof payload.client_id === "string" ? payload.client_id : "");
+          messageTimestamps.push(typeof entry.timestamp === "string" ? entry.timestamp : "");
         }
         continue;
       }
@@ -151,9 +155,9 @@ function parseSession(path: string): ParsedSession {
 
   if (isSubagent || userMessages.length < MIN_USER_MESSAGES) return { conversation: null, createdAtMs };
 
-  // Empty client_ids (a message shape without one) don't make a trustworthy
-  // watermark — only use the last one if it's real.
-  const lastId = messageClientIds[messageClientIds.length - 1];
+  // An empty client_id (a message shape without one) doesn't make a
+  // trustworthy watermark — only use the last one if it's real.
+  const lastId = messageIds[messageIds.length - 1];
 
   return {
     createdAtMs,
@@ -170,6 +174,8 @@ function parseSession(path: string): ParsedSession {
       userMessages,
       assistantMessages,
       toolCommands,
+      messageIds,
+      messageTimestamps,
       ...(lastId ? { lastMessageId: lastId } : {}),
     },
   };
@@ -228,7 +234,7 @@ function findRolloutFiles(root: string): string[] {
 }
 
 export interface CodexParse {
-  parsed: ParsedExport;
+  parsed: ParsedExport & { conversations: WatermarkedConversation[] };
   sessionsFound: number;
   sessionsDropped: number; // beyond maxSessions — most recent are kept
 }
@@ -239,7 +245,7 @@ export function parseCodexTranscripts(
 ): CodexParse {
   if (!existsSync(root)) throw new Error(`No Codex transcripts at ${root}`);
   const names = loadThreadNames(root);
-  const sessions: { conversation: ParsedConversation; createdAtMs: number }[] = [];
+  const sessions: { conversation: WatermarkedConversation; createdAtMs: number }[] = [];
 
   for (const file of findRolloutFiles(root)) {
     // Nothing about this format is a published schema (see the module docstring
@@ -279,4 +285,23 @@ export async function extractCodexEvents(
   onProgress?: (done: number, total: number) => void,
 ): Promise<ImportResult> {
   return extractEvents(parsed, { source: "import:codex", importer: "codex", file, onProgress }, extract, model);
+}
+
+/**
+ * Import Codex sessions not already in the store, plus the new tail of any
+ * session resumed since its last import. Thin wrapper over the shared
+ * incremental engine (see incremental.ts).
+ */
+export async function importNewCodexSessions(
+  store: EventStore,
+  extract: LlmExtract,
+  model = DEFAULT_EXTRACT_MODEL,
+  root: string = DEFAULT_CODEX_SESSIONS_DIR,
+): Promise<IncrementalImportResult> {
+  if (!existsSync(root)) return { newConversations: 0, toppedUp: 0, events: 0, skipped: 0, engineFailed: false };
+  return runIncrementalImport(store, {
+    source: "import:codex",
+    parse: () => parseCodexTranscripts(root).parsed,
+    extract: (jobs) => extractCodexEvents({ conversations: jobs, memoryText: "", projects: [] }, extract, model, root),
+  });
 }
