@@ -226,8 +226,9 @@ export async function extractEvents(
   const topicsPerConvo = await mapBounded(jobs, concurrency, async ({ convo, text, replies }) => {
     // Several failures and nothing working yet means the engine is broken — a bad
     // key, no credits, a provider outage — and every remaining call will fail the
-    // same way. Stop paying for the rest of the batch.
-    if (succeeded === 0 && failed >= FAILFAST_AFTER) { done(); return []; }
+    // same way. Stop paying for the rest of the batch. `ok: false` here is the
+    // same as a real failure below: no processed-marker, so it retries later.
+    if (succeeded === 0 && failed >= FAILFAST_AFTER) { done(); return { topics: [], ok: false }; }
     try {
       const result = await extract({
         model,
@@ -242,7 +243,7 @@ export async function extractEvents(
       succeeded++;
       recordEngineSuccess(); // a working call clears any recorded outage
       done();
-      return topics;
+      return { topics, ok: true };
     } catch (e) {
       failed++;
       // One malformed extraction (e.g. the model returns an out-of-enum value)
@@ -251,19 +252,26 @@ export async function extractEvents(
       recordEngineFailure(e);
       console.error(`extract: skipped "${convo.name}" — ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
       done();
-      return [];
+      return { topics: [], ok: false };
     }
   });
 
   jobs.forEach(({ convo }, i) => {
-    for (const t of topicsPerConvo[i]!) {
-      events.push(newEvent("signal.topic", opts.source, t,
-        {
-          kind: "import", batch, file: opts.file, conversation_uuid: convo.uuid, project: convo.project,
-          ...(convo.lastMessageId ? { message_uuid: convo.lastMessageId } : {}),
-        },
-        safeIso(convo.created_at),
-      ));
+    const { topics, ok } = topicsPerConvo[i]!;
+    const provenance = {
+      kind: "import" as const, batch, file: opts.file, conversation_uuid: convo.uuid, project: convo.project,
+      ...(convo.lastMessageId ? { message_uuid: convo.lastMessageId } : {}),
+    };
+    for (const t of topics) {
+      events.push(newEvent("signal.topic", opts.source, t, provenance, safeIso(convo.created_at)));
+    }
+    // Written whenever the call itself succeeded, even with zero topics — the
+    // only durable record that a working engine already looked at this
+    // conversation and found nothing, distinct from "never attempted." Without
+    // it, a legitimately topic-less conversation is retried forever.
+    if (ok) {
+      events.push(newEvent("system.conversation_processed", opts.source, { topics_found: topics.length },
+        provenance, safeIso(convo.created_at)));
     }
   });
 
