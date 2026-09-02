@@ -1,9 +1,9 @@
 # Persnally
 
-> Local-first personal context engine. Learns who the user is from their existing
-> AI history (Claude, ChatGPT, Claude Code, git) and serves that context to every
-> AI client over MCP. The data stays on the user's machine — no Persnally cloud,
-> every claim traceable to the events behind it, everything deletable.
+> Builds a model of the user from their own AI history (Claude, ChatGPT, Claude
+> Code, Cursor, Codex, git), on their machine, and every AI client reads it over
+> MCP. No Persnally cloud; extraction runs fully offline with Ollama or through the
+> user's own key; every claim traceable to the events behind it; everything deletable.
 
 Install: `npm install -g persnally && persnally setup --yes` (Node >= 22).
 Verify: `persnally doctor` — exit 1 means something is broken, and each finding

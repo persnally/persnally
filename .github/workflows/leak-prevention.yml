@@ -57,9 +57,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: PIVOT.md and launch/ must not be committed
+      - name: Internal strategy docs must not be committed
         run: |
-          tracked=$(git ls-files PIVOT.md launch/ 2>/dev/null)
+          tracked=$(git ls-files PIVOT.md PROGRESS.md CLAUDE.md docs/VISION.md docs/KNOWLEDGE_BASE.md launch/ 2>/dev/null)
           if [ -n "$tracked" ]; then
             echo "::error::Internal strategy docs are tracked in git — these were scrubbed from history in 2026-06 and must stay local-only (see .gitignore):"
             echo "$tracked"

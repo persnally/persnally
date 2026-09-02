@@ -248,7 +248,7 @@ async function main(): Promise<void> {
         console.log(`\n⚠ Set up an AI engine to finish — ${conv.skipped.length} source(s) not imported yet:`);
         for (const s of conv.skipped) console.log(`    · ${s}`);
         console.log("  Your portrait is built from git alone until then. To finish:");
-        console.log("    · open the dashboard below and set up local AI in one click (free, private), or");
+        console.log("    · open the dashboard below and set up local AI in one click (free, runs fully offline with Ollama), or");
         console.log(`    · ${BIN} config set-key <sk-ant-…>`);
         console.log(`  then re-run: ${BIN} setup`);
       } else {

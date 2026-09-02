@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { ImageResponse } from "next/og";
 
-export const alt = "Persnally — your own context engine";
+export const alt = "Persnally — a model of you, on your machine";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -57,7 +57,7 @@ export default async function OpengraphImage() {
             marginBottom: 30,
           }}
         >
-          No. 1 — Your own context engine
+          No. 1 — A model of you, on your machine
         </div>
         <div style={{ display: "flex", fontSize: 158, letterSpacing: "-0.02em" }}>
           <span>persnally</span>

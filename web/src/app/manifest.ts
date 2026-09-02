@@ -4,10 +4,10 @@ import type { MetadataRoute } from "next";
    install as an untitled app that flashes white against the paper field. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Persnally — your own context engine",
+    name: "Persnally — a model of you, on your machine",
     short_name: "Persnally",
     description:
-      "A local-first personal context engine. Learns who you are from your AI history and serves it to every AI you use — on your machine.",
+      "Persnally builds a model of you from your own AI history, on your machine, and every AI you use reads it.",
     start_url: "/",
     display: "standalone",
     background_color: "#f2efe6",

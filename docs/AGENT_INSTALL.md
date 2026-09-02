@@ -3,10 +3,10 @@
 You are setting Persnally up on behalf of the user. Work through this top to
 bottom. Every command is non-interactive and safe to run unattended.
 
-Persnally is a local-first context engine: it reads the user's existing AI
-history from their machine, builds a profile of them, and serves it to AI
-clients over MCP. Nothing leaves the machine except text sent to the user's own
-model during import, and only if they have configured one.
+Persnally builds a model of the user from their own AI history, on their
+machine, and serves it to AI clients over MCP. Extraction runs fully offline with
+Ollama, or through the user's own key; nothing leaves the machine except text sent
+to the model they configured, during import.
 
 ## 0. Preconditions
 
