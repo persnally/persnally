@@ -190,6 +190,33 @@ export function connectClient(client: Client): string | null {
 // The hook self-renders the SessionStart envelope (`context --hook`), so no jq dependency.
 const SESSION_START_COMMAND = "persnallyd context --hook --client=claude-code 2>/dev/null";
 
+/**
+ * True when the Persnally Claude Code plugin is installed and enabled. The
+ * plugin ships the same SessionStart hook, so `connect` must not add a second
+ * one: two hooks inject the context twice per session. Claude Code records
+ * installs in `plugins/installed_plugins.json` keyed `name@marketplace`, and a
+ * disabled plugin (`enabledPlugins[key] === false` in settings.json) contributes
+ * nothing, so the hook is still ours to install in that case.
+ */
+export function claudeCodePluginInstalled(): boolean {
+  const claude = join(homedir(), ".claude");
+  let keys: string[] = [];
+  try {
+    const raw = JSON.parse(readFileSync(join(claude, "plugins", "installed_plugins.json"), "utf-8")) as { plugins?: Record<string, unknown> };
+    keys = Object.keys(raw.plugins ?? {}).filter((k) => k.startsWith("persnally@"));
+  } catch {
+    return false; // no file, or not the shape we know — behave as before the plugin existed
+  }
+  if (!keys.length) return false;
+  let enabled: Record<string, unknown> = {};
+  try {
+    enabled = (JSON.parse(readFileSync(join(claude, "settings.json"), "utf-8")) as { enabledPlugins?: Record<string, unknown> }).enabledPlugins ?? {};
+  } catch {
+    // unreadable settings: an installed plugin is enabled by default
+  }
+  return keys.some((k) => enabled[k] !== false);
+}
+
 interface HookEntry { type?: string; command?: string; timeout?: number; statusMessage?: string }
 interface HookGroup { hooks?: HookEntry[] }
 
@@ -198,8 +225,10 @@ interface HookGroup { hooks?: HookEntry[] }
  * settings so every session injects the user's context. Merges into existing
  * settings, leaves other tools' hooks untouched, and is idempotent: a prior
  * Persnally entry (including the old `show topics` form) is replaced, not duplicated.
+ * Returns null, writing nothing, when the Persnally plugin already owns the hook.
  */
-export function installClaudeCodeHook(): string {
+export function installClaudeCodeHook(): string | null {
+  if (claudeCodePluginInstalled()) return null;
   const file = join(homedir(), ".claude", "settings.json");
   let cfg: Record<string, unknown> = {};
   if (existsSync(file)) {
