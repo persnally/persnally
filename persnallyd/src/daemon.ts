@@ -22,7 +22,7 @@ import { chooseExtractor, resolvedModels, ollamaTags, pullOllamaModel, RECOMMEND
 import { refreshScopedProfiles, scopeKey, synthesizeProfile } from "./profile.js";
 import { searchContext } from "./search.js";
 import { importAllSources } from "./setup.js";
-import { refreshVoice } from "./voice.js";
+import { refreshConventions, refreshVoice } from "./voice.js";
 import type { EventStore } from "./store.js";
 import { engineFailure, recordEngineFailure, recordEngineSuccess } from "./engine-health.js";
 import { buildContextPack, recordContextRead } from "./context-pack.js";
@@ -682,7 +682,17 @@ export async function autoImportNewSessions(store: EventStore, now: number = Dat
       return;
     }
     if (importBackoffActive()) saveConfig({ import_backoff_minutes: 0, import_backoff_until: "" }); // recovered
-    if (outcome.totalEvents) store.rebuild();
+    if (outcome.totalEvents) {
+      store.rebuild();
+      // A batch mines conventions from its own sessions only; the served set
+      // has to come from each workspace's whole history. Deterministic, free.
+      try {
+        const r = refreshConventions(store);
+        if (r.signals) console.error(`auto-import: conventions refreshed — ${r.signals} signal(s) across ${r.projects} project(s)`);
+      } catch (e) {
+        console.error("auto-import: conventions refresh failed:", e instanceof Error ? e.message : e);
+      }
+    }
   } catch (e) {
     console.error("auto-import failed:", e instanceof Error ? e.message : e);
   } finally {

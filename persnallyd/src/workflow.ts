@@ -236,6 +236,9 @@ export function modelledExecutables(): Set<string> {
 const MIN_USES = 3;
 // Within a family, a tool has to clearly lead before we call it a preference.
 const DOMINANCE = 2;
+// What a contested family is served at: below the ask threshold, so an answer
+// resting on it defers to the human instead of picking a side.
+const CONTESTED_CONFIDENCE = 0.5;
 
 /**
  * Turns observed shell commands into convention/workflow signals. Within a
@@ -276,9 +279,23 @@ export function toolConventions(commands: string[]): StyleSignal[] {
     const top = ranked[0];
     if (!top || top.n < MIN_USES) continue;
     const runnerUp = ranked[1];
-    // A contested family with no clear leader says nothing useful — the user
-    // demonstrably uses both, so claiming a preference would be wrong.
-    if (runnerUp && top.n < runnerUp.n * DOMINANCE) continue;
+    // A contested family: the user demonstrably uses both, so a preference
+    // either way would be wrong. Silence is worse, though — an empty family let
+    // a stale prose claim ("prefers pnpm") answer for the project in its place.
+    // Serve the fact with both counts and a confidence that reads as "ask".
+    if (runnerUp && top.n < runnerUp.n * DOMINANCE) {
+      signals.push({
+        dimension: top.rule.dimension,
+        pattern: `uses both ${top.rule.label} (${top.n}) and ${runnerUp.rule.label} (${runnerUp.n}) — no clear preference`,
+        polarity: "does",
+        confidence: CONTESTED_CONFIDENCE,
+        // No "N command(s)" phrasing on purpose: statedConvention() would read
+        // it back as a single count for a pattern that carries two.
+        evidence: `no clear leader across sessions: ${top.rule.label} ${top.n}, ${runnerUp.rule.label} ${runnerUp.n} invocations`,
+        basis: "stylometry",
+      });
+      continue;
+    }
 
     const contested = rules.length > 1 && runnerUp !== undefined;
     signals.push({

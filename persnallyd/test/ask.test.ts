@@ -42,6 +42,11 @@ function seededStore(name: string): EventStore {
   return store;
 }
 
+/** An observed convention: evidence strong enough to carry the model's own confidence. */
+const observedConvention = () => newEvent("signal.style", "mcp:claude-code",
+  { dimension: "convention", pattern: "tests before merge", polarity: "insists", confidence: 0.9, evidence: "seen live", basis: "observed" },
+  { kind: "mcp", client: "claude-code" });
+
 const fakeEngine = (result: { answer: string; confidence: number; evidence_event_ids?: string[] }, calls?: { content?: string; n: number }) => ({
   extract: (async (opts) => {
     if (calls) { calls.n++; calls.content = opts.content; }
@@ -52,15 +57,18 @@ const fakeEngine = (result: { answer: string; confidence: number; evidence_event
 
 test("answers above the threshold and records the question/answer pair", async () => {
   const store = seededStore("answers");
-  const assertionId = store.query({ type: "signal.assertion" })[0]!.id;
+  // Cites observed behaviour, which can bear the model's 0.92 — a prose
+  // assertion alone could not (see ask-evidence-cap.test.ts).
+  const observed = observedConvention();
+  store.append([observed]);
   const r = await askUserModel(store, CLI_OPTS, fakeEngine({
-    answer: "Yes — write the tests.", confidence: 0.92, evidence_event_ids: [assertionId, "hallucinated-id"],
+    answer: "Yes — write the tests.", confidence: 0.92, evidence_event_ids: [observed.id, "hallucinated-id"],
   }));
 
   assert.equal(r.deferred, false);
   assert.equal(r.answer, "Yes — write the tests.");
   assert.equal(r.confidence, 0.92);
-  assert.deepEqual(r.evidence_event_ids, [assertionId], "hallucinated evidence ids must be dropped");
+  assert.deepEqual(r.evidence_event_ids, [observed.id], "hallucinated evidence ids must be dropped");
 
   const q = store.query({ type: "agent.question" });
   const a = store.query({ type: "agent.answer" });
@@ -75,7 +83,7 @@ test("answers above the threshold and records the question/answer pair", async (
     answer: "Yes — write the tests.",
     confidence: 0.92,
     deferred: false,
-    evidence_event_ids: [assertionId],
+    evidence_event_ids: [observed.id],
   });
   assert.deepEqual(a[0]!.provenance, { kind: "derived", from: [q[0]!.id] });
   store.close();
@@ -101,7 +109,9 @@ test("defers below the threshold but still records the exchange", async () => {
 
 test("confidence exactly at the threshold counts as answered", async () => {
   const store = seededStore("boundary");
-  const r = await askUserModel(store, CLI_OPTS, fakeEngine({ answer: "Yes.", confidence: CONFIDENCE_THRESHOLD }));
+  const observed = observedConvention();
+  store.append([observed]);
+  const r = await askUserModel(store, CLI_OPTS, fakeEngine({ answer: "Yes.", confidence: CONFIDENCE_THRESHOLD, evidence_event_ids: [observed.id] }));
   assert.equal(r.deferred, false);
   store.close();
 });
@@ -203,7 +213,9 @@ test("scoped clients see neither corrections nor rejected-answer history", async
 
 test("askHistory joins questions, answers, and feedback with conservative precision", async () => {
   const store = seededStore("history");
-  const engine = fakeEngine({ answer: "Yes.", confidence: 0.9 });
+  const observed = observedConvention();
+  store.append([observed]);
+  const engine = fakeEngine({ answer: "Yes.", confidence: 0.9, evidence_event_ids: [observed.id] });
   const r1 = await askUserModel(store, CLI_OPTS, engine);
   const r2 = await askUserModel(store, { ...CLI_OPTS, question: "What tone for this email?" }, engine);
   const r3 = await askUserModel(store, { ...CLI_OPTS, question: "Unanswerable?" }, fakeEngine({ answer: "?", confidence: 0.1 }));

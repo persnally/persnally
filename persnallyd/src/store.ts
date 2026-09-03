@@ -10,6 +10,9 @@ import { newEvent, normalizeTopic, validateEvent, type PersnallyEvent } from "./
 import { loadConfig } from "./config.js";
 import { DATA_DIR, ensurePrivateDir, ensurePrivateFile } from "./paths.js";
 import { assemblePack, type StyleSignal } from "./stylometry.js";
+
+/** A style signal as served, carrying the event it came from so citations can be traced to evidence. */
+export type ServedStyleSignal = StyleSignal & { id: string };
 import { groupNearDuplicates, TOPIC_MERGE_THRESHOLD } from "./topics.js";
 
 // 4: topic rows fold near-duplicates, so an upgraded store must re-derive —
@@ -739,13 +742,13 @@ export class EventStore {
    * never do. Without that filter the pack could assert both "prefers pnpm over
    * npm" and the reverse — each true of one repo, neither true of the person.
    */
-  voice(project?: string): { pack: string; items: StyleSignal[] } {
+  voice(project?: string): { pack: string; items: ServedStyleSignal[] } {
     const forgotten = this.forgottenStyleKeys();
-    const byPattern = new Map<string, StyleSignal>();
+    const byPattern = new Map<string, ServedStyleSignal>();
     const rows = this.db
-      .prepare(`SELECT payload, json_extract(provenance, '$.project') AS project
+      .prepare(`SELECT id, payload, json_extract(provenance, '$.project') AS project
                 FROM events WHERE type = 'signal.style' ORDER BY ts DESC`)
-      .all() as { payload: string; project: string | null }[];
+      .all() as { id: string; payload: string; project: string | null }[];
     // Newest first, so the first occurrence of a pattern is the most recent.
     for (const row of rows) {
       const p = JSON.parse(row.payload) as StyleSignal;
@@ -757,7 +760,9 @@ export class EventStore {
       if (p.dimension === "emphasis" && p.basis === "stylometry") continue;
       const key = this.styleKey(p.dimension, p.pattern);
       if (forgotten.has(key) || byPattern.has(key)) continue;
-      byPattern.set(key, p);
+      // The id travels with the signal so a consumer that reasons over it (the
+      // ask path) can cite it, and the citation can be traced back to a count.
+      byPattern.set(key, { ...p, id: row.id });
     }
     // Cap the served set: live `observed` signals accrue over time, so bound it
     // to the richest few (consolidation prunes the stored backlog separately).
@@ -810,22 +815,22 @@ export class EventStore {
     return deleted;
   }
 
-  /** Drops style signals of one basis so a deterministic re-run replaces them (live `observed`/`correction` signals are kept). */
-  clearStyleByBasis(basis: string, sources?: string[]): number {
-    // `sources` narrows the wipe to signals a caller can actually re-derive.
-    // refreshVoice re-reads only the Claude Code transcripts still on disk —
-    // deleting stylometry from claude.ai/ChatGPT exports (long gone from disk)
-    // destroyed voice that could never be rebuilt.
-    if (!sources?.length) {
-      return this.db
-        .prepare("DELETE FROM events WHERE type = 'signal.style' AND json_extract(payload, '$.basis') = ?")
-        .run(basis).changes;
-    }
-    const marks = sources.map(() => "?").join(",");
-    return this.db
-      .prepare(`DELETE FROM events WHERE type = 'signal.style'
-                AND json_extract(payload, '$.basis') = ? AND source IN (${marks})`)
-      .run(basis, ...sources).changes;
+  /**
+   * Drops style signals of one basis so a deterministic re-run replaces them
+   * (live `observed`/`correction` signals are kept). `sources` narrows the wipe
+   * to signals a caller can actually re-derive — refreshVoice re-reads only the
+   * transcripts still on disk, and deleting stylometry from claude.ai/ChatGPT
+   * exports (long gone) once destroyed voice that could never be rebuilt.
+   * `dimensions` narrows it further, so the conventions refresh (all local
+   * transcript sources) and the tone refresh (Claude Code prose only) each
+   * replace exactly their own output.
+   */
+  clearStyleByBasis(basis: string, sources?: string[], dimensions?: string[]): number {
+    const where = ["type = 'signal.style'", "json_extract(payload, '$.basis') = ?"];
+    const params: string[] = [basis];
+    if (sources?.length) { where.push(`source IN (${sources.map(() => "?").join(",")})`); params.push(...sources); }
+    if (dimensions?.length) { where.push(`json_extract(payload, '$.dimension') IN (${dimensions.map(() => "?").join(",")})`); params.push(...dimensions); }
+    return this.db.prepare(`DELETE FROM events WHERE ${where.join(" AND ")}`).run(...params).changes;
   }
 
   /**
