@@ -11,7 +11,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { askUserModel, citationSupports, CONFIDENCE_THRESHOLD, evidenceCap, impliedEvidence, namesAnyTool, namesServedTool } from "../src/ask.js";
+import { askUserModel, citationSupports, CONFIDENCE_THRESHOLD, evidenceCap, familiesAsserted, impliedEvidence, namesAnyTool, namesServedTool } from "../src/ask.js";
 import { newEvent } from "../src/events.js";
 import type { LlmExtract } from "../src/llm.js";
 import { EventStore } from "../src/store.js";
@@ -31,7 +31,7 @@ const prose = newEvent("signal.assertion", "import:claude",
   { kind: "import", batch: "b", file: "conversations.json" });
 const observedNpm = style("uses npm", "stylometry", 0.85, "observed in 185 command(s) across Claude Code sessions");
 const thin = style("uses bun", "stylometry", 0.575, "observed in 3 command(s) across Claude Code sessions");
-const contested = style("uses both npm (60) and pnpm (55) — no clear preference", "stylometry", 0.5, "no clear leader across sessions: npm 60, pnpm 55 invocations");
+const contested = style("uses both vitest (9) and jest (8) — no clear preference", "stylometry", 0.5, "no clear leader across sessions: vitest 9, jest 8 invocations");
 const live = newEvent("signal.style", "mcp:claude-code",
   { dimension: "convention", pattern: "prefers merge over rebase", polarity: "prefers", confidence: 0.8, evidence: "seen live", basis: "observed" },
   { kind: "mcp", client: "claude-code", session: "s" });
@@ -65,7 +65,7 @@ test("a confident answer resting only on prose defers — the pnpm-at-0.92 case"
   const r = await askUserModel(store, OPTS, engine(0.92, [prose.id]));
   assert.equal(r.deferred, true);
   assert.equal(r.reason, "low-confidence");
-  assert.equal(r.confidence, 0.65, "recorded at what the evidence bears, not what the model said");
+  assert.equal(r.confidence, 0.6, "prose cannot back a tool claim, so the answer is unsupported — recorded as such, not as what the model said");
 });
 
 test("the same answer citing the observed count is answered, at the count's confidence", async () => {
@@ -91,10 +91,14 @@ test("citing nothing, with an answer nothing served supports, defers — the sma
 
 test("a contested family is served, cite-able, and defers rather than picking a side", async () => {
   const seen = { content: "" };
-  const r = await askUserModel(store, OPTS, engine(0.88, [contested.id], seen));
-  assert.match(seen.content, new RegExp(`\\[${contested.id}\\] uses both npm \\(60\\) and pnpm \\(55\\)`), "served with its id");
-  assert.equal(r.deferred, true);
-  assert.equal(r.confidence, 0.5);
+  // Picking a side: the contested signal cannot agree with "jest", nothing else backs it → unsupported.
+  const side = await askUserModel(store, { ...OPTS, question: "vitest or jest?" }, engine(0.88, [contested.id], seen, "jest"));
+  assert.match(seen.content, new RegExp(`\\[${contested.id}\\] uses both vitest \\(9\\) and jest \\(8\\)`), "served with its id");
+  assert.equal(side.deferred, true);
+  // Not picking a side: the contested signal is the evidence, and its 0.5 defers.
+  const honest = await askUserModel(store, { ...OPTS, question: "vitest or jest?" }, engine(0.88, [contested.id], undefined, "No clear preference here — ask the user which they want."));
+  assert.equal(honest.deferred, true);
+  assert.equal(honest.confidence, 0.5);
 });
 
 test("conventions and tone are rendered with their ids so they can be cited", async () => {
@@ -245,4 +249,31 @@ test("citationSupports, by class", () => {
   assert.equal(citationSupports(correction, "vitest", true), false);
   assert.equal(citationSupports(deletion, "vitest", true), true, "a deletion passes but bears nothing in evidenceCap");
   assert.equal(citationSupports(prose, "pnpm", true), true, "prose passes and is capped at 0.65 by evidenceCap");
+});
+
+// ── The final small-model shape: a paragraph asserting in several families ──
+
+test("every family the answer asserts in must be backed, or the whole answer is unsupported", async () => {
+  // The store serves "uses npm" (package manager) for this project and nothing
+  // for test runners. A paragraph that gets the package manager right and
+  // asserts a test runner it has no evidence for is a wrong answer about the
+  // test runner — it must not ride on the package-manager evidence.
+  const r = await askUserModel(store, OPTS, engine(0.9, [observedNpm.id], undefined,
+    "They use vitest for tests, and npm as the package manager."));
+  assert.equal(r.deferred, true);
+  assert.equal(r.evidence_event_ids.length, 0);
+  assert.deepEqual([...familiesAsserted("They use vitest for tests, and npm as the package manager.").entries()].sort(),
+    [["package-manager", "npm"], ["test-runner-js", "vitest"]].sort());
+});
+
+test("the first-named tool in a family is the assertion, so 'pnpm … npm' asserts pnpm", async () => {
+  // llama3.2 answered a paragraph mentioning pnpm first and npm later for a
+  // repo that serves "uses npm"; the grader — and the cap — read pnpm.
+  const r = await askUserModel(store, OPTS, engine(0.85, [observedNpm.id], undefined,
+    "The user prefers pnpm for speed, though npm appears in older sessions."));
+  assert.equal(r.deferred, true);
+  const ok = await askUserModel(store, OPTS, engine(0.85, [observedNpm.id], undefined,
+    "npm here; pnpm only shows up in one older session."));
+  assert.equal(ok.deferred, false);
+  assert.equal(ok.confidence, 0.85);
 });

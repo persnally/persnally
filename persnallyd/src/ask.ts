@@ -13,7 +13,7 @@ import { overlapScore, queryTokens } from "./search.js";
 import type { EventStore, ServedStyleSignal } from "./store.js";
 import { projectLabel } from "./importers/claude-code.js";
 import { assemblePack, statedConvention, type StyleSignal } from "./stylometry.js";
-import { toolLabels } from "./workflow.js";
+import { toolFamilies } from "./workflow.js";
 
 // Below this, a wrong answer costs more trust than a deferral saves time.
 export const CONFIDENCE_THRESHOLD = 0.7;
@@ -78,70 +78,121 @@ function labelAt(answer: string, label: string): number {
   return m ? m.index : -1;
 }
 
-/** The tools a served convention names: the leader, the runner-up, or both sides of a contested family. */
-function toolsNamed(pattern: string): string[] {
-  const both = /^uses both (.+?) \(\d+\) and (.+?) \(\d+\)/.exec(pattern);
-  if (both) return [both[1]!, both[2]!];
+/**
+ * What the answer asserts, per tool family: the first tool of each family it
+ * names. Models assert first and mention the alternative after ("pnpm, not
+ * npm"), and the benchmark grades the same way. An answer that names tools
+ * from several families asserts something in each of them.
+ */
+export function familiesAsserted(answer: string): Map<string, string> {
+  const first = new Map<string, { label: string; at: number }>();
+  for (const { label, family } of toolFamilies()) {
+    const at = labelAt(answer, label);
+    if (at === -1) continue;
+    const cur = first.get(family);
+    if (!cur || at < cur.at) first.set(family, { label, at });
+  }
+  return new Map([...first].map(([family, v]) => [family, v.label]));
+}
+
+/** The tool a mined convention stands for, or null for a contested family. */
+function conventionLeader(pattern: string): string | null {
+  if (/^uses both /.test(pattern)) return null;
   const pref = /^prefers (.+?) over (.+)$/.exec(pattern);
-  return pref ? [pref[1]!, pref[2]!] : [pattern.replace(/^uses /, "")];
+  return pref ? pref[1]! : pattern.replace(/^uses /, "");
+}
+
+function familyOf(label: string): string | undefined {
+  return toolFamilies().find((t) => t.label.toLowerCase() === label.toLowerCase())?.family;
+}
+
+/** A mined convention backs the answer when the answer's first-named tool in that convention's family is the convention's own. */
+function conventionAgrees(pattern: string, asserted: Map<string, string>): boolean {
+  const leader = conventionLeader(pattern);
+  if (!leader) return false;
+  const family = familyOf(leader);
+  return family !== undefined && asserted.get(family)?.toLowerCase() === leader.toLowerCase();
 }
 
 export function namesServedTool(answer: string, served: { pattern: string }[]): boolean {
-  return served.some((s) => toolsNamed(s.pattern).some((t) => labelAt(answer, t) !== -1));
+  return served.some((s) => {
+    const both = /^uses both (.+?) \(\d+\) and (.+?) \(\d+\)/.exec(s.pattern);
+    const pref = /^prefers (.+?) over (.+)$/.exec(s.pattern);
+    const names = both ? [both[1]!, both[2]!] : pref ? [pref[1]!, pref[2]!] : [s.pattern.replace(/^uses /, "")];
+    return names.some((t) => labelAt(answer, t) !== -1);
+  });
 }
 
-/**
- * Whether the answer names any tool the rule table knows — the whole
- * vocabulary, not just what is served for this project. "pnpm" for a repo whose
- * only served convention is "uses npm" names no *served* tool, and that gap let
- * an unrelated citation carry a wrong answer.
- */
+/** Whether the answer names any tool the rule table knows — the whole vocabulary, not just what is served here. */
 export function namesAnyTool(answer: string): boolean {
-  return toolLabels().some((t) => labelAt(answer, t) !== -1);
+  return familiesAsserted(answer).size > 0;
 }
 
-/** Whether two pieces of text name at least one tool in common. */
-function shareATool(a: string, b: string): boolean {
-  return toolLabels().some((t) => labelAt(a, t) !== -1 && labelAt(b, t) !== -1);
+/** The families this free-form text (an observed convention, a correction) can vouch for: those whose asserted tool it names. */
+function familiesVouchedBy(text: string, asserted: Map<string, string>): string[] {
+  return [...asserted].filter(([, label]) => labelAt(text, label) !== -1).map(([family]) => family);
 }
 
 /**
- * Whether a cited event can bear this answer. A tool answer is carried only by
- * evidence that names the same tool: a mined convention that agrees, an
- * observed convention or correction whose own text names it. Tone never
- * carries a tool answer. For any other answer, every citation stands and the
+ * Served conventions that back the answer without being cited. Small models
+ * answer correctly and skip the citation list; the evidence exists either way.
+ */
+export function impliedEvidence(answer: string, served: { id: string; pattern: string }[]): string[] {
+  const asserted = familiesAsserted(answer);
+  return served.filter((s) => conventionAgrees(s.pattern, asserted)).map((s) => s.id);
+}
+
+/**
+ * Whether a cited event can bear this answer. Under a tool answer only
+ * evidence naming the asserted tool counts: a mined convention that agrees,
+ * an observed convention or a correction whose own text names it. Tone never
+ * carries a tool answer. Under any other answer every citation stands and the
  * class caps in `evidenceCap` apply.
  */
 export function citationSupports(e: PersnallyEvent, answer: string, toolAnswer: boolean): boolean {
+  const asserted = familiesAsserted(answer);
   if (e.type === "signal.style") {
     const s = e.payload as StyleSignal;
     if (s.dimension !== "convention" && s.dimension !== "workflow") return !toolAnswer;
-    if (s.basis === "stylometry" && s.dimension === "convention" && !/^uses both /.test(s.pattern)) {
-      return impliedEvidence(answer, [{ id: e.id, pattern: s.pattern }]).length > 0;
+    if (s.basis === "stylometry" && s.dimension === "convention") {
+      // A contested family backs an answer that picks no side (its 0.5 then
+      // defers), never one that does.
+      return /^uses both /.test(s.pattern) ? !toolAnswer : conventionAgrees(s.pattern, asserted);
     }
-    return !toolAnswer || shareATool(s.pattern, answer);
+    return !toolAnswer || familiesVouchedBy(s.pattern, asserted).length > 0;
   }
   if (e.type === "user.correction") {
     const p = e.payload as { action?: string; reason?: string; target_id?: string };
     if (p.action === "delete") return true; // contributes nothing to the cap either way
-    return !toolAnswer || shareATool(`${p.target_id ?? ""} ${p.reason ?? ""}`, answer);
+    return !toolAnswer || familiesVouchedBy(`${p.target_id ?? ""} ${p.reason ?? ""}`, asserted).length > 0;
   }
   return true;
 }
 
-export function impliedEvidence(answer: string, served: { id: string; pattern: string }[]): string[] {
-  const ids: string[] = [];
-  for (const s of served) {
-    if (/^uses both /.test(s.pattern)) continue;
-    const pref = /^prefers (.+?) over (.+)$/.exec(s.pattern);
-    const leader = labelAt(answer, pref ? pref[1]! : s.pattern.replace(/^uses /, ""));
-    if (leader === -1) continue;
-    // Models assert first and mention the alternative after ("pnpm, not npm"):
-    // the leader has to come first, not stand alone.
-    const runnerUp = pref ? labelAt(answer, pref[2]!) : -1;
-    if (runnerUp === -1 || leader < runnerUp) ids.push(s.id);
+/**
+ * The families an evidence set can vouch for. A tool answer is only as
+ * supported as its least-supported family: "vitest, and they use pnpm" for a
+ * repo that serves pnpm and runs go test asserts two things and only one is
+ * backed, so it is unsupported as a whole.
+ */
+export function familiesBacked(evidence: PersnallyEvent[], asserted: Map<string, string>): Set<string> {
+  const backed = new Set<string>();
+  for (const e of evidence) {
+    if (e.type === "signal.style") {
+      const s = e.payload as StyleSignal;
+      if (s.basis === "stylometry" && s.dimension === "convention") {
+        const leader = conventionLeader(s.pattern);
+        const family = leader ? familyOf(leader) : undefined;
+        if (family && conventionAgrees(s.pattern, asserted)) backed.add(family);
+      } else if (s.dimension === "convention" || s.dimension === "workflow") {
+        for (const f of familiesVouchedBy(s.pattern, asserted)) backed.add(f);
+      }
+    } else if (e.type === "user.correction") {
+      const p = e.payload as { action?: string; reason?: string; target_id?: string };
+      if (p.action !== "delete") for (const f of familiesVouchedBy(`${p.target_id ?? ""} ${p.reason ?? ""}`, asserted)) backed.add(f);
+    }
   }
-  return ids;
+  return backed;
 }
 
 const INSTRUCTION = `You are the user's personal model. An AI agent is asking a question about this user so it can proceed without interrupting them. Answer ONLY from the evidence provided.
@@ -218,11 +269,20 @@ export async function askUserModel(
   // under "vitest" — each time the cap trusted the citation. An answer that
   // names any known tool is a tool choice, and only evidence naming that tool
   // can carry it.
-  const toolAnswer = namesAnyTool(parsed.answer);
+  const asserted = familiesAsserted(parsed.answer);
+  const toolAnswer = asserted.size > 0;
   const citedEvents = store.getEvents(parsed.evidence_event_ids.filter((id) => knownIds.has(id)))
     .filter((e) => citationSupports(e, parsed.answer, toolAnswer));
-  const evidence = citedEvents.length ? citedEvents.map((e) => e.id) : impliedEvidence(parsed.answer, served);
-  const confidence = Math.min(normalizeConfidence(parsed.confidence), evidenceCap(citedEvents.length ? citedEvents : store.getEvents(evidence)));
+  let evidenceEvents = citedEvents.length ? citedEvents : store.getEvents(impliedEvidence(parsed.answer, served));
+  // Every family the answer asserts in has to be backed, or the answer as a
+  // whole is unsupported — a paragraph that gets the package manager right
+  // and the test runner wrong is a wrong answer about the test runner.
+  if (toolAnswer) {
+    const backed = familiesBacked(evidenceEvents, asserted);
+    if ([...asserted.keys()].some((f) => !backed.has(f))) evidenceEvents = [];
+  }
+  const evidence = evidenceEvents.map((e) => e.id);
+  const confidence = Math.min(normalizeConfidence(parsed.confidence), evidenceCap(evidenceEvents));
 
   if (confidence < CONFIDENCE_THRESHOLD) {
     return record(store, opts, {
