@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v persnallyd >/dev/null 2>&1 && persnallyd context --hook --client=claude-code 2>/dev/null || true",
+            "timeout": 10,
+            "statusMessage": "Loading your Persnally context…"
+          }
+        ]
+      }
+    ]
+  }
+}

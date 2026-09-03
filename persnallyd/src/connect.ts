@@ -190,6 +190,50 @@ export function connectClient(client: Client): string | null {
 // The hook self-renders the SessionStart envelope (`context --hook`), so no jq dependency.
 const SESSION_START_COMMAND = "persnallyd context --hook --client=claude-code 2>/dev/null";
 
+/**
+ * True when a Persnally Claude Code plugin that ships our SessionStart hook is
+ * installed for the user and enabled. `connect` must not add a second hook
+ * then: two hooks inject the context twice per session. Three things have to
+ * hold, each checked against what Claude Code actually recorded rather than
+ * the plugin's name: the install is user-scoped (a project- or local-scoped
+ * plugin covers one repository, so every other session still needs the hook
+ * in user settings); its installed manifest carries our hook command (a
+ * same-named plugin from another marketplace may ship none); and it is not
+ * disabled (`enabledPlugins[key] === false`).
+ */
+export function claudeCodePluginInstalled(): boolean {
+  const claude = join(homedir(), ".claude");
+  let records: { key: string; scope?: unknown; installPath?: unknown }[];
+  try {
+    const raw = JSON.parse(readFileSync(join(claude, "plugins", "installed_plugins.json"), "utf-8")) as { plugins?: Record<string, unknown> };
+    records = Object.entries(raw.plugins ?? {})
+      .filter(([k]) => k.startsWith("persnally@"))
+      .flatMap(([key, v]) => (Array.isArray(v) ? v : [v]).map((r) => ({ key, ...(r as { scope?: unknown; installPath?: unknown }) })));
+  } catch {
+    return false; // no file, or not the shape we know — behave as before the plugin existed
+  }
+  let enabled: Record<string, unknown> = {};
+  try {
+    enabled = (JSON.parse(readFileSync(join(claude, "settings.json"), "utf-8")) as { enabledPlugins?: Record<string, unknown> }).enabledPlugins ?? {};
+  } catch {
+    // unreadable settings: an installed plugin is enabled by default
+  }
+  return records.some((r) =>
+    (r.scope === undefined || r.scope === "user")
+    && enabled[r.key] !== false
+    && typeof r.installPath === "string"
+    && shipsOurHook(r.installPath));
+}
+
+/** Whether an installed plugin's own hooks manifest carries the Persnally SessionStart command. */
+function shipsOurHook(installPath: string): boolean {
+  try {
+    return readFileSync(join(installPath, "hooks", "hooks.json"), "utf-8").includes("persnallyd context --hook");
+  } catch {
+    return false;
+  }
+}
+
 interface HookEntry { type?: string; command?: string; timeout?: number; statusMessage?: string }
 interface HookGroup { hooks?: HookEntry[] }
 
@@ -198,8 +242,10 @@ interface HookGroup { hooks?: HookEntry[] }
  * settings so every session injects the user's context. Merges into existing
  * settings, leaves other tools' hooks untouched, and is idempotent: a prior
  * Persnally entry (including the old `show topics` form) is replaced, not duplicated.
+ * Returns null, writing nothing, when the Persnally plugin already owns the hook.
  */
-export function installClaudeCodeHook(): string {
+export function installClaudeCodeHook(): string | null {
+  if (claudeCodePluginInstalled()) return null;
   const file = join(homedir(), ".claude", "settings.json");
   let cfg: Record<string, unknown> = {};
   if (existsSync(file)) {
