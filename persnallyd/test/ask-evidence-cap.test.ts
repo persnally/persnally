@@ -11,7 +11,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { askUserModel, CONFIDENCE_THRESHOLD, evidenceCap, impliedEvidence } from "../src/ask.js";
+import { askUserModel, CONFIDENCE_THRESHOLD, evidenceCap, impliedEvidence, namesServedTool } from "../src/ask.js";
 import { newEvent } from "../src/events.js";
 import type { LlmExtract } from "../src/llm.js";
 import { EventStore } from "../src/store.js";
@@ -175,4 +175,27 @@ test("a cited convention counts only when the answer agrees with it — the para
   const agree = await askUserModel(store, OPTS, engine(0.85, [observedNpm.id], undefined, "npm — that is what this repo runs."));
   assert.equal(agree.deferred, false);
   assert.deepEqual(agree.evidence_event_ids, [observedNpm.id]);
+});
+
+test("a cited tone signal cannot carry a tool answer, but still carries a tone answer", async () => {
+  const tone = store.query({ type: "signal.style", limit: 100 }).find((e) => (e.payload as { dimension: string }).dimension === "voice")!;
+  // "Use pnpm" citing "terse, no filler" (0.9): the citation says nothing about
+  // package managers, and no served tool convention agrees with pnpm.
+  const tool = await askUserModel(store, OPTS, engine(0.9, [tone.id], undefined, "Use pnpm."));
+  assert.equal(tool.deferred, true);
+  assert.equal(tool.evidence_event_ids.length, 0);
+  // A tone question answered from tone evidence keeps the tone signal's confidence.
+  const toneQ = { ...OPTS, question: "What tone for this Slack message?" };
+  const style = await askUserModel(store, toneQ, engine(0.9, [tone.id], undefined, "Terse, no filler, no greeting."));
+  assert.equal(style.deferred, false);
+  assert.equal(style.confidence, 0.9);
+  assert.deepEqual(style.evidence_event_ids, [tone.id]);
+});
+
+test("namesServedTool sees leaders, runners-up and both sides of a contested family", () => {
+  const served = [{ pattern: "prefers npm over pnpm" }, { pattern: "uses both go test (9) and vitest (8) — no clear preference" }, { pattern: "cargo test" }];
+  assert.equal(namesServedTool("pnpm install", served), true);
+  assert.equal(namesServedTool("vitest is fine", served), true);
+  assert.equal(namesServedTool("cargo test --all", served), true);
+  assert.equal(namesServedTool("keep it terse", served), false);
 });

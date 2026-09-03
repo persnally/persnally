@@ -69,24 +69,36 @@ function normalizeConfidence(raw: number): number {
  * defer on every question. Only observed conventions qualify — never prose —
  * and never a contested family, and never when the answer names the runner-up.
  */
+/** Where a tool label is first named in the answer, or -1. Tolerant of how
+    models write a label: "node --test" matches "node --test", "node:test", "node test". */
+function labelAt(answer: string, label: string): number {
+  const tokens = label.toLowerCase().split(/\s+/).map((t) => t.replace(/^-+/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const m = new RegExp(`(^|[^a-z0-9])${tokens.join("[\\s:\\-]*")}([^a-z0-9]|$)`).exec(answer.toLowerCase());
+  return m ? m.index : -1;
+}
+
+/** The tools a served convention names: the leader, the runner-up, or both sides of a contested family. */
+function toolsNamed(pattern: string): string[] {
+  const both = /^uses both (.+?) \(\d+\) and (.+?) \(\d+\)/.exec(pattern);
+  if (both) return [both[1]!, both[2]!];
+  const pref = /^prefers (.+?) over (.+)$/.exec(pattern);
+  return pref ? [pref[1]!, pref[2]!] : [pattern.replace(/^uses /, "")];
+}
+
+export function namesServedTool(answer: string, served: { pattern: string }[]): boolean {
+  return served.some((s) => toolsNamed(s.pattern).some((t) => labelAt(answer, t) !== -1));
+}
+
 export function impliedEvidence(answer: string, served: { id: string; pattern: string }[]): string[] {
-  const hay = answer.toLowerCase();
-  // Where a tool is first named in the answer, or -1. Tolerant of how models
-  // write a label: "node --test" matches "node --test", "node:test", "node test".
-  const at = (label: string): number => {
-    const tokens = label.toLowerCase().split(/\s+/).map((t) => t.replace(/^-+/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-    const m = new RegExp(`(^|[^a-z0-9])${tokens.join("[\\s:\\-]*")}([^a-z0-9]|$)`).exec(hay);
-    return m ? m.index : -1;
-  };
   const ids: string[] = [];
   for (const s of served) {
     if (/^uses both /.test(s.pattern)) continue;
     const pref = /^prefers (.+?) over (.+)$/.exec(s.pattern);
-    const leader = at(pref ? pref[1]! : s.pattern.replace(/^uses /, ""));
+    const leader = labelAt(answer, pref ? pref[1]! : s.pattern.replace(/^uses /, ""));
     if (leader === -1) continue;
     // Models assert first and mention the alternative after ("pnpm, not npm"):
     // the leader has to come first, not stand alone.
-    const runnerUp = pref ? at(pref[2]!) : -1;
+    const runnerUp = pref ? labelAt(answer, pref[2]!) : -1;
     if (runnerUp === -1 || leader < runnerUp) ids.push(s.id);
   }
   return ids;
@@ -132,7 +144,7 @@ export async function askUserModel(
   engine: { extract: LlmExtract; model: string } | null,
 ): Promise<AskResult> {
   const allowed = opts.allowed ?? null;
-  const { content, knownIds, served } = buildMaterial(store, opts.question, allowed, opts.project);
+  const { content, knownIds, served, styleById } = buildMaterial(store, opts.question, allowed, opts.project);
 
   if (!engine) return record(store, opts, { deferred: true, reason: "no-engine" });
   if (!content) return record(store, opts, { deferred: true, reason: "not-enough-context" });
@@ -161,12 +173,17 @@ export async function askUserModel(
   // Only the miner's patterns name a tool that can be checked ("uses npm",
   // "prefers X over Y"); a live-observed convention ("tests before merge") and
   // a contested family (capped at 0.5, which defers anyway) are kept as cited.
-  const servedById = new Map(served.map((s) => [s.id, s]));
+  // An answer that names a served tool is a tool choice, and only tool
+  // evidence (or a correction) can carry one: a cited tone signal ("terse, no
+  // filler", 0.9) says nothing about which package manager this repo runs.
+  const toolAnswer = namesServedTool(parsed.answer, served);
   const supports = (id: string): boolean => {
-    const s = servedById.get(id);
+    const s = styleById.get(id);
+    if (!s) return true; // corrections, prose and topics keep their own caps
+    if (s.dimension !== "convention" && s.dimension !== "workflow") return !toolAnswer;
     // Only mined tool conventions name something checkable; workflow patterns
     // ("works through GitHub PRs from the CLI") are prose and keep their cap.
-    if (!s || s.basis !== "stylometry" || s.dimension !== "convention" || /^uses both /.test(s.pattern)) return true;
+    if (s.basis !== "stylometry" || s.dimension !== "convention" || /^uses both /.test(s.pattern)) return true;
     return impliedEvidence(parsed.answer, [s]).length > 0;
   };
   const cited = parsed.evidence_event_ids.filter((id) => knownIds.has(id) && supports(id));
@@ -203,9 +220,9 @@ const TOPIC_CANDIDATES = 1000;
 /** Evidence corpus for the model, ranked against the question. Scoped clients
     get only their allowed categories' topics (never the cross-category profile
     or assertions) — the same boundary the daemon enforces on /profile. */
-function buildMaterial(store: EventStore, question: string, allowed: Category[] | null, project?: string): { content: string; knownIds: Set<string>; served: ServedStyleSignal[] } {
+function buildMaterial(store: EventStore, question: string, allowed: Category[] | null, project?: string): { content: string; knownIds: Set<string>; served: ServedStyleSignal[]; styleById: Map<string, ServedStyleSignal> } {
   const knownIds = new Set<string>();
-  if (readsNothing(allowed)) return { content: "", knownIds, served: [] };
+  if (readsNothing(allowed)) return { content: "", knownIds, served: [], styleById: new Map() };
   const lines: string[] = [];
   const q = queryTokens(question);
 
@@ -294,7 +311,7 @@ function buildMaterial(store: EventStore, question: string, allowed: Category[] 
     }
   }
 
-  return { content: lines.join("\n").trim(), knownIds, served: scoped };
+  return { content: lines.join("\n").trim(), knownIds, served: scoped, styleById: new Map(voice.items.map((s) => [s.id, s])) };
 }
 
 function record(

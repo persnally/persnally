@@ -48,6 +48,7 @@ export interface ConventionRoots {
 /** Every source whose convention/workflow signals a refresh re-derives and may therefore replace. */
 export const CONVENTION_SOURCES = ["cli", "dashboard", "import:claude-code", "import:cursor", "import:codex"];
 const CONVENTION_DIMENSIONS = ["convention", "workflow"];
+const ALL_HISTORY = Number.MAX_SAFE_INTEGER;
 const TONE_DIMENSIONS = ["voice", "format", "emphasis"];
 
 /**
@@ -72,12 +73,17 @@ export function commandsByProjectOnDisk(roots: ConventionRoots = {}): Map<string
       console.error(`conventions: skipped ${label} — ${e instanceof Error ? e.message : String(e)}`);
     }
   };
+  // Unbounded on purpose. The parsers keep the newest N sessions by default,
+  // which is right for an import budget and wrong here: this refresh replaces
+  // every convention on file, so a habit whose evidence sits in older sessions
+  // would be wiped by a bounded read. Deterministic and local, so the cost is
+  // parse time, not tokens.
   read("Claude Code", roots.claudeCode === undefined ? DEFAULT_TRANSCRIPTS_DIR : roots.claudeCode,
-    (p) => parseClaudeCodeTranscripts(p).parsed.conversations);
+    (p) => parseClaudeCodeTranscripts(p, ALL_HISTORY).parsed.conversations);
   read("Cursor", roots.cursorDb === undefined ? defaultCursorDb(roots.cursorHome) : roots.cursorDb,
-    (p) => parseCursorHistory(p, roots.cursorHome ?? homedir()).parsed.conversations);
+    (p) => parseCursorHistory(p, roots.cursorHome ?? homedir(), ALL_HISTORY).parsed.conversations);
   read("Codex", roots.codex === undefined ? DEFAULT_CODEX_SESSIONS_DIR : roots.codex,
-    (p) => parseCodexTranscripts(p).parsed.conversations);
+    (p) => parseCodexTranscripts(p, ALL_HISTORY).parsed.conversations);
   return byProject;
 }
 

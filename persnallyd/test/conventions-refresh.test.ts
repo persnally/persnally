@@ -127,3 +127,37 @@ test("an unreadable source is reported and skipped, never fatal", () => {
   const by = commandsByProjectOnDisk({ claudeCode: ccRoot, cursorDb: null, codex: broken });
   assert.equal(by.get(PROJECT)?.length, 4, "the readable source still contributes");
 });
+
+test("a habit whose evidence sits beyond the parsers' default window is still derived", () => {
+  // 205 sessions in one workspace; only the five OLDEST run npm. A bounded
+  // read keeps the newest 200 and would replace the store's conventions with a
+  // set that has never seen npm — wiping a real habit on every refresh.
+  const deepRoot = join(root, "deep-claude-projects");
+  const dir = join(deepRoot, "-Users-dev-Projects-deep");
+  mkdirSync(dir, { recursive: true });
+  const project = "/Users/dev/Projects/deep";
+  for (let i = 0; i < 205; i++) {
+    const id = `d${String(i).padStart(3, "0")}`;
+    const ts = new Date(Date.UTC(2025, 0, 1) + i * 3_600_000).toISOString(); // oldest first
+    const base = { sessionId: id, cwd: project, timestamp: ts };
+    const commands = i < 5 ? ["npm ci", "npm test", "npm run build"] : ["ls"];
+    const lines = [
+      { ...base, type: "user", uuid: `${id}-u1`, message: { role: "user", content: "one" } },
+      { ...base, type: "user", uuid: `${id}-u2`, message: { role: "user", content: "two" } },
+      ...commands.map((command, k) => ({
+        ...base, type: "assistant", uuid: `${id}-a${k}`,
+        message: { role: "assistant", content: [{ type: "tool_use", id: `t${k}`, name: "Bash", input: { command } }] },
+      })),
+    ];
+    writeFileSync(join(dir, `${id}.jsonl`), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+  }
+  const s2 = new EventStore(join(root, "deep.db"));
+  try {
+    refreshConventions(s2, { claudeCode: deepRoot, cursorDb: null, codex: null });
+    const npm = s2.voice(project).items.find((s) => s.pattern === "uses npm");
+    assert.ok(npm, "fifteen npm invocations in the oldest sessions must survive the refresh");
+    assert.match(npm.evidence, /observed in 15 command/);
+  } finally {
+    s2.close();
+  }
+});
