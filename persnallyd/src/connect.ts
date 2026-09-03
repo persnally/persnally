@@ -200,7 +200,7 @@ const SESSION_START_COMMAND = "persnallyd context --hook --client=claude-code 2>
  */
 export function claudeCodePluginInstalled(): boolean {
   const claude = join(homedir(), ".claude");
-  let keys: string[] = [];
+  let keys: string[];
   try {
     const raw = JSON.parse(readFileSync(join(claude, "plugins", "installed_plugins.json"), "utf-8")) as { plugins?: Record<string, unknown> };
     keys = Object.keys(raw.plugins ?? {}).filter((k) => k.startsWith("persnally@"));
