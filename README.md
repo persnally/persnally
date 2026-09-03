@@ -2,7 +2,7 @@
 
 **So every AI finally knows you.**
 
-Persnally is a local-first personal context engine. It learns who you are from your AI activity — your Claude and ChatGPT history, your code — and serves that context to every AI tool you use, so they stop treating you like a stranger.
+Persnally builds **a model of you** from your own AI history, on your machine, and every AI you use reads it. It learns from your Claude and ChatGPT chats, your Claude Code, Cursor and Codex sessions, and your git; eight clients read the result over MCP today (Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, Windsurf, Zed, VS Code). ChatGPT imports today and reads live once the agent relay ships — it cannot reach a loopback server. Your tools stop treating you like a stranger.
 
 Your context lives on your machine. Not in our cloud, not in any model vendor's silo. You can read every byte, see why it believes each thing, and delete any of it.
 
@@ -107,10 +107,10 @@ Or add the MCP server to any client manually. It exposes six tools backed by the
 
 ## Your data, your rules
 
-- **Local-first.** State lives in `~/.persnally`. Nothing leaves your machine except, at import/synthesis, the text you choose to send to your own LLM for extraction (bring your own key).
+- **On your machine.** State lives in `~/.persnally`. Extraction runs fully offline with Ollama, or through your own key — either way, nothing leaves your machine except the text you choose to send to the model you chose, at import and synthesis.
 - **Structured signals only.** Raw conversations are never stored — only `{ topic, weight, intent, sentiment, category, … }` and provenance pointers.
 - **Inspectable & deletable.** The dashboard shows everything; the delete button means it.
-- **Source-available.** Read the engine, audit the claims, run it yourself.
+- **Source-available.** Read the engine, audit the claims, run it yourself. Licensed FSL-1.1-MIT: free to use, read and run; converts to MIT two years after each release.
 
 ## CLI
 

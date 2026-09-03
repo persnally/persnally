@@ -3,7 +3,7 @@
 **Spec version: 1.0** · Status: **Stable** · License: open specification (CC-BY-4.0) — anyone may
 implement a compatible client or a compatible server, no permission needed.
 
-> The interface between AI clients (Claude, Cursor, agents) and a personal context engine, over
+> The interface between AI clients (Claude, Cursor, agents) and the user's Persnally daemon — a model of them, on their machine — over
 > [MCP](https://modelcontextprotocol.io) (stdio transport). Persnally's server is a thin adapter:
 > all state lives behind a local daemon; the tools below are the whole contract a client sees.
 > Normative reference implementation: [`persnallyd/src/mcp/index.ts`](../persnallyd/src/mcp/index.ts).
