@@ -144,7 +144,21 @@ export async function askUserModel(
     console.error(`ask: engine reply unusable — ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
     return record(store, opts, { deferred: true, reason: "low-confidence", confidence: 0 });
   }
-  const cited = parsed.evidence_event_ids.filter((id) => knownIds.has(id));
+  // A citation is not support. A small model cited a real "uses npm" convention
+  // under an answer that said pnpm — so a cited convention only counts when the
+  // answer actually names its leading tool, the same test implied evidence
+  // passes. Tone, corrections and prose cannot be checked against the text and
+  // keep their own caps.
+  // Only the miner's patterns name a tool that can be checked ("uses npm",
+  // "prefers X over Y"); a live-observed convention ("tests before merge") and
+  // a contested family (capped at 0.5, which defers anyway) are kept as cited.
+  const servedById = new Map(served.map((s) => [s.id, s]));
+  const supports = (id: string): boolean => {
+    const s = servedById.get(id);
+    if (!s || s.basis !== "stylometry" || /^uses both /.test(s.pattern)) return true;
+    return impliedEvidence(parsed.answer, [s]).length > 0;
+  };
+  const cited = parsed.evidence_event_ids.filter((id) => knownIds.has(id) && supports(id));
   const evidence = cited.length ? cited : impliedEvidence(parsed.answer, served);
   const confidence = Math.min(normalizeConfidence(parsed.confidence), evidenceCap(store.getEvents(evidence)));
 

@@ -158,3 +158,15 @@ test("impliedEvidence: leader yes, runner-up no, contested never, prose never", 
   assert.deepEqual(impliedEvidence("cargo test, then grep the output", served), ["c", "d"]);
   assert.deepEqual(impliedEvidence("npmjs.com is the registry", served), [], "whole words only");
 });
+
+test("a cited convention counts only when the answer agrees with it — the paragraph-of-prose case", async () => {
+  // llama3.2 cited the real "uses npm" convention under an answer that said
+  // "favors pnpm and tsc … vitest …". The citation must not carry that answer.
+  const r = await askUserModel(store, OPTS, engine(0.85, [observedNpm.id], undefined,
+    "User favors pnpm and tsc in Node.js stacks, vitest for testing, and psql for databases."));
+  assert.equal(r.deferred, true, "an answer that contradicts what it cites is unsupported");
+  assert.equal(r.evidence_event_ids.length, 0);
+  const agree = await askUserModel(store, OPTS, engine(0.85, [observedNpm.id], undefined, "npm — that is what this repo runs."));
+  assert.equal(agree.deferred, false);
+  assert.deepEqual(agree.evidence_event_ids, [observedNpm.id]);
+});
