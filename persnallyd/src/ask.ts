@@ -13,6 +13,7 @@ import { overlapScore, queryTokens } from "./search.js";
 import type { EventStore, ServedStyleSignal } from "./store.js";
 import { projectLabel } from "./importers/claude-code.js";
 import { assemblePack, statedConvention, type StyleSignal } from "./stylometry.js";
+import { toolLabels } from "./workflow.js";
 
 // Below this, a wrong answer costs more trust than a deferral saves time.
 export const CONFIDENCE_THRESHOLD = 0.7;
@@ -89,6 +90,45 @@ export function namesServedTool(answer: string, served: { pattern: string }[]): 
   return served.some((s) => toolsNamed(s.pattern).some((t) => labelAt(answer, t) !== -1));
 }
 
+/**
+ * Whether the answer names any tool the rule table knows — the whole
+ * vocabulary, not just what is served for this project. "pnpm" for a repo whose
+ * only served convention is "uses npm" names no *served* tool, and that gap let
+ * an unrelated citation carry a wrong answer.
+ */
+export function namesAnyTool(answer: string): boolean {
+  return toolLabels().some((t) => labelAt(answer, t) !== -1);
+}
+
+/** Whether two pieces of text name at least one tool in common. */
+function shareATool(a: string, b: string): boolean {
+  return toolLabels().some((t) => labelAt(a, t) !== -1 && labelAt(b, t) !== -1);
+}
+
+/**
+ * Whether a cited event can bear this answer. A tool answer is carried only by
+ * evidence that names the same tool: a mined convention that agrees, an
+ * observed convention or correction whose own text names it. Tone never
+ * carries a tool answer. For any other answer, every citation stands and the
+ * class caps in `evidenceCap` apply.
+ */
+export function citationSupports(e: PersnallyEvent, answer: string, toolAnswer: boolean): boolean {
+  if (e.type === "signal.style") {
+    const s = e.payload as StyleSignal;
+    if (s.dimension !== "convention" && s.dimension !== "workflow") return !toolAnswer;
+    if (s.basis === "stylometry" && s.dimension === "convention" && !/^uses both /.test(s.pattern)) {
+      return impliedEvidence(answer, [{ id: e.id, pattern: s.pattern }]).length > 0;
+    }
+    return !toolAnswer || shareATool(s.pattern, answer);
+  }
+  if (e.type === "user.correction") {
+    const p = e.payload as { action?: string; reason?: string; target_id?: string };
+    if (p.action === "delete") return true; // contributes nothing to the cap either way
+    return !toolAnswer || shareATool(`${p.target_id ?? ""} ${p.reason ?? ""}`, answer);
+  }
+  return true;
+}
+
 export function impliedEvidence(answer: string, served: { id: string; pattern: string }[]): string[] {
   const ids: string[] = [];
   for (const s of served) {
@@ -144,7 +184,7 @@ export async function askUserModel(
   engine: { extract: LlmExtract; model: string } | null,
 ): Promise<AskResult> {
   const allowed = opts.allowed ?? null;
-  const { content, knownIds, served, styleById } = buildMaterial(store, opts.question, allowed, opts.project);
+  const { content, knownIds, served } = buildMaterial(store, opts.question, allowed, opts.project);
 
   if (!engine) return record(store, opts, { deferred: true, reason: "no-engine" });
   if (!content) return record(store, opts, { deferred: true, reason: "not-enough-context" });
@@ -173,22 +213,16 @@ export async function askUserModel(
   // Only the miner's patterns name a tool that can be checked ("uses npm",
   // "prefers X over Y"); a live-observed convention ("tests before merge") and
   // a contested family (capped at 0.5, which defers anyway) are kept as cited.
-  // An answer that names a served tool is a tool choice, and only tool
-  // evidence (or a correction) can carry one: a cited tone signal ("terse, no
-  // filler", 0.9) says nothing about which package manager this repo runs.
-  const toolAnswer = namesServedTool(parsed.answer, served);
-  const supports = (id: string): boolean => {
-    const s = styleById.get(id);
-    if (!s) return true; // corrections, prose and topics keep their own caps
-    if (s.dimension !== "convention" && s.dimension !== "workflow") return !toolAnswer;
-    // Only mined tool conventions name something checkable; workflow patterns
-    // ("works through GitHub PRs from the CLI") are prose and keep their cap.
-    if (s.basis !== "stylometry" || s.dimension !== "convention" || /^uses both /.test(s.pattern)) return true;
-    return impliedEvidence(parsed.answer, [s]).length > 0;
-  };
-  const cited = parsed.evidence_event_ids.filter((id) => knownIds.has(id) && supports(id));
-  const evidence = cited.length ? cited : impliedEvidence(parsed.answer, served);
-  const confidence = Math.min(normalizeConfidence(parsed.confidence), evidenceCap(store.getEvents(evidence)));
+  // A citation is not support. A small model cited a real "uses npm" convention
+  // under "pnpm", then a tone signal under "pnpm", then an unrelated correction
+  // under "vitest" — each time the cap trusted the citation. An answer that
+  // names any known tool is a tool choice, and only evidence naming that tool
+  // can carry it.
+  const toolAnswer = namesAnyTool(parsed.answer);
+  const citedEvents = store.getEvents(parsed.evidence_event_ids.filter((id) => knownIds.has(id)))
+    .filter((e) => citationSupports(e, parsed.answer, toolAnswer));
+  const evidence = citedEvents.length ? citedEvents.map((e) => e.id) : impliedEvidence(parsed.answer, served);
+  const confidence = Math.min(normalizeConfidence(parsed.confidence), evidenceCap(citedEvents.length ? citedEvents : store.getEvents(evidence)));
 
   if (confidence < CONFIDENCE_THRESHOLD) {
     return record(store, opts, {
@@ -220,9 +254,9 @@ const TOPIC_CANDIDATES = 1000;
 /** Evidence corpus for the model, ranked against the question. Scoped clients
     get only their allowed categories' topics (never the cross-category profile
     or assertions) — the same boundary the daemon enforces on /profile. */
-function buildMaterial(store: EventStore, question: string, allowed: Category[] | null, project?: string): { content: string; knownIds: Set<string>; served: ServedStyleSignal[]; styleById: Map<string, ServedStyleSignal> } {
+function buildMaterial(store: EventStore, question: string, allowed: Category[] | null, project?: string): { content: string; knownIds: Set<string>; served: ServedStyleSignal[] } {
   const knownIds = new Set<string>();
-  if (readsNothing(allowed)) return { content: "", knownIds, served: [], styleById: new Map() };
+  if (readsNothing(allowed)) return { content: "", knownIds, served: [] };
   const lines: string[] = [];
   const q = queryTokens(question);
 
@@ -311,7 +345,7 @@ function buildMaterial(store: EventStore, question: string, allowed: Category[] 
     }
   }
 
-  return { content: lines.join("\n").trim(), knownIds, served: scoped, styleById: new Map(voice.items.map((s) => [s.id, s])) };
+  return { content: lines.join("\n").trim(), knownIds, served: scoped };
 }
 
 function record(

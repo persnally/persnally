@@ -11,7 +11,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { askUserModel, CONFIDENCE_THRESHOLD, evidenceCap, impliedEvidence, namesServedTool } from "../src/ask.js";
+import { askUserModel, citationSupports, CONFIDENCE_THRESHOLD, evidenceCap, impliedEvidence, namesAnyTool, namesServedTool } from "../src/ask.js";
 import { newEvent } from "../src/events.js";
 import type { LlmExtract } from "../src/llm.js";
 import { EventStore } from "../src/store.js";
@@ -198,4 +198,51 @@ test("namesServedTool sees leaders, runners-up and both sides of a contested fam
   assert.equal(namesServedTool("vitest is fine", served), true);
   assert.equal(namesServedTool("cargo test --all", served), true);
   assert.equal(namesServedTool("keep it terse", served), false);
+});
+
+// ── What the final small-model run exposed: unrelated citations under a tool answer ──
+
+test("a tool answer naming a tool that is NOT served here is still a tool answer — tone cannot carry it", async () => {
+  // llama3.2 answered "pnpm" for a repo whose only served convention is
+  // "uses npm", citing a tone signal. "pnpm" names no served tool, but it
+  // names a known one, and that is what makes it a tool choice.
+  const tone = store.query({ type: "signal.style", limit: 100 }).find((e) => (e.payload as { dimension: string }).dimension === "voice")!;
+  const r = await askUserModel(store, OPTS, engine(0.92, [tone.id], undefined, "pnpm"));
+  assert.equal(r.deferred, true);
+  assert.equal(r.evidence_event_ids.length, 0);
+  assert.ok(namesAnyTool("pnpm") && !namesServedTool("pnpm", [{ pattern: "uses npm" }]), "the gap the old test left open");
+});
+
+test("a correction carries a tool answer only when it names that tool", async () => {
+  // The store's correction says "uses npm, never pnpm".
+  const wrongTool = await askUserModel(store, OPTS, engine(0.95, [correction.id], undefined, "vitest"));
+  assert.equal(wrongTool.deferred, true, "an unrelated correction is not evidence for vitest");
+  const rightTool = await askUserModel(store, OPTS, engine(0.95, [correction.id], undefined, "npm — never pnpm here."));
+  assert.equal(rightTool.deferred, false);
+  assert.equal(rightTool.confidence, 0.95, "a correction naming the tool lets the model's confidence stand");
+  const notATool = await askUserModel(store, { ...OPTS, question: "tests before merge?" }, engine(0.9, [correction.id], undefined, "Yes, always."));
+  assert.equal(notATool.deferred, false, "an answer that names no tool keeps every citation");
+});
+
+test("an observed free-form convention carries a tool answer only when its text names the tool", async () => {
+  // "prefers merge over rebase" (observed, 0.95) under an answer about npm shares no tool.
+  const r = await askUserModel(store, OPTS, engine(0.9, [live.id], undefined, "npm"));
+  assert.equal(r.deferred, false, "…but 'npm' is then carried by the served 'uses npm' convention through implied evidence");
+  assert.deepEqual(r.evidence_event_ids, [observedNpm.id], "the unrelated observed signal was dropped; the agreeing convention was attributed");
+  const rebase = await askUserModel(store, { ...OPTS, question: "merge or rebase?" }, engine(0.9, [live.id], undefined, "merge, not rebase"));
+  assert.equal(rebase.deferred, false);
+  assert.deepEqual(rebase.evidence_event_ids, [live.id]);
+});
+
+test("citationSupports, by class", () => {
+  const conv = { ...observedNpm, payload: observedNpm.payload };
+  assert.equal(citationSupports(conv, "npm", true), true);
+  assert.equal(citationSupports(conv, "pnpm", true), false);
+  assert.equal(citationSupports(live, "merge, not rebase", true), true);
+  assert.equal(citationSupports(live, "vitest", true), false);
+  assert.equal(citationSupports(live, "Yes, always.", false), true);
+  assert.equal(citationSupports(correction, "npm", true), true);
+  assert.equal(citationSupports(correction, "vitest", true), false);
+  assert.equal(citationSupports(deletion, "vitest", true), true, "a deletion passes but bears nothing in evidenceCap");
+  assert.equal(citationSupports(prose, "pnpm", true), true, "prose passes and is capped at 0.65 by evidenceCap");
 });

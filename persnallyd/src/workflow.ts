@@ -227,6 +227,11 @@ export function invocations(command: string): Invocation[] {
  * which of its questions fall outside what this file can see at all — a score
  * built only from questions we already model reports nothing about coverage.
  */
+/** Every tool label the rule table can name — the vocabulary an answer is checked against. */
+export function toolLabels(): string[] {
+  return [...new Set(RULES.map((r) => r.label))];
+}
+
 export function modelledExecutables(): Set<string> {
   return new Set(RULES.map((r) => r.exe));
 }
