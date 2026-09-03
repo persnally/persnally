@@ -40,12 +40,19 @@ describe("a clear preference is reported", () => {
 });
 
 describe("silence when the evidence doesn't support a claim", () => {
-  test("a genuinely contested family produces nothing", () => {
-    // Real numbers from this machine: npm 408, pnpm 346. The user demonstrably
-    // uses both — asserting a preference either way would be wrong.
-    const p = patterns([...rep("npm ci", 40), ...rep("pnpm install", 34)]);
-    assert.ok(!p.some((x) => /pnpm|npm/.test(x)),
-      `a contested family must stay silent, got ${JSON.stringify(p)}`);
+  test("a genuinely contested family is served as a fact with both counts, never a preference", () => {
+    // Nine pnpm and eight npm: the user uses both. Claiming a preference either
+    // way would be wrong — but going silent let a stale prose claim answer for
+    // this workspace instead. The fact is served, at a confidence that defers.
+    const signals = toolConventions([...rep("pnpm install", 9), ...rep("npm test", 8)]);
+    const s = signals.find((x) => /pnpm|npm/.test(x.pattern));
+    assert.ok(s, `expected a contested-family fact, got ${JSON.stringify(signals.map((x) => x.pattern))}`);
+    assert.doesNotMatch(s.pattern, /prefers/);
+    assert.match(s.pattern, /uses both pnpm \(9\) and npm \(8\)/);
+    assert.match(s.pattern, /no clear preference/);
+    assert.equal(s.polarity, "does");
+    assert.ok(s.confidence < 0.7, "below the ask threshold, so an answer resting on it defers");
+    assert.doesNotMatch(s.evidence, /\d+\s+command/, "must not read back as a single count");
   });
 
   test("a one-off never becomes a habit", () => {

@@ -6,16 +6,45 @@
  */
 
 import { z } from "zod";
-import { newEvent, type Provenance } from "./events.js";
+import { newEvent, type PersnallyEvent, type Provenance } from "./events.js";
 import type { LlmExtract } from "./llm.js";
 import { type Category, readsNothing } from "./permissions.js";
 import { overlapScore, queryTokens } from "./search.js";
 import type { EventStore } from "./store.js";
 import { projectLabel } from "./importers/claude-code.js";
-import { assemblePack, statedConvention } from "./stylometry.js";
+import { assemblePack, statedConvention, type StyleSignal } from "./stylometry.js";
 
 // Below this, a wrong answer costs more trust than a deferral saves time.
 export const CONFIDENCE_THRESHOLD = 0.7;
+
+/**
+ * How sure the *evidence* allows an answer to be, independent of how sure the
+ * model says it is. The model's number is a self-report — a small local model
+ * reported 0.9 on both questions it had no evidence for, and a capable one
+ * reported 0.92 citing a prose claim against a repo that contradicted it 185
+ * times. So the answer's confidence is the lesser of what the model claims and
+ * what the cited events can bear: a stated correction can back anything, an
+ * observed convention exactly as much as its count earned it, and a model's
+ * reading of prose — or nothing cited at all — stays under the threshold, so
+ * the answer defers. This is what makes the loop honest on any engine.
+ */
+const UNSUPPORTED_CAP = 0.6;
+const PROSE_CAP = 0.65;
+const OBSERVED_CAP = 0.95;
+export function evidenceCap(cited: PersnallyEvent[]): number {
+  let cap = 0;
+  for (const e of cited) {
+    if (e.type === "user.correction") {
+      // A deletion states what is false; only a contradiction or edit states what is true.
+      if ((e.payload as { action?: string }).action !== "delete") cap = Math.max(cap, 1);
+    } else if (e.type === "signal.style") {
+      const s = e.payload as StyleSignal;
+      cap = Math.max(cap, s.basis === "stylometry" ? s.confidence : OBSERVED_CAP);
+    } else cap = Math.max(cap, PROSE_CAP);
+  }
+  // Nothing cited, or nothing cited that can bear a claim, is the same case.
+  return cap > 0 ? cap : UNSUPPORTED_CAP;
+}
 
 export const DEFER_MESSAGE = "Persnally can't answer this confidently from the evidence it has — ask the user directly.";
 
@@ -79,17 +108,18 @@ export async function askUserModel(
   });
   const parsed = answerSchema.parse(raw);
   const evidence = parsed.evidence_event_ids.filter((id) => knownIds.has(id));
+  const confidence = Math.min(parsed.confidence, evidenceCap(store.getEvents(evidence)));
 
-  if (parsed.confidence < CONFIDENCE_THRESHOLD) {
+  if (confidence < CONFIDENCE_THRESHOLD) {
     return record(store, opts, {
       deferred: true,
       reason: "low-confidence",
       answer: parsed.answer,
-      confidence: parsed.confidence,
+      confidence,
       evidence,
     });
   }
-  return record(store, opts, { deferred: false, answer: parsed.answer, confidence: parsed.confidence, evidence });
+  return record(store, opts, { deferred: false, answer: parsed.answer, confidence, evidence });
 }
 
 // Identity-level material (profile, corrections, voice) is relevant to any
@@ -140,15 +170,21 @@ function buildMaterial(store: EventStore, question: string, allowed: Category[] 
   // Project-scoped facts have to say what they are scoped to. Serving "prefers
   // npm over pnpm" unlabelled leaves a model unable to tell whether it applies
   // to the repo being asked about — the evidence was present and unusable.
+  // Every served signal carries its id so the model can cite it, and the
+  // citation is what lets the answer's confidence be bounded by the evidence.
   const voice = store.voice(project);
   const scoped = voice.items.filter((i) => i.dimension === "convention" || i.dimension === "workflow");
   const tone = voice.items.filter((i) => !scoped.includes(i));
   if (tone.length) {
-    lines.push("", "## How the user writes", assemblePack(tone));
+    for (const s of tone) knownIds.add(s.id);
+    lines.push("", "## How the user writes", assemblePack(tone), `(evidence: ${tone.map((s) => `[${s.id}]`).join(" ")})`);
   }
   if (scoped.length) {
     lines.push("", `## How the user works${project ? ` in ${projectLabel(project)}` : ""}` + " (observed behaviour — outranks the general claims above)");
-    for (const s of scoped) lines.push(`- ${statedConvention(s)}`);
+    for (const s of scoped) {
+      knownIds.add(s.id);
+      lines.push(`- [${s.id}] ${statedConvention(s)}`);
+    }
   }
 
 
