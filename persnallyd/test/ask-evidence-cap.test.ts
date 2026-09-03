@@ -153,10 +153,16 @@ test("impliedEvidence: leader yes, runner-up no, contested never, prose never", 
   ];
   assert.deepEqual(impliedEvidence("Use npm here.", served), ["a"]);
   assert.deepEqual(impliedEvidence("pnpm install", served), [], "naming the runner-up implies nothing");
-  assert.deepEqual(impliedEvidence("npm, though they also run pnpm sometimes", served), [], "naming both implies nothing");
+  assert.deepEqual(impliedEvidence("npm — not pnpm — in this repo", served), ["a"], "the leader first, the alternative mentioned after, is an assertion of the leader");
+  assert.deepEqual(impliedEvidence("pnpm mostly, though npm in CI", served), [], "the runner-up first is an assertion of the runner-up");
   assert.deepEqual(impliedEvidence("run go test", served), [], "a contested family never backs an answer");
   assert.deepEqual(impliedEvidence("cargo test, then grep the output", served), ["c", "d"]);
   assert.deepEqual(impliedEvidence("npmjs.com is the registry", served), [], "whole words only");
+  const runner = [{ id: "n", pattern: "prefers node --test over vitest" }];
+  for (const phrasing of ["node --test", "node:test", "the built-in node test runner", "Node --test (no vitest)"]) {
+    assert.deepEqual(impliedEvidence(phrasing, runner), ["n"], `label spelled as ${JSON.stringify(phrasing)}`);
+  }
+  assert.deepEqual(impliedEvidence("vitest, since node --test lacks mocking", runner), [], "vitest asserted first");
 });
 
 test("a cited convention counts only when the answer agrees with it — the paragraph-of-prose case", async () => {

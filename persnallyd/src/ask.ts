@@ -71,14 +71,23 @@ function normalizeConfidence(raw: number): number {
  */
 export function impliedEvidence(answer: string, served: { id: string; pattern: string }[]): string[] {
   const hay = answer.toLowerCase();
-  const names = (label: string) => new RegExp(`(^|[^a-z0-9])${label.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}([^a-z0-9]|$)`).test(hay);
+  // Where a tool is first named in the answer, or -1. Tolerant of how models
+  // write a label: "node --test" matches "node --test", "node:test", "node test".
+  const at = (label: string): number => {
+    const tokens = label.toLowerCase().split(/\s+/).map((t) => t.replace(/^-+/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const m = new RegExp(`(^|[^a-z0-9])${tokens.join("[\\s:\\-]*")}([^a-z0-9]|$)`).exec(hay);
+    return m ? m.index : -1;
+  };
   const ids: string[] = [];
   for (const s of served) {
     if (/^uses both /.test(s.pattern)) continue;
     const pref = /^prefers (.+?) over (.+)$/.exec(s.pattern);
-    const leader = pref ? pref[1]! : s.pattern.replace(/^uses /, "");
-    const runnerUp = pref ? pref[2]! : null;
-    if (names(leader) && !(runnerUp && names(runnerUp))) ids.push(s.id);
+    const leader = at(pref ? pref[1]! : s.pattern.replace(/^uses /, ""));
+    if (leader === -1) continue;
+    // Models assert first and mention the alternative after ("pnpm, not npm"):
+    // the leader has to come first, not stand alone.
+    const runnerUp = pref ? at(pref[2]!) : -1;
+    if (runnerUp === -1 || leader < runnerUp) ids.push(s.id);
   }
   return ids;
 }
@@ -155,7 +164,9 @@ export async function askUserModel(
   const servedById = new Map(served.map((s) => [s.id, s]));
   const supports = (id: string): boolean => {
     const s = servedById.get(id);
-    if (!s || s.basis !== "stylometry" || /^uses both /.test(s.pattern)) return true;
+    // Only mined tool conventions name something checkable; workflow patterns
+    // ("works through GitHub PRs from the CLI") are prose and keep their cap.
+    if (!s || s.basis !== "stylometry" || s.dimension !== "convention" || /^uses both /.test(s.pattern)) return true;
     return impliedEvidence(parsed.answer, [s]).length > 0;
   };
   const cited = parsed.evidence_event_ids.filter((id) => knownIds.has(id) && supports(id));
