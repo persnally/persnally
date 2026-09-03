@@ -11,7 +11,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { askUserModel, CONFIDENCE_THRESHOLD, evidenceCap } from "../src/ask.js";
+import { askUserModel, CONFIDENCE_THRESHOLD, evidenceCap, impliedEvidence } from "../src/ask.js";
 import { newEvent } from "../src/events.js";
 import type { LlmExtract } from "../src/llm.js";
 import { EventStore } from "../src/store.js";
@@ -44,8 +44,8 @@ const deletion = newEvent("user.correction", "dashboard",
 store.append([prose, observedNpm, thin, contested, live, correction, deletion]);
 
 const OPTS = { question: "npm or pnpm here?", asker: "test", source: "cli", provenance: { kind: "local" as const, surface: "cli" as const }, project: PROJECT };
-const engine = (confidence: number, ids: string[], seen?: { content: string }) => ({
-  extract: (async (o) => { if (seen) seen.content = o.content; return { answer: "npm", confidence, evidence_event_ids: ids }; }) as LlmExtract,
+const engine = (confidence: number, ids: string[], seen?: { content: string }, answer = "npm") => ({
+  extract: (async (o) => { if (seen) seen.content = o.content; return { answer, confidence, evidence_event_ids: ids }; }) as LlmExtract,
   model: "fake",
 });
 
@@ -80,11 +80,11 @@ test("a stated correction lets the model's own confidence stand", async () => {
   assert.equal(r.confidence, 0.92);
 });
 
-test("citing nothing, or only ids that were never served, defers — the small-model case", async () => {
-  const none = await askUserModel(store, OPTS, engine(0.9, []));
+test("citing nothing, with an answer nothing served supports, defers — the small-model case", async () => {
+  const none = await askUserModel(store, OPTS, engine(0.9, [], undefined, "yarn"));
   assert.equal(none.deferred, true);
   assert.equal(none.confidence, 0.6);
-  const fake = await askUserModel(store, OPTS, engine(0.9, ["not-an-event"]));
+  const fake = await askUserModel(store, OPTS, engine(0.9, ["not-an-event"], undefined, "yarn"));
   assert.equal(fake.deferred, true);
   assert.equal(fake.evidence_event_ids.length, 0);
 });
@@ -112,4 +112,49 @@ test("the model's confidence still governs when it is the lower of the two", asy
   const r = await askUserModel(store, OPTS, engine(CONFIDENCE_THRESHOLD - 0.01, [correction.id]));
   assert.equal(r.deferred, true);
   assert.equal(r.confidence, CONFIDENCE_THRESHOLD - 0.01);
+});
+
+// ── What the small-model run exposed ──────────────────────────────────────
+
+test("a confidence given as a percentage is read as one, not rejected", async () => {
+  const r = await askUserModel(store, OPTS, engine(85, [observedNpm.id]));
+  assert.equal(r.deferred, false);
+  assert.equal(r.confidence, 0.85);
+  const clamped = await askUserModel(store, OPTS, engine(150, [correction.id]));
+  assert.equal(clamped.confidence, 1);
+});
+
+test("an engine reply that cannot be shaped into an answer defers instead of throwing", async () => {
+  const broken = { extract: (async () => ({ answer: "npm", confidence: "high" })) as unknown as LlmExtract, model: "fake" };
+  const r = await askUserModel(store, OPTS, broken);
+  assert.equal(r.deferred, true);
+  assert.equal(r.confidence, 0);
+  const thrown = { extract: (async () => { throw new Error("engine down"); }) as LlmExtract, model: "fake" };
+  const r2 = await askUserModel(store, OPTS, thrown);
+  assert.equal(r2.deferred, true);
+  assert.equal(store.query({ type: "agent.answer" }).length >= 2, true, "both exchanges are still recorded");
+});
+
+test("an uncited answer that names a served convention's leading tool is attributed to it", async () => {
+  // Small models answer correctly and skip the citation list. "npm" against a
+  // served "uses npm" convention rests on that convention whether cited or not.
+  const r = await askUserModel(store, OPTS, engine(0.9, []));
+  assert.equal(r.deferred, false, "the served 'uses npm' convention backs an answer of 'npm'");
+  assert.equal(r.confidence, 0.85);
+  assert.deepEqual(r.evidence_event_ids, [observedNpm.id]);
+});
+
+test("impliedEvidence: leader yes, runner-up no, contested never, prose never", () => {
+  const served = [
+    { id: "a", pattern: "prefers npm over pnpm" },
+    { id: "b", pattern: "uses both go test (9) and vitest (8) — no clear preference" },
+    { id: "c", pattern: "cargo test" },
+    { id: "d", pattern: "uses grep" },
+  ];
+  assert.deepEqual(impliedEvidence("Use npm here.", served), ["a"]);
+  assert.deepEqual(impliedEvidence("pnpm install", served), [], "naming the runner-up implies nothing");
+  assert.deepEqual(impliedEvidence("npm, though they also run pnpm sometimes", served), [], "naming both implies nothing");
+  assert.deepEqual(impliedEvidence("run go test", served), [], "a contested family never backs an answer");
+  assert.deepEqual(impliedEvidence("cargo test, then grep the output", served), ["c", "d"]);
+  assert.deepEqual(impliedEvidence("npmjs.com is the registry", served), [], "whole words only");
 });

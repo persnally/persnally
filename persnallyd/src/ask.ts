@@ -10,7 +10,7 @@ import { newEvent, type PersnallyEvent, type Provenance } from "./events.js";
 import type { LlmExtract } from "./llm.js";
 import { type Category, readsNothing } from "./permissions.js";
 import { overlapScore, queryTokens } from "./search.js";
-import type { EventStore } from "./store.js";
+import type { EventStore, ServedStyleSignal } from "./store.js";
 import { projectLabel } from "./importers/claude-code.js";
 import { assemblePack, statedConvention, type StyleSignal } from "./stylometry.js";
 
@@ -48,11 +48,40 @@ export function evidenceCap(cited: PersnallyEvent[]): number {
 
 export const DEFER_MESSAGE = "Persnally can't answer this confidently from the evidence it has — ask the user directly.";
 
+// `confidence` is not bounded at 1 here on purpose: a small local model answers
+// "85" as readily as "0.85", and rejecting the whole reply for it turned a
+// usable answer into a crash. Normalised below; the recorded value is always 0–1.
 const answerSchema = z.object({
   answer: z.string().min(1),
-  confidence: z.number().min(0).max(1),
+  confidence: z.number().min(0),
   evidence_event_ids: z.array(z.string()).default([]),
 });
+
+function normalizeConfidence(raw: number): number {
+  if (raw <= 1) return raw;
+  return raw <= 100 ? raw / 100 : 1;
+}
+
+/**
+ * Evidence an answer rests on even when the model cited nothing: a served,
+ * project-scoped convention whose leading tool the answer names. Small models
+ * often answer correctly and skip the citation list; without this they would
+ * defer on every question. Only observed conventions qualify — never prose —
+ * and never a contested family, and never when the answer names the runner-up.
+ */
+export function impliedEvidence(answer: string, served: { id: string; pattern: string }[]): string[] {
+  const hay = answer.toLowerCase();
+  const names = (label: string) => new RegExp(`(^|[^a-z0-9])${label.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}([^a-z0-9]|$)`).test(hay);
+  const ids: string[] = [];
+  for (const s of served) {
+    if (/^uses both /.test(s.pattern)) continue;
+    const pref = /^prefers (.+?) over (.+)$/.exec(s.pattern);
+    const leader = pref ? pref[1]! : s.pattern.replace(/^uses /, "");
+    const runnerUp = pref ? pref[2]! : null;
+    if (names(leader) && !(runnerUp && names(runnerUp))) ids.push(s.id);
+  }
+  return ids;
+}
 
 const INSTRUCTION = `You are the user's personal model. An AI agent is asking a question about this user so it can proceed without interrupting them. Answer ONLY from the evidence provided.
 
@@ -94,21 +123,30 @@ export async function askUserModel(
   engine: { extract: LlmExtract; model: string } | null,
 ): Promise<AskResult> {
   const allowed = opts.allowed ?? null;
-  const { content, knownIds } = buildMaterial(store, opts.question, allowed, opts.project);
+  const { content, knownIds, served } = buildMaterial(store, opts.question, allowed, opts.project);
 
   if (!engine) return record(store, opts, { deferred: true, reason: "no-engine" });
   if (!content) return record(store, opts, { deferred: true, reason: "not-enough-context" });
 
-  const raw = await engine.extract({
-    model: engine.model,
-    instruction: INSTRUCTION,
-    schema: answerSchema,
-    content: `Question from agent "${opts.asker}":\n${opts.question}\n\n## Evidence about the user\n${content}`,
-    maxTokens: 1000,
-  });
-  const parsed = answerSchema.parse(raw);
-  const evidence = parsed.evidence_event_ids.filter((id) => knownIds.has(id));
-  const confidence = Math.min(parsed.confidence, evidenceCap(store.getEvents(evidence)));
+  let parsed: z.infer<typeof answerSchema>;
+  try {
+    const raw = await engine.extract({
+      model: engine.model,
+      instruction: INSTRUCTION,
+      schema: answerSchema,
+      content: `Question from agent "${opts.asker}":\n${opts.question}\n\n## Evidence about the user\n${content}`,
+      maxTokens: 1000,
+    });
+    parsed = answerSchema.parse(raw);
+  } catch (e) {
+    // A reply the engine could not shape into an answer is not an answer. It
+    // used to propagate and take the caller down; a deferral is the honest result.
+    console.error(`ask: engine reply unusable — ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
+    return record(store, opts, { deferred: true, reason: "low-confidence", confidence: 0 });
+  }
+  const cited = parsed.evidence_event_ids.filter((id) => knownIds.has(id));
+  const evidence = cited.length ? cited : impliedEvidence(parsed.answer, served);
+  const confidence = Math.min(normalizeConfidence(parsed.confidence), evidenceCap(store.getEvents(evidence)));
 
   if (confidence < CONFIDENCE_THRESHOLD) {
     return record(store, opts, {
@@ -140,9 +178,9 @@ const TOPIC_CANDIDATES = 1000;
 /** Evidence corpus for the model, ranked against the question. Scoped clients
     get only their allowed categories' topics (never the cross-category profile
     or assertions) — the same boundary the daemon enforces on /profile. */
-function buildMaterial(store: EventStore, question: string, allowed: Category[] | null, project?: string): { content: string; knownIds: Set<string> } {
+function buildMaterial(store: EventStore, question: string, allowed: Category[] | null, project?: string): { content: string; knownIds: Set<string>; served: ServedStyleSignal[] } {
   const knownIds = new Set<string>();
-  if (readsNothing(allowed)) return { content: "", knownIds };
+  if (readsNothing(allowed)) return { content: "", knownIds, served: [] };
   const lines: string[] = [];
   const q = queryTokens(question);
 
@@ -231,7 +269,7 @@ function buildMaterial(store: EventStore, question: string, allowed: Category[] 
     }
   }
 
-  return { content: lines.join("\n").trim(), knownIds };
+  return { content: lines.join("\n").trim(), knownIds, served: scoped };
 }
 
 function record(
