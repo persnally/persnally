@@ -2,7 +2,7 @@
 
 **So every AI finally knows you.**
 
-Persnally builds **a model of you** from your own AI history, on your machine, and every AI you use reads it. It reads your Claude and ChatGPT chats, your Claude Code, Cursor and Codex sessions, and your git — and every tool you use stops treating you like a stranger.
+Persnally builds **a model of you** from your own AI history, on your machine, and every AI you use reads it. It learns from your Claude and ChatGPT chats, your Claude Code, Cursor and Codex sessions, and your git; eight clients read the result over MCP today (Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, Windsurf, Zed, VS Code). ChatGPT imports today and reads live once the agent relay ships — it cannot reach a loopback server. Your tools stop treating you like a stranger.
 
 Your context lives on your machine. Not in our cloud, not in any model vendor's silo. You can read every byte, see why it believes each thing, and delete any of it.
 

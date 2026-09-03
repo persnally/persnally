@@ -626,7 +626,7 @@ function Engine() {
 
       <div className="mt-12 grid gap-5 lg:grid-cols-2">
         <div className="plate flex flex-col p-6">
-          <Eyebrow>Every AI · MCP</Eyebrow>
+          <Eyebrow>Eight clients · MCP</Eyebrow>
           <h3 className="font-display mt-4 text-2xl text-ink">One context, every tool reads it.</h3>
           <Vignette
             src={fountain}

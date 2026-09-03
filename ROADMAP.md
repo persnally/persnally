@@ -1,6 +1,6 @@
 # Roadmap
 
-Persnally builds a model of you from your own AI history, on your machine, and every AI you use reads it. The roadmap is that one sentence with "every AI" meaning more each year: first the tools you type into, then the agents that act for you, then the agents that act for your team.
+Persnally builds a model of you from your own AI history, on your machine, and every AI you use reads it. Today that is eight MCP clients (Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, Windsurf, Zed, VS Code); ChatGPT imports today and reads live once the agent relay ships, since its connectors cannot reach a loopback server. The roadmap is that one sentence with "every AI" meaning more each year: first the tools you type into, then the agents that act for you, then the agents that act for your team.
 
 We build in rungs, and each rung has to earn the next.
 
@@ -36,7 +36,7 @@ Any agent acting on your behalf consults the model of you first.
 ## Always
 
 - **On your machine.** Custody of your data stays with you. Extraction runs fully offline with Ollama, or through your own key.
-- **Cloud as amplifier, never custodian.** Optional paid services (sync, multi-device, hosted compute, teams) carry encrypted data and run on your behalf — they never hold your plaintext.
+- **Cloud as amplifier, never custodian.** Optional paid services run on your behalf and never hold your data at rest in the clear: sync, backup and the agent relay carry ciphertext only; zero-setup inference sees the text you send it in transit, while it runs, and never stores it.
 - **Source-available and inspectable.** Audit the engine; verify the claims. FSL-1.1-MIT, converting to MIT after two years.
 - **Deletable for real.** Forgetting removes the data and everything derived from it.
 
