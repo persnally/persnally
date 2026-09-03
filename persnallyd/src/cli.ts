@@ -238,8 +238,11 @@ async function main(): Promise<void> {
         console.log(file ? `✓ Connected ${client}` : `· ${client} not installed — skipped`);
       }
       if (connections.some((r) => r.client === "claude-code" && r.file)) {
-        try { installClaudeCodeHook(); console.log("✓ Context hook installed (injects on every Claude Code session)"); }
-        catch (e) { console.error(`· Context hook skipped: ${e instanceof Error ? e.message : String(e)}`); }
+        try {
+          console.log(installClaudeCodeHook()
+            ? "✓ Context hook installed (injects on every Claude Code session)"
+            : "· Context hook: the Persnally plugin already provides it — skipped");
+        } catch (e) { console.error(`· Context hook skipped: ${e instanceof Error ? e.message : String(e)}`); }
       }
 
       // Never report plain success over history we silently passed over: the
@@ -329,7 +332,10 @@ async function main(): Promise<void> {
       // Claude Code also gets a SessionStart hook so every session injects context automatically.
       if (results.some((r) => r.client === "claude-code" && r.file)) {
         try {
-          console.log(`Installed Claude Code context hook (${installClaudeCodeHook()})`);
+          const hookFile = installClaudeCodeHook();
+          console.log(hookFile
+            ? `Installed Claude Code context hook (${hookFile})`
+            : "Claude Code context hook: the Persnally plugin already provides it — skipped");
         } catch (e) {
           console.error(`Context hook not installed: ${e instanceof Error ? e.message : String(e)}`);
         }

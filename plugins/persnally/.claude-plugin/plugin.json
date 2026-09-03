@@ -1,0 +1,11 @@
+{
+  "name": "persnally",
+  "displayName": "Persnally",
+  "version": "0.1.0",
+  "description": "A model of you, on your machine, read at session start. Your agent stops asking you what you already told it: persnally_ask answers from your own history with a confidence score, or defers back to you.",
+  "author": { "name": "Persnally", "url": "https://persnally.com" },
+  "homepage": "https://persnally.com",
+  "repository": "https://github.com/persnally/persnally",
+  "license": "FSL-1.1-MIT",
+  "keywords": ["context", "personalization", "mcp", "session-start", "on-your-machine", "ollama"]
+}
