@@ -18,11 +18,11 @@ const text = Newsreader({ subsets: ["latin"], style: ["normal", "italic"], varia
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 const description =
-  "Persnally is a local-first personal context engine. It learns who you are from your AI history and serves that context to every AI tool you use — local-first, across every AI.";
+  "Persnally builds a model of you from your own AI history, on your machine, and every AI you use reads it. So every AI finally knows you.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
-  title: "Persnally — your own context engine",
+  title: "Persnally — a model of you, on your machine",
   description,
   applicationName: "Persnally",
   authors: [{ name: "Persnally", url: SITE }],

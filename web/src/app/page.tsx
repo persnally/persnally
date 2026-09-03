@@ -131,7 +131,7 @@ function Hero() {
             spans the figure's full height, no slack under the CTA */}
         <div className="flex flex-col lg:justify-between">
           <div className="rise" style={{ animationDelay: "0ms" }}>
-            <Eyebrow>Open source · local-first · MCP</Eyebrow>
+            <Eyebrow>Source-available · on your machine · MCP</Eyebrow>
           </div>
 
           <div className="mt-6 lg:mt-0">
@@ -146,8 +146,8 @@ function Hero() {
               className="rise mt-8 max-w-xl text-pretty text-lg leading-relaxed text-mute"
               style={{ animationDelay: "160ms" }}
             >
-              Persnally learns who you are from your AI history — your chats, your code, your
-              decisions — and serves it to every AI you use. On your machine. Yours.
+              Persnally builds a model of you from your own AI history — your chats, your code,
+              your decisions — on your machine, and every AI you use reads it. Yours.
             </p>
 
             <div className="rise mt-10 flex max-w-xl flex-col gap-4" style={{ animationDelay: "240ms" }}>
@@ -480,7 +480,7 @@ function DashboardEmbed() {
       <div className="relative flex h-[38px] items-center border-b border-black/40 bg-gradient-to-b from-[#2b2b2d] to-[#242426] px-3">
         <TrafficLights />
         <span className="pointer-events-none absolute inset-x-0 text-center font-sans text-[12.5px] font-medium text-white/70">
-          persnally — your context engine
+          persnally — a model of you
         </span>
       </div>
       <iframe
@@ -519,7 +519,7 @@ function AskProof() {
         eyebrow="Answers, not just recall"
         title={
           <>
-            The only context engine your AI can <Em>ask.</Em>
+            The only model of you your AI can <Em>ask.</Em>
           </>
         }
         lede={
@@ -626,7 +626,7 @@ function Engine() {
 
       <div className="mt-12 grid gap-5 lg:grid-cols-2">
         <div className="plate flex flex-col p-6">
-          <Eyebrow>Cross-vendor · MCP</Eyebrow>
+          <Eyebrow>Eight clients · MCP</Eyebrow>
           <h3 className="font-display mt-4 text-2xl text-ink">One context, every tool reads it.</h3>
           <Vignette
             src={fountain}
@@ -809,7 +809,7 @@ function Compare() {
 function Trust() {
   const pillars = [
     {
-      t: "Local-first",
+      t: "On your machine",
       art: lock,
       d: "Your context lives in ~/.persnally — not our cloud, not any vendor's silo.",
       viz: (
@@ -879,8 +879,8 @@ function Trust() {
       <SectionHead
         n="07"
         eyebrow="Your data, your rules"
-        title="A context engine you can actually trust."
-        lede="Trust isn't a privacy policy here — it's the architecture. Not promises; properties you can check."
+        title="A model of you that you can actually check."
+        lede="Trust isn't a policy here — it's the architecture. Not promises; properties you can check."
       />
 
       <div className="mt-12 grid gap-5 md:grid-cols-2">
@@ -963,7 +963,7 @@ function Positioning() {
 
         <div className="plate border-electric p-7">
           <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-electric">Persnally</p>
-          <p className="mt-1.5 text-sm italic text-mute">your own context engine</p>
+          <p className="mt-1.5 text-sm italic text-mute">a model of you, on your machine</p>
           <ul className="mt-6 space-y-3.5">
             {us.map((x) => (
               <li key={x} className="flex items-start gap-3 text-[15px] text-ink">
@@ -1050,7 +1050,7 @@ function Pricing() {
         <CustodyNote />
 
         <p className="mx-auto mt-10 max-w-xl text-center text-[15px] italic leading-relaxed text-paper/75">
-          Privacy is never the paid tier. The local engine, the dashboard, and deletion stay free —
+          Custody is never the paid tier. The local engine, the dashboard, and deletion stay free —
           Pro is convenience on top, not a wall around your own data.
         </p>
       </div>

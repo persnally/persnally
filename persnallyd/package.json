@@ -2,7 +2,7 @@
   "name": "persnally",
   "version": "3.1.0",
   "license": "FSL-1.1-MIT",
-  "description": "Your own context engine \u2014 local-first, across every AI. So every AI finally knows you.",
+  "description": "A model of you, built from your own AI history, on your machine. Every AI you use reads it. So every AI finally knows you.",
   "type": "module",
   "bin": {
     "persnally": "build/src/cli.js",
