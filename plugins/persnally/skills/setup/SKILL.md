@@ -1,6 +1,6 @@
 ---
-description: Install or repair Persnally on this machine — the model of the user that this and every other AI client reads at session start. Use when the user asks to set up Persnally, when persnally_context is unavailable, or when the Persnally hook reports nothing.
-disable-model-invocation: false
+description: Install or repair Persnally on this machine — the model of the user that this and every other AI client reads at session start. Run only when the user invokes /persnally:setup; it installs software and reads their local exports, sessions and repositories.
+disable-model-invocation: true
 ---
 
 Persnally builds a model of the user from their own AI history, on their machine, and every

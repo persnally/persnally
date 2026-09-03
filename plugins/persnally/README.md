@@ -26,7 +26,14 @@ score or a deferral.
 
 The plugin expects the `persnally` CLI on your PATH (`npm i -g persnally`). If it isn't
 installed yet, run `/persnally:setup` once; the hook stays silent until then rather than failing
-your session.
+your session. The skill never runs on its own: it installs software and reads your local
+history, so it waits to be invoked.
+
+**Windows:** the hook is a POSIX shell line, the same one `persnally connect claude-code`
+writes. Claude Code runs shell-form hooks through Git Bash when it is installed and through
+PowerShell when it is not, and PowerShell has no `command -v`, so on a Windows machine without
+Git Bash the hook exits quietly without injecting context. Install Git for Windows (Git Bash
+comes with it), which the `persnally` CLI's own setup already assumes.
 
 Extraction runs fully offline with Ollama, or bring your own Anthropic key. Serving context to
 Claude Code never calls a model.
