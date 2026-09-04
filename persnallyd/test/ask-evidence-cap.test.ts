@@ -11,7 +11,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { askUserModel, citationSupports, CONFIDENCE_THRESHOLD, evidenceCap, familiesAsserted, impliedEvidence, namesAnyTool, namesServedTool } from "../src/ask.js";
+import { askUserModel, citationSupports, CONFIDENCE_THRESHOLD, contradictedFamilies, evidenceCap, familiesAsserted, impliedEvidence, namesAnyTool, namesServedTool } from "../src/ask.js";
 import { newEvent } from "../src/events.js";
 import type { LlmExtract } from "../src/llm.js";
 import { EventStore } from "../src/store.js";
@@ -253,17 +253,30 @@ test("citationSupports, by class", () => {
 
 // ── The final small-model shape: a paragraph asserting in several families ──
 
-test("every family the answer asserts in must be backed, or the whole answer is unsupported", async () => {
-  // The store serves "uses npm" (package manager) for this project and nothing
-  // for test runners. A paragraph that gets the package manager right and
-  // asserts a test runner it has no evidence for is a wrong answer about the
-  // test runner — it must not ride on the package-manager evidence.
-  const r = await askUserModel(store, OPTS, engine(0.9, [observedNpm.id], undefined,
+test("the headline claim must be backed; a passing mention may be unbacked but never contradicted", async () => {
+  // The store serves "uses npm" for this project and no test runner.
+  // Leading with an unbacked test runner: unsupported as a whole.
+  const lead = await askUserModel(store, OPTS, engine(0.9, [observedNpm.id], undefined,
     "They use vitest for tests, and npm as the package manager."));
-  assert.equal(r.deferred, true);
-  assert.equal(r.evidence_event_ids.length, 0);
+  assert.equal(lead.deferred, true);
+  assert.equal(lead.evidence_event_ids.length, 0);
+  // Leading with the backed npm and mentioning an unbacked test runner in passing: answered on the npm evidence.
+  const passing = await askUserModel(store, OPTS, engine(0.9, [observedNpm.id], undefined,
+    "npm as the package manager; they also run vitest for tests."));
+  assert.equal(passing.deferred, false);
+  assert.equal(passing.confidence, 0.85);
+  // Once the store serves a test runner, a contradicting mention sinks the answer even in passing.
+  const runner = style("prefers node --test over vitest", "stylometry", 0.85, "observed in 143 command(s) across Claude Code sessions");
+  store.append([runner]);
+  const contradicted = await askUserModel(store, OPTS, engine(0.9, [observedNpm.id], undefined,
+    "npm as the package manager; they also run vitest for tests."));
+  assert.equal(contradicted.deferred, true, "vitest contradicts the served node --test");
   assert.deepEqual([...familiesAsserted("They use vitest for tests, and npm as the package manager.").entries()].sort(),
-    [["package-manager", "npm"], ["test-runner-js", "vitest"]].sort());
+    [["package-manager", "npm"], ["test-runner", "vitest"]].sort(), "test runners assert as one family, as the benchmark grades them");
+  assert.deepEqual(contradictedFamilies(new Map([["test-runner", "vitest"]]), [{ pattern: "go test" }]), ["test-runner"],
+    "a go test project contradicts a vitest claim even though the rule table files them under different languages");
+  assert.deepEqual(contradictedFamilies(new Map([["test-runner", "vitest"]]), [{ pattern: "uses both vitest (9) and jest (8) — no clear preference" }]), [],
+    "a contested family contradicts nothing");
 });
 
 test("the first-named tool in a family is the assertion, so 'pnpm … npm' asserts pnpm", async () => {

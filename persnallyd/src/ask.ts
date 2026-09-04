@@ -89,10 +89,55 @@ export function familiesAsserted(answer: string): Map<string, string> {
   for (const { label, family } of toolFamilies()) {
     const at = labelAt(answer, label);
     if (at === -1) continue;
-    const cur = first.get(family);
-    if (!cur || at < cur.at) first.set(family, { label, at });
+    const key = assertionFamily(family);
+    const cur = first.get(key);
+    if (!cur || at < cur.at) first.set(key, { label, at });
   }
   return new Map([...first].map(([family, v]) => [family, v.label]));
+}
+
+/** The family of the first tool the answer names at all — its headline claim. */
+export function headlineFamily(answer: string): string | null {
+  let best: { family: string; at: number } | null = null;
+  for (const { label, family } of toolFamilies()) {
+    const at = labelAt(answer, label);
+    if (at !== -1 && (!best || at < best.at)) best = { family: assertionFamily(family), at };
+  }
+  return best?.family ?? null;
+}
+
+/**
+ * The rule table splits test runners by language (test-runner-js, -go, …)
+ * because they never compete inside one family for mining. For what an
+ * answer *asserts* they are one question — "which test runner?" — and the
+ * benchmark grades them as one. Everything else keeps its family.
+ */
+function assertionFamily(family: string): string {
+  return family.startsWith("test-runner") ? "test-runner" : family;
+}
+
+/**
+ * Families where the answer's assertion contradicts a served convention:
+ * the served leader is a different tool of the same family. An unbacked
+ * mention is allowed; a contradicted one is not.
+ */
+export function contradictedFamilies(asserted: Map<string, string>, served: { pattern: string; confidence?: number }[]): string[] {
+  // A family's verdict is its strongest served convention. Fragments from
+  // before a whole-history refresh can leave two leaders on file for one
+  // family; the weaker must not veto an answer the stronger backs.
+  const verdict = new Map<string, { leader: string; confidence: number }>();
+  for (const s of served) {
+    const leader = conventionLeader(s.pattern);
+    const family = leader ? familyOf(leader) : undefined;
+    if (!leader || !family) continue;
+    const key = assertionFamily(family);
+    const cur = verdict.get(key);
+    if (!cur || (s.confidence ?? 0) > cur.confidence) verdict.set(key, { leader, confidence: s.confidence ?? 0 });
+  }
+  return [...verdict].filter(([family, v]) => {
+    const claim = asserted.get(family);
+    return claim !== undefined && claim.toLowerCase() !== v.leader.toLowerCase();
+  }).map(([family]) => family);
 }
 
 /** The tool a mined convention stands for, or null for a contested family. */
@@ -111,7 +156,7 @@ function conventionAgrees(pattern: string, asserted: Map<string, string>): boole
   const leader = conventionLeader(pattern);
   if (!leader) return false;
   const family = familyOf(leader);
-  return family !== undefined && asserted.get(family)?.toLowerCase() === leader.toLowerCase();
+  return family !== undefined && asserted.get(assertionFamily(family))?.toLowerCase() === leader.toLowerCase();
 }
 
 export function namesServedTool(answer: string, served: { pattern: string }[]): boolean {
@@ -183,7 +228,7 @@ export function familiesBacked(evidence: PersnallyEvent[], asserted: Map<string,
       if (s.basis === "stylometry" && s.dimension === "convention") {
         const leader = conventionLeader(s.pattern);
         const family = leader ? familyOf(leader) : undefined;
-        if (family && conventionAgrees(s.pattern, asserted)) backed.add(family);
+        if (family && conventionAgrees(s.pattern, asserted)) backed.add(assertionFamily(family));
       } else if (s.dimension === "convention" || s.dimension === "workflow") {
         for (const f of familiesVouchedBy(s.pattern, asserted)) backed.add(f);
       }
@@ -275,12 +320,15 @@ export async function askUserModel(
   const citedEvents = store.getEvents(parsed.evidence_event_ids.filter((id) => knownIds.has(id)))
     .filter((e) => citationSupports(e, parsed.answer, toolAnswer));
   let evidenceEvents = citedEvents.length ? citedEvents : store.getEvents(impliedEvidence(parsed.answer, served));
-  // Every family the answer asserts in has to be backed, or the answer as a
-  // whole is unsupported — a paragraph that gets the package manager right
-  // and the test runner wrong is a wrong answer about the test runner.
+  // The answer's headline claim — the first tool it names — has to be backed,
+  // and nothing else it names may contradict what is served for this project.
+  // A paragraph that leads with the right package manager and then asserts
+  // the wrong test runner is a wrong answer about the test runner; one that
+  // mentions an unbacked tool in passing is not.
   if (toolAnswer) {
+    const headline = headlineFamily(parsed.answer);
     const backed = familiesBacked(evidenceEvents, asserted);
-    if ([...asserted.keys()].some((f) => !backed.has(f))) evidenceEvents = [];
+    if ((headline && !backed.has(headline)) || contradictedFamilies(asserted, served).length) evidenceEvents = [];
   }
   const evidence = evidenceEvents.map((e) => e.id);
   const confidence = Math.min(normalizeConfidence(parsed.confidence), evidenceCap(evidenceEvents));
