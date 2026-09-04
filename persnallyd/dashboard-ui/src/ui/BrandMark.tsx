@@ -14,6 +14,8 @@ const MARKS: Record<string, { path: string; title: string }> = {
   "claude-desktop": { path: siClaude.path, title: "Claude" },
   chatgpt: { path: OPENAI_PATH, title: "OpenAI" },
   "codex-cli": { path: OPENAI_PATH, title: "OpenAI" },
+  // The client is "codex-cli"; the importer that reads its transcripts is "codex".
+  codex: { path: OPENAI_PATH, title: "OpenAI" },
   "gemini-cli": { path: siGooglegemini.path, title: "Google Gemini" },
   cursor: { path: siCursor.path, title: "Cursor" },
   windsurf: { path: siWindsurf.path, title: "Windsurf" },

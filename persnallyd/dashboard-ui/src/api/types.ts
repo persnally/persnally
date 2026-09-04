@@ -18,6 +18,13 @@ export interface Health {
   version: string;
 }
 
+export interface ImportRun {
+  importer: string;
+  events: number;
+  runs: number;
+  last: string;
+}
+
 export interface Stats {
   total: number;
   byType: Record<string, number>;

@@ -115,3 +115,36 @@ describe("the built artifact", () => {
     assert.ok(artifact.length < 400_000, `artifact is ${artifact.length} bytes; the single-file build must stay lean`);
   });
 });
+
+test("the Connections panel lists every importer the product actually has", () => {
+  // Cursor and Codex shipped as import sources and the panel was never
+  // updated, so a user who had imported from either saw "not imported yet"
+  // against a store that held their data. The list is now pinned to the
+  // importer names the extractors emit, so a seventh source fails here first.
+  const emitted = new Set(
+    readdirSync(join(root, "src/importers"))
+      .filter((f) => f.endsWith(".ts"))
+      .flatMap((f) => [...readFileSync(join(root, "src/importers", f), "utf-8").matchAll(/importer: "([a-z-]+)"/g)].map((m) => m[1]!)),
+  );
+  assert.ok(emitted.size >= 6, `expected the six known importers, found ${[...emitted].join(", ")}`);
+
+  const listed = new Set(
+    [...ui("views/connections/ConnectionsView.tsx").matchAll(/^\s+"?([a-z-]+)"?:\s*"[^"]+",$/gm)].map((m) => m[1]!),
+  );
+  for (const name of emitted) {
+    assert.ok(listed.has(name), `importer "${name}" emits events but has no row in the Connections panel`);
+  }
+
+  // And each one resolves to a brand mark rather than a fallback initial.
+  const marks = BrandMarkSource();
+  for (const name of emitted) {
+    if (name === "git") continue; // git has its own mark keyed identically
+    assert.ok(marks.has(name), `importer "${name}" has no brand mark — it would render as a bare initial`);
+  }
+});
+
+function BrandMarkSource(): Set<string> {
+  return new Set(
+    [...ui("ui/BrandMark.tsx").matchAll(/^\s+"?([a-z-]+)"?:\s*\{ path:/gm)].map((m) => m[1]!),
+  );
+}
