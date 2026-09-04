@@ -1,0 +1,26 @@
+# Persnally
+
+> Builds a model of the user from their own AI history (Claude, ChatGPT, Claude
+> Code, Cursor, Codex, git), on their machine, and every AI client reads it over
+> MCP — eight clients today (Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI,
+> Windsurf, Zed, VS Code); ChatGPT imports today and cannot read live until the
+> agent relay ships (its connectors need a public HTTPS endpoint, not loopback).
+> No Persnally cloud; extraction runs fully offline with Ollama or through the
+> user's own key; every claim traceable to the events behind it; everything deletable.
+
+Install: `npm install -g persnally && persnally setup --yes` (Node >= 22).
+Verify: `persnally doctor` — exit 1 means something is broken, and each finding
+prints the command that fixes it.
+
+Connects to: claude-code, claude-desktop, cursor, codex, gemini-cli, windsurf,
+zed, vscode. ChatGPT's own connectors require a public HTTPS endpoint and cannot
+reach a loopback daemon — ChatGPT *history* imports, but live context does not.
+
+## Docs
+
+- [Installing Persnally (for an AI agent)](https://github.com/persnally/persnally/blob/main/docs/AGENT_INSTALL.md): deterministic, non-interactive setup steps, failure modes, and what not to do. Read this first if you are an agent setting Persnally up.
+- [README](https://github.com/persnally/persnally/blob/main/README.md): what it is, the five-minute path, the CLI surface.
+- [MCP interface](https://github.com/persnally/persnally/blob/main/docs/MCP_INTERFACE.md): the six tools a connected AI gets — get context, ask about the user, search, record signals, list interests, forget.
+- [Event schema](https://github.com/persnally/persnally/blob/main/docs/EVENT_SCHEMA.md): the append-only event types and payloads. Versioned open spec (CC-BY).
+- [Architecture](https://github.com/persnally/persnally/blob/main/docs/ARCHITECTURE.md): daemon, event store, derived views, provenance.
+- [Context depth](https://github.com/persnally/persnally/blob/main/docs/CONTEXT_DEPTH.md): what signals are extracted and why, including corpus-hygiene findings.

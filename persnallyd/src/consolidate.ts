@@ -8,6 +8,7 @@
 
 import { z } from "zod";
 import { loadConfig, saveConfig } from "./config.js";
+import { refreshConventions, type ConventionRoots } from "./voice.js";
 import { newEvent, PAYLOAD_SCHEMAS, type PersnallyEvent } from "./events.js";
 import { chooseExtractor, type ChosenExtractor } from "./llm.js";
 import { refreshScopedProfiles, synthesizeProfile } from "./profile.js";
@@ -21,6 +22,8 @@ export const CONSOLIDATION_HOUR = 3; // local time
 const STYLE_BACKLOG_CAP = 80;
 
 export interface ConsolidationResult {
+  /** Convention/workflow signals re-derived from the whole command history this run. */
+  conventionsRefreshed: number;
   newSignals: number;
   assertions: number;
   profileRefreshed: boolean;
@@ -51,6 +54,7 @@ export async function runConsolidation(
   store: EventStore,
   engine: ChosenExtractor | null,
   now: Date = new Date(),
+  opts: { conventionRoots?: ConventionRoots } = {},
 ): Promise<ConsolidationResult> {
   const lastRun = loadConfig().last_consolidation;
   const since = typeof lastRun === "string" ? lastRun : new Date(0).toISOString();
@@ -68,6 +72,15 @@ export async function runConsolidation(
 
   // Decay shifts daily even with no new events — always re-derive.
   store.rebuild(now.getTime());
+
+  // Conventions come from each workspace's whole command history, re-derived
+  // nightly so a day of imports never leaves the served set as fragments.
+  let conventionsRefreshed = 0;
+  try {
+    conventionsRefreshed = refreshConventions(store, opts.conventionRoots ?? {}, "cli").signals;
+  } catch (e) {
+    console.error("consolidate: conventions refresh failed:", e instanceof Error ? e.message : e);
+  }
 
   // Distill the voice layer: live `observed` capture has no equivalent of decay,
   // so bound the backlog to the richest signals (capture small, store distilled).
@@ -111,5 +124,5 @@ export async function runConsolidation(
   }
 
   saveConfig({ last_consolidation: now.toISOString() });
-  return { newSignals: newSignals.length, assertions: assertions.length, profileRefreshed, stylePruned };
+  return { newSignals: newSignals.length, assertions: assertions.length, profileRefreshed, stylePruned, conventionsRefreshed };
 }

@@ -64,6 +64,8 @@ re-derives all views from the log.
 | `import:claude` | Claude data export importer |
 | `import:claude-code` | Claude Code local transcripts importer (`~/.claude/projects`) |
 | `import:chatgpt` | ChatGPT data export importer |
+| `import:cursor` | Cursor local chat history importer (`state.vscdb`, reverse-engineered — no published schema) |
+| `import:codex` | Codex session transcripts importer (`~/.codex/sessions`, rollout JSONL format shared by the CLI, desktop, and IDE extension) |
 | `import:git` | Git history importer |
 | `cli` | User action via `persnally` CLI |
 | `dashboard` | User action via local dashboard |
@@ -159,6 +161,17 @@ inferred.** Two established uses:
 ```jsonc
 { "importer": "claude", "batch": "<uuid>", "events": 412, "source_span": ["2024-10-01", "2026-06-11"] }
 ```
+
+### `system.conversation_processed` — a conversation was successfully looked at
+```jsonc
+{ "topics_found": 0 }
+```
+Written once per conversation whose extraction call succeeded, regardless of how many
+topics it yielded. `signal.topic` alone can't mark "this was looked at" — a conversation
+that genuinely has nothing topic-worthy produces zero `signal.topic` events, which is
+indistinguishable from "never attempted." Without this, such a conversation is retried
+on every future import, forever, at real token cost. Identity and watermark live on the
+event's own `conversation_uuid`/`message_uuid` provenance, same as `signal.topic`.
 
 ## Provenance
 

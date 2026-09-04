@@ -1,0 +1,47 @@
+/* Persnally design tokens — palette ported from the classic dashboard.
+   Layout and interaction follow the conventional workspace shell; the visual
+   signature is squared: no rounded corners on any rectangle. Dark is the
+   product's color scheme. */
+
+:root {
+  --bg: #0b0c0e;
+  --panel: #141517;
+  --panel-2: #1b1c1f;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --text: #f1f2f4;
+  /* body prose — the portrait is primary content, it must not read as metadata */
+  --text-2: #d3d6dc;
+  --dim: #9a9da5;
+  --faint: #62656d;
+  --active: #35d07f; /* status / confidence-high */
+  --brand: #2418ff; /* the mark's pupil */
+  --warn: #ffb454;
+  --danger: #ff8a8a;
+
+  --font:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto,
+    Helvetica, Arial, sans-serif;
+  /* Display face for the portrait headline — the one editorial moment. */
+  --display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* category palette (shared with the interest map in a later slice) */
+  --cat-technology: #5ec8ff;
+  --cat-business: #ffb454;
+  --cat-finance: #5fe3a1;
+  --cat-career: #b388ff;
+  --cat-creative: #ff7ab6;
+  --cat-science: #7dd3fc;
+  --cat-education: #ffd45e;
+  --cat-health: #6ee7b7;
+  --cat-lifestyle: #ff9e80;
+  --cat-news: #9fb3c8;
+  --cat-other: #a0a4ad;
+
+  /* shell geometry — rail width matches the reference apps' ~230px */
+  --rail-w: 232px;
+  --topbar-h: 48px;
+  --canvas-max: 680px;
+}

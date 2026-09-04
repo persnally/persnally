@@ -15,12 +15,17 @@ import {
 } from "./permissions.js";
 import { newEvent, validateEvent, type EventType, type PersnallyEvent, type Provenance } from "./events.js";
 import { importNewClaudeCodeSessions } from "./importers/claude-code.js";
-import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL } from "./llm.js";
+import { importNewCursorHistory } from "./importers/cursor.js";
+import { importNewCodexSessions } from "./importers/codex.js";
+import type { IncrementalImportResult } from "./importers/incremental.js";
+import { chooseExtractor, resolvedModels, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL, type LlmExtract } from "./llm.js";
 import { refreshScopedProfiles, scopeKey, synthesizeProfile } from "./profile.js";
 import { searchContext } from "./search.js";
 import { importAllSources } from "./setup.js";
-import { refreshVoice } from "./voice.js";
+import { refreshConventions, refreshVoice } from "./voice.js";
 import type { EventStore } from "./store.js";
+import { engineFailure, recordEngineFailure, recordEngineSuccess } from "./engine-health.js";
+import { buildContextPack, recordContextRead } from "./context-pack.js";
 
 export const DEFAULT_PORT = 4983;
 const MAX_BODY_BYTES = 25 * 1024 * 1024; // generous for import batches; bounds memory
@@ -91,10 +96,10 @@ function authenticate(req: http.IncomingMessage, claimed: string | null): Auth {
 function clientMayReach(method: string, path: string): boolean {
   switch (method) {
     case "GET":
-      return path === "/topics" || path === "/profile" || path === "/voice"
+      return path === "/context" || path === "/topics" || path === "/profile" || path === "/voice"
         || path === "/search" || path === "/stats" || path === "/skills";
     case "POST":
-      return path === "/events" || path === "/ask";
+      return path === "/events" || path === "/ask" || path === "/reads";
     case "DELETE":
       return path === "/events" || path.startsWith("/topics/") || path.startsWith("/voice/");
     default:
@@ -149,6 +154,11 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       if (req.method === "GET" && url.pathname === "/") {
         return serveDashboard(req, res, url);
       }
+      // The workspace dashboard (Preact, single-file build) — parallel to the
+      // classic page while it grows to parity; same session gate, same headers.
+      if (req.method === "GET" && url.pathname === "/next") {
+        return serveDashboard(req, res, url, nextDashboardHtml, "/next");
+      }
 
       const auth = authenticate(req, url.searchParams.get("client"));
       if (auth.kind === "none") return json(res, 401, { error: auth.error });
@@ -194,12 +204,55 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         if (auth.kind === "client" && isRevoked(auth.client)) return json(res, 200, []);
         return json(res, 200, store.skills(num(url, "limit", 25)));
       }
+      // A client declares a read it performed (its own tool served context from
+      // data it already had). Attribution is derived from the verified token,
+      // never from the body — a caller must not be able to name itself.
+      if (req.method === "POST" && url.pathname === "/reads") {
+        const body = (await readBody(req)) as { scope?: unknown; purpose?: unknown; items?: unknown };
+        const id = scopeFor(auth, null);
+        if (id.error) return json(res, 401, { error: id.error });
+        recordContextRead(store, {
+          surface: id.client ? "mcp" : "cli",
+          client: id.client ?? undefined,
+          scope: typeof body.scope === "string" ? body.scope.slice(0, 40) : "context",
+          purpose: typeof body.purpose === "string" ? body.purpose.slice(0, 200) : "",
+          items: typeof body.items === "number" && Number.isFinite(body.items) ? Math.max(0, Math.trunc(body.items)) : 0,
+        });
+        return json(res, 202, { recorded: true });
+      }
+
+      // The single serving path for a model. Rendering and recording happen
+      // together here so no channel can disclose context without a receipt.
+      if (req.method === "GET" && url.pathname === "/context") {
+        const id = scopeFor(auth, url.searchParams.get("client"));
+        if (id.error) return json(res, 401, { error: id.error });
+        const allowed = id.client ? allowedCategories(id.client) : null;
+        const detail = url.searchParams.get("detail") === "full" ? "full" : "brief";
+        const project = url.searchParams.get("project") ?? undefined;
+        const pack = buildContextPack(store, { detail, project, allowed });
+        if (!pack.text) return json(res, 200, { text: "", items: 0 });
+        // A client reads over MCP; the owner's own surfaces name themselves.
+        const surface = id.client ? "mcp" : (url.searchParams.get("surface") === "hook" ? "hook" : "cli");
+        recordContextRead(store, {
+          surface,
+          client: id.client ?? url.searchParams.get("client") ?? undefined,
+          scope: detail,
+          purpose: (url.searchParams.get("purpose") ?? "").slice(0, 200) || "context read",
+          items: pack.items,
+        });
+        return json(res, 200, pack);
+      }
       if (req.method === "GET" && url.pathname === "/voice") {
         // Stylistic, not topical — a scoped client still gets it (it's how you
         // write, not what about). A revoked one does not: "reads nothing" is
         // stated without qualification in the dashboard, so it has to be true.
         if (auth.kind === "client" && isRevoked(auth.client)) return json(res, 200, { pack: "", items: [] });
-        return json(res, 200, store.voice());
+        {
+          const served = store.voice(url.searchParams.get("project") ?? undefined);
+          // Owner only: a client asking for the voice pack must not learn the
+          // names of projects it holds no grant for.
+          return json(res, 200, auth.kind === "client" ? served : { ...served, scoped: store.scopedVoice() });
+        }
       }
       if (req.method === "DELETE" && url.pathname.startsWith("/voice/")) {
         const [, , dimension, pattern] = url.pathname.split("/");
@@ -253,7 +306,9 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       }
       if (req.method === "POST" && url.pathname === "/synthesize") {
         const engine = await chooseExtractor("profile");
-        const profile = await synthesizeProfile(store, engine.extract, engine.model);
+        const profile = await synthesizeProfile(store, engine.extract, engine.model)
+          .then((p) => { recordEngineSuccess(); return p; })
+          .catch((e: unknown) => { recordEngineFailure(e); throw e; });
         safeRefreshVoice(store, "dashboard"); // keep "how you write" current with the portrait
         // Scoped caches ride along; per-scope failures are logged, never fatal.
         await refreshScopedProfiles(store, engine.extract, engine.model);
@@ -276,6 +331,12 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
           hasProfile: !!store.getProfile(),
           ollama: { reachable: tags !== null, models: tags ?? [], hasModel: (tags?.length ?? 0) > 0 },
           recommended: RECOMMENDED_LOCAL_MODEL,
+          // Resolved here so the dashboard reports the model that runs each
+          // job instead of guessing from the tag order.
+          models: resolvedModels(key.startsWith("sk-ant-"), tags),
+          // A key on file is not a key that works; report the last failure so
+          // the dashboard can stop claiming a healthy engine.
+          lastFailure: engineFailure(),
           pull,
         });
       }
@@ -316,7 +377,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         if (!(req.headers["content-type"] ?? "").includes("application/json")) {
           return json(res, 415, { error: "Content-Type must be application/json" });
         }
-        const body = (await readBody(req)) as { question?: unknown; client?: unknown; asker?: unknown };
+        const body = (await readBody(req)) as { question?: unknown; client?: unknown; asker?: unknown; project?: unknown };
         const question = typeof body.question === "string" ? body.question.trim() : "";
         if (!question || question.length > 500) {
           return json(res, 400, { error: "question required (1–500 chars)" });
@@ -332,13 +393,26 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
           return json(res, 429, { error: `ask limit reached (${ASK_LIMIT} per ${ASK_WINDOW_MS / 60000} min) — protects your inference budget from a looping agent` });
         }
         const engine = await chooseExtractor("extract").catch(() => null);
-        const result = await askUserModel(store, {
-          question,
-          asker,
-          source: client ? `mcp:${client}` : "dashboard",
-          provenance: client ? { kind: "mcp", client } : { kind: "local", surface: "dashboard" },
-          allowed: client ? allowedCategories(client) : null,
-        }, engine);
+        // An ask is an engine call like any other, so its outcome updates the
+        // health the dashboard reports. A deferral (no engine, no context) is
+        // not a failure and must not be recorded as one.
+        let result;
+        try {
+          result = await askUserModel(store, {
+            question,
+            asker,
+            source: client ? `mcp:${client}` : "dashboard",
+            provenance: client ? { kind: "mcp", client } : { kind: "local", surface: "dashboard" },
+            allowed: client ? allowedCategories(client) : null,
+            // Conventions are project-scoped, so an asker that knows its
+            // workspace gets the set that is true there.
+            project: typeof body.project === "string" ? body.project : undefined,
+          }, engine);
+          if (engine) recordEngineSuccess();
+        } catch (e) {
+          recordEngineFailure(e);
+          throw e;
+        }
         return json(res, 200, result);
       }
       if (req.method === "GET" && url.pathname === "/questions") {
@@ -488,6 +562,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       safeRefreshVoice(store, "cli"); // nightly: keep the voice fingerprint fresh + clean
       console.error(`consolidation: ${r.newSignals} new signals, ${r.assertions} assertions, profile ${r.profileRefreshed ? "refreshed" : "kept"}, ${r.stylePruned} style signals pruned`);
     } catch (e) {
+      recordEngineFailure(e);
       console.error(`consolidation failed (retrying tomorrow, not this hour): ${e instanceof Error ? e.message : String(e)}`);
     }
   }, 30 * 60 * 1000);
@@ -525,11 +600,65 @@ function nextImportBackoff(): number {
   return Math.min(last ? last * 2 : IMPORT_BACKOFF_START_MIN, IMPORT_BACKOFF_MAX_MIN);
 }
 
+export interface AutoImportSource {
+  label: string;
+  run: (store: EventStore, extract: LlmExtract, model: string) => Promise<IncrementalImportResult>;
+}
+
+/** Every local source with an incremental importer, in a fixed order so
+    logging and backoff messages are stable across ticks. */
+const AUTO_IMPORT_SOURCES: AutoImportSource[] = [
+  { label: "Claude Code", run: (s, e, m) => importNewClaudeCodeSessions(s, e, m) },
+  { label: "Cursor", run: (s, e, m) => importNewCursorHistory(s, e, m) },
+  { label: "Codex", run: (s, e, m) => importNewCodexSessions(s, e, m) },
+];
+
+export interface AutoImportOutcome {
+  totalEvents: number;
+  /** The label of the first source whose engine call failed, or null if every
+      source ran clean. */
+  engineFailedAt: string | null;
+  /** Only meaningful when engineFailedAt is set. */
+  itemsLeftUnimported: number;
+}
+
 /**
- * Ingest Claude Code sessions created since the last pass — the daemon's
- * automatic capture of new chats (no user action, no per-session hook). A
- * key-less, Ollama-less machine has no extractor: skip rather than block.
- * Never throws — capture must not take the daemon down.
+ * Runs every source in order, stopping at the first engine failure. All
+ * sources share one engine (there is exactly one `chooseExtractor` call per
+ * tick), so a dead engine is dead for the rest of them too — continuing would
+ * pay fail-fast's cost again for content that already proved the engine
+ * won't answer. Exported so this short-circuit is directly testable with
+ * fake sources, without a real extraction engine or network access: nothing
+ * in `autoImportNewSessions` itself (engine selection, config IO, the
+ * reentrancy lock) is reasonably fakeable, so that behavior stays covered
+ * only by the sources it calls, same as before this existed.
+ */
+export async function runAutoImportSources(
+  sources: AutoImportSource[],
+  store: EventStore,
+  extract: LlmExtract,
+  model: string,
+): Promise<AutoImportOutcome> {
+  let totalEvents = 0;
+  for (const source of sources) {
+    const r = await source.run(store, extract, model);
+    if (r.engineFailed) {
+      return { totalEvents, engineFailedAt: source.label, itemsLeftUnimported: r.newConversations + r.toppedUp };
+    }
+    if (r.events) {
+      totalEvents += r.events;
+      console.error(`auto-import: ${r.newConversations} new + ${r.toppedUp} resumed ${source.label} conversation(s) → ${r.events} events`);
+    }
+  }
+  return { totalEvents, engineFailedAt: null, itemsLeftUnimported: 0 };
+}
+
+/**
+ * Ingest new local chat activity since the last pass — the daemon's automatic
+ * capture across every source with an incremental importer (no user action,
+ * no per-session hook). A key-less, Ollama-less machine has no extractor:
+ * skip rather than block. Never throws — capture must not take the daemon
+ * down.
  */
 export async function autoImportNewSessions(store: EventStore, now: number = Date.now()): Promise<void> {
   if (importing) {
@@ -541,20 +670,28 @@ export async function autoImportNewSessions(store: EventStore, now: number = Dat
   try {
     const engine = await chooseExtractor("extract").catch(() => null);
     if (!engine) return;
-    const r = await importNewClaudeCodeSessions(store, engine.extract, engine.model);
-    if (r.engineFailed) {
-      // A failed extraction leaves the session unmarked so it retries — right for
-      // one bad response, ruinous when the engine is down: the same sessions come
-      // back every tick. Back off, doubling while it stays broken.
+
+    const outcome = await runAutoImportSources(AUTO_IMPORT_SOURCES, store, engine.extract, engine.model);
+    if (outcome.engineFailedAt) {
+      // A failed extraction leaves the content unmarked so it retries — right
+      // for one bad response, ruinous when the engine is down: the same
+      // content comes back every tick. Back off, doubling while it stays broken.
       const minutes = nextImportBackoff();
       saveConfig({ import_backoff_minutes: minutes, import_backoff_until: new Date(now + minutes * 60_000).toISOString() });
-      console.error(`auto-import: extraction engine is failing — pausing imports for ${minutes} min (${r.newSessions + r.toppedUp} session(s) left unimported)`);
+      console.error(`auto-import: extraction engine is failing (${outcome.engineFailedAt}) — pausing imports for ${minutes} min (${outcome.itemsLeftUnimported} item(s) left unimported)`);
       return;
     }
     if (importBackoffActive()) saveConfig({ import_backoff_minutes: 0, import_backoff_until: "" }); // recovered
-    if (r.events) {
+    if (outcome.totalEvents) {
       store.rebuild();
-      console.error(`auto-import: ${r.newSessions} new + ${r.toppedUp} resumed Claude Code session(s) → ${r.events} events`);
+      // A batch mines conventions from its own sessions only; the served set
+      // has to come from each workspace's whole history. Deterministic, free.
+      try {
+        const r = refreshConventions(store);
+        if (r.signals) console.error(`auto-import: conventions refreshed — ${r.signals} signal(s) across ${r.projects} project(s)`);
+      } catch (e) {
+        console.error("auto-import: conventions refresh failed:", e instanceof Error ? e.message : e);
+      }
     }
   } catch (e) {
     console.error("auto-import failed:", e instanceof Error ? e.message : e);
@@ -571,6 +708,12 @@ function dashboardHtml(): string {
   return cachedHtml;
 }
 
+let cachedNextHtml: string | undefined;
+function nextDashboardHtml(): string {
+  cachedNextHtml ??= readFileSync(new URL("./dashboard-next.html", import.meta.url), "utf-8");
+  return cachedNextHtml;
+}
+
 // The page itself never carries the credential — the key arrives once as ?k=,
 // is exchanged for an HttpOnly cookie, and the redirect drops it from the
 // address bar so it can't leak through history or a Referer on an outbound link.
@@ -581,12 +724,18 @@ const DASHBOARD_HEADERS = {
   "X-Content-Type-Options": "nosniff",
 };
 
-function serveDashboard(req: http.IncomingMessage, res: http.ServerResponse, url: URL): void {
+function serveDashboard(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  url: URL,
+  page: () => string = dashboardHtml,
+  selfPath = "/",
+): void {
   const key = url.searchParams.get("k");
   if (key && verifyDashboardKey(key)) {
     res.writeHead(302, {
       ...DASHBOARD_HEADERS,
-      "Location": "/",
+      "Location": selfPath,
       "Set-Cookie": `${SESSION_COOKIE}=${createSession()}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict`,
     });
     res.end();
@@ -602,7 +751,7 @@ function serveDashboard(req: http.IncomingMessage, res: http.ServerResponse, url
       headers["Set-Cookie"] = `${SESSION_COOKIE}=${createSession()}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict`;
     }
     res.writeHead(200, headers);
-    res.end(dashboardHtml());
+    res.end(page());
     return;
   }
   res.writeHead(401, DASHBOARD_HEADERS);

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { startDaemon } from "../src/daemon.js";
 import { newEvent } from "../src/events.js";
-import { createSession, issueToken, SESSION_COOKIE } from "../src/permissions.js";
+import { SESSION_COOKIE, clearScope, createSession, issueToken, setScope } from "../src/permissions.js";
 import { EventStore } from "../src/store.js";
 
 const PORT = 49831;
@@ -211,4 +211,58 @@ test("DELETE /scopes/:client clears the scope (restores full access)", async () 
   // Cleared → unrestricted again: /profile no longer scoped-out (404 = none synthesized, not 403).
   const r2 = await fetch(BASE + "/profile", { headers: { authorization: `Bearer ${cursorToken}` } });
   assert.equal(r2.status, 404);
+});
+
+test("GET /context serves and records together, so no channel can disclose silently", async () => {
+  // Rendering and recording live on the same route by design: a channel that
+  // could fetch context without a receipt is how the highest-volume read path
+  // came to be invisible in the first place.
+  // Self-sufficient: earlier tests in this file delete topics, and depending on
+  // their leftovers is how a passing test starts measuring nothing.
+  store.append([newEvent("signal.topic", "import:claude", {
+    topic: "context serving", weight: 0.9, intent: "building", sentiment: "positive",
+    depth: "deep", category: "technology", entities: [],
+  }, { kind: "import", batch: "b2", file: "conversations.json" })]);
+  store.rebuild();
+  const before = store.query({ type: "context.read", limit: 200 }).length;
+  const r = await authed("/context?detail=brief&purpose=owner%20check");
+  assert.equal(r.status, 200);
+  const pack = await r.json() as { text: string; items: number };
+  assert.match(pack.text, /# About the user|# Current interests/, "the pack is assembled");
+  assert.match(pack.text, /context serving/);
+  assert.ok(pack.items > 0, "the receipt counts what was served");
+
+  const reads = store.query({ type: "context.read", limit: 200 });
+  assert.equal(reads.length, before + 1, "serving without recording is what this prevents");
+  const latest = reads[0]!;
+  assert.equal(latest.source, "cli", "the owner's own read names itself, not a client");
+  assert.equal((latest.payload as { items: number }).items, pack.items,
+    "the receipt must count what was actually served");
+  assert.equal((latest.payload as { client_purpose: string }).client_purpose, "owner check");
+});
+
+test("a scoped client reading /context is attributed to itself, and sees only its scope", async () => {
+  // One topic in each category, so "it saw only its scope" is a real claim
+  // rather than an empty pack passing a doesNotMatch trivially.
+  store.append([newEvent("signal.topic", "import:claude", {
+    topic: "pricing tiers", weight: 0.9, intent: "deciding", sentiment: "positive",
+    depth: "deep", category: "business", entities: [],
+  }, { kind: "import", batch: "b3", file: "conversations.json" })]);
+  store.rebuild();
+  setScope("cursor", ["business"]);
+  try {
+    const r = await fetch(`${BASE}/context?detail=brief&client=cursor`, {
+      headers: { authorization: `Bearer ${cursorToken}` },
+    });
+    assert.equal(r.status, 200);
+    const pack = await r.json() as { text: string };
+    assert.match(pack.text, /pricing tiers/, "the scoped client got nothing at all");
+    assert.doesNotMatch(pack.text, /context serving/, "a scoped client received a category it cannot read");
+
+    const latest = store.query({ type: "context.read", limit: 1 })[0]!;
+    assert.equal(latest.source, "mcp:cursor", "attribution comes from the verified token");
+    assert.deepEqual(latest.provenance, { kind: "mcp", client: "cursor" });
+  } finally {
+    clearScope("cursor");
+  }
 });

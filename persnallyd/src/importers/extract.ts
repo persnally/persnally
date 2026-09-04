@@ -11,6 +11,7 @@ import { anthropicExtract, DEFAULT_EXTRACT_MODEL, type LlmExtract } from "../llm
 import { proseLines, stripNoise } from "../prose.js";
 import { analyzeVoice } from "../stylometry.js";
 import { toolConventions } from "../workflow.js";
+import { recordEngineFailure, recordEngineSuccess } from "../engine-health.js";
 
 // Enough attempts to tell a bad response apart from a dead engine, few enough
 // that a dead engine costs a handful of calls instead of the whole batch.
@@ -121,6 +122,8 @@ export interface ParsedConversation {
   /** Id of the last message consumed, recorded as the provenance watermark so a
       resumed session can be topped up with only what came after it. */
   lastMessageId?: string;
+  /** Workspace this session ran in, when the source knows it. */
+  project?: string;
 }
 
 export interface ParsedExport {
@@ -189,7 +192,11 @@ export async function extractEvents(
   const events: PersnallyEvent[] = [];
   const voiceCorpus: string[] = []; // clean prose for the deterministic voice fingerprint
 
-  const commandCorpus: string[] = []; // shell commands → convention/workflow signals
+  // Commands grouped by workspace, not pooled. Mining them together produced
+  // one global winner per tool family, so a store ended up asserting both
+  // "prefers pnpm over npm" and the reverse — each true of a different repo,
+  // neither true of the person.
+  const commandsByProject = new Map<string, string[]>();
   const jobs: { convo: ParsedConversation; text: string; replies: string }[] = [];
   for (const convo of parsed.conversations) {
     if (!convo.userMessages.length) continue;
@@ -199,7 +206,11 @@ export async function extractEvents(
     voiceCorpus.push(...proseLines(joined));
     const text = stripNoise(joined).slice(0, MAX_CONVO_CHARS); // strip pasted paths/URLs/logs before the LLM sees it
     if (!text) continue;
-    commandCorpus.push(...(convo.toolCommands ?? []));
+    const cmds = convo.toolCommands ?? [];
+    if (cmds.length) {
+      const key = convo.project ?? "";
+      commandsByProject.set(key, [...(commandsByProject.get(key) ?? []), ...cmds]);
+    }
     const replies = budgetedTurns(convo.assistantMessages ?? [], MAX_ASSISTANT_TURN_CHARS, MAX_ASSISTANT_CHARS);
     jobs.push({ convo, text, replies });
   }
@@ -215,8 +226,9 @@ export async function extractEvents(
   const topicsPerConvo = await mapBounded(jobs, concurrency, async ({ convo, text, replies }) => {
     // Several failures and nothing working yet means the engine is broken — a bad
     // key, no credits, a provider outage — and every remaining call will fail the
-    // same way. Stop paying for the rest of the batch.
-    if (succeeded === 0 && failed >= FAILFAST_AFTER) { done(); return []; }
+    // same way. Stop paying for the rest of the batch. `ok: false` here is the
+    // same as a real failure below: no processed-marker, so it retries later.
+    if (succeeded === 0 && failed >= FAILFAST_AFTER) { done(); return { topics: [], ok: false }; }
     try {
       const result = await extract({
         model,
@@ -229,28 +241,37 @@ export async function extractEvents(
       });
       const topics = topicsExtraction.parse(result).topics;
       succeeded++;
+      recordEngineSuccess(); // a working call clears any recorded outage
       done();
-      return topics;
+      return { topics, ok: true };
     } catch (e) {
       failed++;
       // One malformed extraction (e.g. the model returns an out-of-enum value)
       // must not abort a whole multi-conversation import. Skip it — leaving no
       // conversation_uuid marker, so the next pass retries it — and keep the rest.
+      recordEngineFailure(e);
       console.error(`extract: skipped "${convo.name}" — ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
       done();
-      return [];
+      return { topics: [], ok: false };
     }
   });
 
   jobs.forEach(({ convo }, i) => {
-    for (const t of topicsPerConvo[i]!) {
-      events.push(newEvent("signal.topic", opts.source, t,
-        {
-          kind: "import", batch, file: opts.file, conversation_uuid: convo.uuid,
-          ...(convo.lastMessageId ? { message_uuid: convo.lastMessageId } : {}),
-        },
-        safeIso(convo.created_at),
-      ));
+    const { topics, ok } = topicsPerConvo[i]!;
+    const provenance = {
+      kind: "import" as const, batch, file: opts.file, conversation_uuid: convo.uuid, project: convo.project,
+      ...(convo.lastMessageId ? { message_uuid: convo.lastMessageId } : {}),
+    };
+    for (const t of topics) {
+      events.push(newEvent("signal.topic", opts.source, t, provenance, safeIso(convo.created_at)));
+    }
+    // Written whenever the call itself succeeded, even with zero topics — the
+    // only durable record that a working engine already looked at this
+    // conversation and found nothing, distinct from "never attempted." Without
+    // it, a legitimately topic-less conversation is retried forever.
+    if (ok) {
+      events.push(newEvent("system.conversation_processed", opts.source, { topics_found: topics.length },
+        provenance, safeIso(convo.created_at)));
     }
   });
 
@@ -273,6 +294,7 @@ export async function extractEvents(
       }
     } catch (e) {
       // A malformed assertions response shouldn't discard the topics already gathered.
+      recordEngineFailure(e);
       console.error(`extract: skipped memory/projects assertions — ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
     }
   }
@@ -284,8 +306,12 @@ export async function extractEvents(
 
   // Conventions and workflow from the commands the sessions actually ran —
   // also deterministic, and the only producer of these two dimensions.
-  for (const s of toolConventions(commandCorpus)) {
-    events.push(newEvent("signal.style", opts.source, s, { kind: "import", batch, file: opts.file }));
+  for (const [project, cmds] of commandsByProject) {
+    for (const s of toolConventions(cmds)) {
+      events.push(newEvent("signal.style", opts.source, s, {
+        kind: "import", batch, file: opts.file, ...(project ? { project } : {}),
+      }));
+    }
   }
 
   const span = parsed.conversations.map((c) => c.created_at).sort();

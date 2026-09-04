@@ -166,6 +166,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* The nav's condense/restore is set inline, so only !important reaches it. */
+  .nav-morph {
+    transition: none !important;
+  }
   .rise,
   .marquee-track,
   .fade-label {

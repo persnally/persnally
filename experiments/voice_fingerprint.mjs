@@ -20,13 +20,25 @@ function humanText(content) {
   if (text.startsWith("<command-") || text.startsWith("<local-command") || text.startsWith("[Request interrupted")) return "";
   return text;
 }
-// Keep only prose the human actually wrote. Strips injected blocks (task
-// notifications, reminders, command palettes), fenced code, and pasted
-// data (paths, URLs, JSON, logs) that otherwise swamp the voice signal.
+// Blocks the client injects into the user's turn. The closing tag is matched by
+// backreference to the tag that opened it: a non-greedy match to *any* closing
+// tag stops at the first nested one — `</task-id>` inside `<task-notification>`
+// — and the remainder of the block, including Claude Code's own API-error text,
+// was being counted as the user's writing. Tag list is what actually occurs in
+// ~/.claude/projects, not a guess.
+const INJECTED = /<(task-notification|system-reminder|local-command-[\w-]+|command-[\w-]+|bash-input|bash-stdout|bash-stderr|user-prompt-submit-hook)\b[^>]*>[\s\S]*?<\/\1>/g;
+
+function stripInjected(t) {
+  let prev;
+  do { prev = t; t = t.replace(INJECTED, " "); } while (t !== prev);
+  return t;
+}
+
+// Keep only prose the human actually wrote. Strips injected blocks, fenced code,
+// and pasted data (paths, URLs, JSON, logs) that otherwise swamp the voice signal.
 const FUNCTION_WORD = /\b(the|a|an|i|to|and|is|it|you|we|that|this|of|for|in|on|do|are|be|can|should|need|want|make|how|what|why|let|so|but|not|just|with|like|now|also)\b/;
 function prose(t) {
-  t = t.replace(/```[\s\S]*?```/g, " ")
-       .replace(/<(task-notification|system-reminder|local-command[^>]*|command-[^>]*)>[\s\S]*?<\/[^>]+>/g, " ")
+  t = stripInjected(t.replace(/```[\s\S]*?```/g, " "))
        .replace(/<\/?[a-z][^>]*>/gi, " ");
   const kept = [];
   for (let ln of t.split("\n")) {

@@ -8,8 +8,8 @@
 
 | Property | Why it's hard for a cloud incumbent to match |
 |---|---|
-| Local-first | Memory-layer companies are cloud businesses; going local deletes their revenue model |
-| Cross-vendor | Platform memory exists *to* lock in; vendors won't share user context with rivals |
+| On your machine | Memory companies are cloud businesses; going local deletes their revenue model |
+| Neutral across vendors | Platform memory exists *to* lock in; vendors won't share user context with rivals |
 | Provenance-complete | Memory trained into weights or summarized into blobs can never answer "why do you think this?" |
 | Truly unlearnable | Hard-delete + re-derive requires an event-sourced core; retrofitting it is a rewrite |
 

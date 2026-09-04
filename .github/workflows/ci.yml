@@ -7,8 +7,10 @@ on:
   # Manual trigger: on 2026-08-06 pushes stopped producing runs entirely and
   # there was no way to force one.
   workflow_dispatch:
-  push:
-    branches: [main, dev]
+  # No push trigger. `dev` is the default branch, requires a PR, blocks force
+  # pushes, enforces admins, and is strict (a branch must be current before
+  # merging) — so the PR run already tested the exact merge result and a
+  # post-merge run repeats it. Direct pushes to dev are impossible.
   pull_request:
     branches: [main, dev]
 

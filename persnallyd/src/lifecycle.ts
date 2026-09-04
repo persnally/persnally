@@ -127,7 +127,7 @@ export function renderSystemdUnit(cliPath: string, port: number): string {
   // (C-style) so a pathological path can't break out of its quotes.
   const q = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
   return `[Unit]
-Description=Persnally — local personal context engine
+Description=Persnally daemon (persnallyd) — a model of you, on your machine
 After=default.target
 
 [Service]

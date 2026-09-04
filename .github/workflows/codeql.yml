@@ -6,7 +6,9 @@ name: CodeQL
 # catches issues surfaced by new advisories against code that hasn't changed.
 on:
   push:
-    branches: [main, dev]
+    # Default branch only: code scanning diffs PR alerts against the
+    # default-branch analysis, so this run is the baseline, not a duplicate.
+    branches: [dev]
   pull_request:
     branches: [main, dev]
   schedule:

@@ -4,7 +4,7 @@ import { useState } from "react";
 
 const COMMAND = "npm i -g persnally && persnally setup";
 
-const PROMPT = `Set up Persnally for me — a local-first context engine that gives you (my AI tools) personal context about who I am and what I'm working on, served over MCP and stored only on my machine.
+const PROMPT = `Set up Persnally for me — a model of me, built from my own AI history on my machine, that gives you (my AI tools) context about who I am and what I'm working on, served over MCP.
 
 1. Run: npm i -g persnally
 2. Run: persnally setup   (imports my AI history, builds my profile, and connects this client over MCP)

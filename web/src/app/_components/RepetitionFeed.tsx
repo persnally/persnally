@@ -3,14 +3,14 @@
 import { MotionConfig } from "motion/react";
 import { RotateCw } from "lucide-react";
 import { AnimatedList } from "@/components/magicui/animated-list";
-import { Glyph, TOOLS } from "@/components/ui/logos";
+import { Glyph, brand, type BrandName } from "@/components/ui/logos";
 
 /* The repetition tax: you re-explaining the same context to tool after tool,
    stacking up via Magic UI AnimatedList. Each tool meets you as a stranger. */
 
-const icon = (name: string) => TOOLS.find((t) => t.name === name)!.icon;
+const icon = (name: BrandName) => brand(name);
 
-const MESSAGES = [
+const MESSAGES: { id: string; tool: BrandName; to: string; text: string }[] = [
   { id: "m1", tool: "Claude", to: "Claude", text: "My stack: TypeScript, Next.js, Tailwind." },
   { id: "m2", tool: "ChatGPT", to: "ChatGPT", text: "As I said — SQLite, not Postgres." },
   { id: "m3", tool: "Cursor", to: "Cursor", text: "Again: I ship the smallest thing that works." },
@@ -18,7 +18,7 @@ const MESSAGES = [
   { id: "m5", tool: "Claude", to: "Claude · new chat", text: "Like I told the others, my stack is…" },
 ];
 
-function Message({ tool, to, text }: { tool: string; to: string; text: string }) {
+function Message({ tool, to, text }: { tool: BrandName; to: string; text: string }) {
   return (
     <div className="plate w-full p-3.5">
       <div className="flex items-center justify-between gap-3">

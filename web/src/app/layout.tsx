@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, Newsreader, Geist_Mono } from "next/font/google";
 import { OpenPanelComponent } from "@openpanel/nextjs";
+import { GITHUB, NPM, PRODUCT_HUNT, SITE } from "@/lib/links";
 import "./globals.css";
 
 // OpenPanel client id (public browser key) — kept out of source. Set
@@ -17,15 +18,14 @@ const text = Newsreader({ subsets: ["latin"], style: ["normal", "italic"], varia
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 const description =
-  "Persnally is a local-first personal context engine. It learns who you are from your AI history and serves that context to every AI tool you use — local-first, across every AI.";
+  "Persnally builds a model of you from your own AI history, on your machine, and every AI you use reads it. So every AI finally knows you.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://persnally.com"),
-  title: "Persnally — your own context engine",
+  metadataBase: new URL(SITE),
+  title: "Persnally — a model of you, on your machine",
   description,
   applicationName: "Persnally",
-  keywords: ["personal context engine", "local-first", "MCP", "AI memory", "Claude", "ChatGPT", "Cursor"],
-  authors: [{ name: "Persnally", url: "https://persnally.com" }],
+  authors: [{ name: "Persnally", url: SITE }],
   creator: "Persnally",
   publisher: "Persnally",
   category: "technology",
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Persnally — so every AI finally knows you",
     description,
-    url: "https://persnally.com",
+    url: SITE,
     siteName: "Persnally",
     locale: "en_US",
     type: "website",
@@ -56,24 +56,62 @@ export const metadata: Metadata = {
   },
 };
 
-// Structured data for rich results (SoftwareApplication: free, BYOK, source-available).
+/* Three entities — who publishes it, what the site is, what the software is —
+   in one @graph, each with an @id so the publisher references link them
+   instead of leaving three unrelated blobs. No FAQPage: Google dropped FAQ
+   rich results for non-health/gov sites, and the page has no visible Q&A for
+   the markup to mirror. */
 const jsonLd = {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  name: "Persnally",
-  applicationCategory: "DeveloperApplication",
-  operatingSystem: "macOS, Linux, Windows",
-  description,
-  url: "https://persnally.com",
-  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-  license: "https://github.com/persnally/persnally/blob/main/LICENSE",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${SITE}/#organization`,
+      name: "Persnally",
+      url: SITE,
+      description,
+      logo: {
+        "@type": "ImageObject",
+        url: `${SITE}/icons/android-chrome-512x512.png`,
+        width: 512,
+        height: 512,
+      },
+      sameAs: [GITHUB, NPM, PRODUCT_HUNT],
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE}/#website`,
+      name: "Persnally",
+      url: SITE,
+      description,
+      inLanguage: "en-US",
+      publisher: { "@id": `${SITE}/#organization` },
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": `${SITE}/#software`,
+      name: "Persnally",
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "macOS, Linux, Windows",
+      description,
+      url: SITE,
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      license: `${GITHUB}/blob/main/LICENSE`,
+      publisher: { "@id": `${SITE}/#organization` },
+    },
+  ],
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${display.variable} ${text.variable} ${mono.variable}`}>
       <body className="antialiased">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        {/* `<` escaped per Next's JSON-LD guide: JSON.stringify does not do it,
+            and no future value here should be able to close the script tag. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+        />
         {OPENPANEL_CLIENT_ID && (
           <OpenPanelComponent
             clientId={OPENPANEL_CLIENT_ID}

@@ -7,8 +7,10 @@ name: Leak Prevention
 # launch/) were committed and had to be scrubbed from history in 2026-06.
 # They're gitignored now; this catches a future `git add -f` before it ships.
 on:
-  push:
-    branches: [main, dev]
+  # No push trigger. `dev` is the default branch, requires a PR, blocks force
+  # pushes, enforces admins, and is strict (a branch must be current before
+  # merging) — so the PR run already tested the exact merge result and a
+  # post-merge run repeats it. Direct pushes to dev are impossible.
   pull_request:
     branches: [main, dev]
 
@@ -55,9 +57,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: PIVOT.md and launch/ must not be committed
+      - name: Internal strategy docs must not be committed
         run: |
-          tracked=$(git ls-files PIVOT.md launch/ 2>/dev/null)
+          tracked=$(git ls-files PIVOT.md PROGRESS.md CLAUDE.md docs/VISION.md docs/KNOWLEDGE_BASE.md launch/ 2>/dev/null)
           if [ -n "$tracked" ]; then
             echo "::error::Internal strategy docs are tracked in git — these were scrubbed from history in 2026-06 and must stay local-only (see .gitignore):"
             echo "$tracked"

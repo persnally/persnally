@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { loadConfig, saveConfig } from "../src/config.js";
+const NO_DISK = { conventionRoots: { claudeCode: null, cursorDb: null, codex: null } };
 import { runConsolidation, shouldRunNow } from "../src/consolidate.js";
 import { newEvent } from "../src/events.js";
 import type { LlmExtract } from "../src/llm.js";
@@ -30,7 +31,7 @@ const topic = (name: string) =>
 
 test("without an engine: refreshes decay, emits no assertions", async () => {
   store.append([topic("rust"), topic("sqlite")]);
-  const r = await runConsolidation(store, null, new Date("2026-06-12T03:00:00"));
+  const r = await runConsolidation(store, null, new Date("2026-06-12T03:00:00"), NO_DISK);
   assert.equal(r.assertions, 0);
   assert.equal(r.profileRefreshed, false);
   assert.ok(store.topics().length >= 1, "decay rebuild ran");
@@ -44,7 +45,7 @@ test("consolidation prunes the style backlog so live capture stays bounded", asy
     const style = (pattern: string, confidence: number) =>
       newEvent("signal.style", "mcp:cursor", { dimension: "voice", pattern, polarity: "does", confidence, evidence: "x", basis: "observed" }, { kind: "mcp", client: "cursor" });
     s3.append(Array.from({ length: 90 }, (_, i) => style(`pattern-${i}`, i / 100)));
-    const r = await runConsolidation(s3, null, new Date("2026-06-13T03:00:00"));
+    const r = await runConsolidation(s3, null, new Date("2026-06-13T03:00:00"), NO_DISK);
     assert.ok(r.stylePruned >= 10, "overflow beyond the cap is pruned");
     assert.ok(s3.query({ type: "signal.style", limit: 1000 }).length <= 80, "backlog bounded to the cap");
   } finally {
@@ -69,7 +70,7 @@ test("with engine + enough signal: emits derived behavior assertions", async () 
         return { assertions: [{ claim: "deep focus on systems topics", kind: "behavior", confidence: 0.8, evidence: "6 recent deep signals" }] };
       },
     };
-    const r = await runConsolidation(s2, engine, new Date("2026-06-12T03:00:00"));
+    const r = await runConsolidation(s2, engine, new Date("2026-06-12T03:00:00"), NO_DISK);
     assert.equal(r.newSignals, 6);
     assert.equal(r.assertions, 1);
     assert.match(sawSummary, /topic-0/);
@@ -129,4 +130,35 @@ test("an upgraded install with only the old key runs once, then settles", () => 
   // as "never attempted" so the first tick after upgrade runs.
   assert.equal(shouldRunNow(undefined, new Date("2026-08-05T14:00:00")), true);
   assert.equal(shouldRunNow("not-a-date", new Date("2026-08-05T14:00:00")), true, "unreadable state tries once");
+});
+
+test("nightly consolidation re-derives conventions from the whole command history", async () => {
+  const d4 = mkdtempSync(join(tmpdir(), "consolidate-conventions-"));
+  const s4 = new EventStore(join(d4, "t.db"));
+  process.env.PERSNALLY_DIR = d4;
+  const cc = join(d4, "claude-projects", "-Users-dev-Projects-thing");
+  try {
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    mkdirSync(cc, { recursive: true });
+    const base = { sessionId: "s1", cwd: "/Users/dev/Projects/thing", timestamp: "2026-08-01T10:00:00Z" };
+    const lines = [
+      { ...base, type: "user", uuid: "u1", message: { role: "user", content: "one" } },
+      { ...base, type: "user", uuid: "u2", message: { role: "user", content: "two" } },
+      ...["npm ci", "npm test", "npm run build"].map((command, i) => ({
+        ...base, type: "assistant", uuid: `a${i}`,
+        message: { role: "assistant", content: [{ type: "tool_use", id: `t${i}`, name: "Bash", input: { command } }] },
+      })),
+    ];
+    writeFileSync(join(cc, "s1.jsonl"), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+
+    const r = await runConsolidation(s4, null, new Date("2026-06-14T03:00:00"),
+      { conventionRoots: { claudeCode: join(d4, "claude-projects"), cursorDb: null, codex: null } });
+    assert.ok(r.conventionsRefreshed > 0, "the refresh ran and derived something");
+    const npm = s4.voice("/Users/dev/Projects/thing").items.find((s) => s.pattern === "uses npm");
+    assert.ok(npm, "the whole-history habit is on file after the nightly pass");
+  } finally {
+    s4.close();
+    delete process.env.PERSNALLY_DIR;
+    rmSync(d4, { recursive: true, force: true });
+  }
 });

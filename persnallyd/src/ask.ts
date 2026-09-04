@@ -6,27 +6,272 @@
  */
 
 import { z } from "zod";
-import { newEvent, type Provenance } from "./events.js";
+import { newEvent, type PersnallyEvent, type Provenance } from "./events.js";
 import type { LlmExtract } from "./llm.js";
-import type { Category } from "./permissions.js";
+import { type Category, readsNothing } from "./permissions.js";
 import { overlapScore, queryTokens } from "./search.js";
-import type { EventStore } from "./store.js";
+import type { EventStore, ServedStyleSignal } from "./store.js";
+import { projectLabel } from "./importers/claude-code.js";
+import { assemblePack, statedConvention, type StyleSignal } from "./stylometry.js";
+import { toolFamilies } from "./workflow.js";
 
 // Below this, a wrong answer costs more trust than a deferral saves time.
 export const CONFIDENCE_THRESHOLD = 0.7;
 
+/**
+ * How sure the *evidence* allows an answer to be, independent of how sure the
+ * model says it is. The model's number is a self-report — a small local model
+ * reported 0.9 on both questions it had no evidence for, and a capable one
+ * reported 0.92 citing a prose claim against a repo that contradicted it 185
+ * times. So the answer's confidence is the lesser of what the model claims and
+ * what the cited events can bear: a stated correction can back anything, an
+ * observed convention exactly as much as its count earned it, and a model's
+ * reading of prose — or nothing cited at all — stays under the threshold, so
+ * the answer defers. This is what makes the loop honest on any engine.
+ */
+const UNSUPPORTED_CAP = 0.6;
+const PROSE_CAP = 0.65;
+const OBSERVED_CAP = 0.95;
+export function evidenceCap(cited: PersnallyEvent[]): number {
+  let cap = 0;
+  for (const e of cited) {
+    if (e.type === "user.correction") {
+      // A deletion states what is false; only a contradiction or edit states what is true.
+      if ((e.payload as { action?: string }).action !== "delete") cap = Math.max(cap, 1);
+    } else if (e.type === "signal.style") {
+      const s = e.payload as StyleSignal;
+      cap = Math.max(cap, s.basis === "stylometry" ? s.confidence : OBSERVED_CAP);
+    } else cap = Math.max(cap, PROSE_CAP);
+  }
+  // Nothing cited, or nothing cited that can bear a claim, is the same case.
+  return cap > 0 ? cap : UNSUPPORTED_CAP;
+}
+
 export const DEFER_MESSAGE = "Persnally can't answer this confidently from the evidence it has — ask the user directly.";
 
+// `confidence` is not bounded at 1 here on purpose: a small local model answers
+// "85" as readily as "0.85", and rejecting the whole reply for it turned a
+// usable answer into a crash. Normalised below; the recorded value is always 0–1.
 const answerSchema = z.object({
   answer: z.string().min(1),
-  confidence: z.number().min(0).max(1),
+  confidence: z.number().min(0),
   evidence_event_ids: z.array(z.string()).default([]),
 });
+
+function normalizeConfidence(raw: number): number {
+  if (raw <= 1) return raw;
+  return raw <= 100 ? raw / 100 : 1;
+}
+
+/**
+ * Evidence an answer rests on even when the model cited nothing: a served,
+ * project-scoped convention whose leading tool the answer names. Small models
+ * often answer correctly and skip the citation list; without this they would
+ * defer on every question. Only observed conventions qualify — never prose —
+ * and never a contested family, and never when the answer names the runner-up.
+ */
+/** Where a tool label is first named in the answer, or -1. Tolerant of how
+    models write a label: "node --test" matches "node --test", "node:test", "node test". */
+function labelAt(answer: string, label: string): number {
+  const tokens = label.toLowerCase().split(/\s+/).map((t) => t.replace(/^-+/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const m = new RegExp(`(^|[^a-z0-9])${tokens.join("[\\s:\\-]*")}([^a-z0-9]|$)`).exec(answer.toLowerCase());
+  // The label's own start, not the boundary character captured before it.
+  return m ? m.index + m[1]!.length : -1;
+}
+
+/**
+ * What the answer asserts, per tool family: the first tool of each family it
+ * names. Models assert first and mention the alternative after ("pnpm, not
+ * npm"), and the benchmark grades the same way. An answer that names tools
+ * from several families asserts something in each of them.
+ */
+export function familiesAsserted(answer: string): Map<string, string> {
+  const first = new Map<string, { label: string; at: number }>();
+  for (const { label, family } of toolFamilies()) {
+    const at = positiveLabelAt(answer, label);
+    if (at === -1) continue;
+    const key = assertionFamily(family);
+    const cur = first.get(key);
+    if (!cur || at < cur.at) first.set(key, { label, at });
+  }
+  return new Map([...first].map(([family, v]) => [family, v.label]));
+}
+
+/**
+ * Where a tool is named as something the user *does*, or -1: a mention right
+ * after a negation ("never pnpm", "not rebase", "no vitest") is a claim
+ * against it, not for it. The same reading applies to an answer and to the
+ * free-form text of a correction or an observed convention.
+ */
+const NEGATION = /(?:^|[^a-z])(?:never|not|no|avoid(?:s|ed)?|without|instead of|rather than|don'?t|doesn'?t)\s+(?:use\s+|using\s+|run\s+|running\s+)?$/;
+function positiveLabelAt(text: string, label: string): number {
+  const lower = text.toLowerCase();
+  let from = 0;
+  for (;;) {
+    const at = labelAt(lower.slice(from), label);
+    if (at === -1) return -1;
+    const abs = from + at;
+    if (!NEGATION.test(lower.slice(Math.max(0, abs - 24), abs))) return abs;
+    from = abs + 1;
+  }
+}
+
+/** The family of the first tool the answer names at all — its headline claim. */
+export function headlineFamily(answer: string): string | null {
+  let best: { family: string; at: number } | null = null;
+  for (const { label, family } of toolFamilies()) {
+    const at = labelAt(answer, label);
+    if (at !== -1 && (!best || at < best.at)) best = { family: assertionFamily(family), at };
+  }
+  return best?.family ?? null;
+}
+
+/**
+ * The rule table splits test runners by language (test-runner-js, -go, …)
+ * because they never compete inside one family for mining. For what an
+ * answer *asserts* they are one question — "which test runner?" — and the
+ * benchmark grades them as one. Everything else keeps its family.
+ */
+function assertionFamily(family: string): string {
+  return family.startsWith("test-runner") ? "test-runner" : family;
+}
+
+/**
+ * Families where the answer's assertion contradicts a served convention:
+ * the served leader is a different tool of the same family. An unbacked
+ * mention is allowed; a contradicted one is not.
+ */
+export function contradictedFamilies(asserted: Map<string, string>, served: { pattern: string; confidence?: number }[]): string[] {
+  // A family's verdict is its strongest served convention. Fragments from
+  // before a whole-history refresh can leave two leaders on file for one
+  // family; the weaker must not veto an answer the stronger backs.
+  const verdict = new Map<string, { leader: string; confidence: number }>();
+  for (const s of served) {
+    const leader = conventionLeader(s.pattern);
+    const family = leader ? familyOf(leader) : undefined;
+    if (!leader || !family) continue;
+    const key = assertionFamily(family);
+    const cur = verdict.get(key);
+    if (!cur || (s.confidence ?? 0) > cur.confidence) verdict.set(key, { leader, confidence: s.confidence ?? 0 });
+  }
+  return [...verdict].filter(([family, v]) => {
+    const claim = asserted.get(family);
+    return claim !== undefined && claim.toLowerCase() !== v.leader.toLowerCase();
+  }).map(([family]) => family);
+}
+
+/** The tool a mined convention stands for, or null for a contested family. */
+function conventionLeader(pattern: string): string | null {
+  if (/^uses both /.test(pattern)) return null;
+  const pref = /^prefers (.+?) over (.+)$/.exec(pattern);
+  return pref ? pref[1]! : pattern.replace(/^uses /, "");
+}
+
+function familyOf(label: string): string | undefined {
+  return toolFamilies().find((t) => t.label.toLowerCase() === label.toLowerCase())?.family;
+}
+
+/** A mined convention backs the answer when the answer's first-named tool in that convention's family is the convention's own. */
+function conventionAgrees(pattern: string, asserted: Map<string, string>): boolean {
+  const leader = conventionLeader(pattern);
+  if (!leader) return false;
+  const family = familyOf(leader);
+  return family !== undefined && asserted.get(assertionFamily(family))?.toLowerCase() === leader.toLowerCase();
+}
+
+export function namesServedTool(answer: string, served: { pattern: string }[]): boolean {
+  return served.some((s) => {
+    const both = /^uses both (.+?) \(\d+\) and (.+?) \(\d+\)/.exec(s.pattern);
+    const pref = /^prefers (.+?) over (.+)$/.exec(s.pattern);
+    const names = both ? [both[1]!, both[2]!] : pref ? [pref[1]!, pref[2]!] : [s.pattern.replace(/^uses /, "")];
+    return names.some((t) => labelAt(answer, t) !== -1);
+  });
+}
+
+/** Whether the answer names any tool the rule table knows — the whole vocabulary, not just what is served here. */
+export function namesAnyTool(answer: string): boolean {
+  return familiesAsserted(answer).size > 0;
+}
+
+/**
+ * The families a free-form text (an observed convention, a correction) can
+ * vouch for: those where what the text asserts — its first positively named
+ * tool in the family — is what the answer asserts. "prefers merge over
+ * rebase" asserts merge, so it vouches for "merge" and never for "rebase";
+ * "uses npm, never pnpm" vouches for npm only.
+ */
+function familiesVouchedBy(text: string, asserted: Map<string, string>): string[] {
+  const claims = familiesAsserted(text);
+  return [...asserted].filter(([family, label]) => claims.get(family)?.toLowerCase() === label.toLowerCase()).map(([family]) => family);
+}
+
+/**
+ * Served conventions that back the answer without being cited. Small models
+ * answer correctly and skip the citation list; the evidence exists either way.
+ */
+export function impliedEvidence(answer: string, served: { id: string; pattern: string }[]): string[] {
+  const asserted = familiesAsserted(answer);
+  return served.filter((s) => conventionAgrees(s.pattern, asserted)).map((s) => s.id);
+}
+
+/**
+ * Whether a cited event can bear this answer. Under a tool answer only
+ * evidence naming the asserted tool counts: a mined convention that agrees,
+ * an observed convention or a correction whose own text names it. Tone never
+ * carries a tool answer. Under any other answer every citation stands and the
+ * class caps in `evidenceCap` apply.
+ */
+export function citationSupports(e: PersnallyEvent, answer: string, toolAnswer: boolean): boolean {
+  const asserted = familiesAsserted(answer);
+  if (e.type === "signal.style") {
+    const s = e.payload as StyleSignal;
+    if (s.dimension !== "convention" && s.dimension !== "workflow") return !toolAnswer;
+    if (s.basis === "stylometry" && s.dimension === "convention") {
+      // A contested family backs an answer that picks no side (its 0.5 then
+      // defers), never one that does.
+      return /^uses both /.test(s.pattern) ? !toolAnswer : conventionAgrees(s.pattern, asserted);
+    }
+    return !toolAnswer || familiesVouchedBy(s.pattern, asserted).length > 0;
+  }
+  if (e.type === "user.correction") {
+    const p = e.payload as { action?: string; reason?: string; target_id?: string };
+    if (p.action === "delete") return true; // contributes nothing to the cap either way
+    return !toolAnswer || familiesVouchedBy(`${p.target_id ?? ""} ${p.reason ?? ""}`, asserted).length > 0;
+  }
+  return true;
+}
+
+/**
+ * The families an evidence set can vouch for. A tool answer is only as
+ * supported as its least-supported family: "vitest, and they use pnpm" for a
+ * repo that serves pnpm and runs go test asserts two things and only one is
+ * backed, so it is unsupported as a whole.
+ */
+export function familiesBacked(evidence: PersnallyEvent[], asserted: Map<string, string>): Set<string> {
+  const backed = new Set<string>();
+  for (const e of evidence) {
+    if (e.type === "signal.style") {
+      const s = e.payload as StyleSignal;
+      if (s.basis === "stylometry" && s.dimension === "convention") {
+        const leader = conventionLeader(s.pattern);
+        const family = leader ? familyOf(leader) : undefined;
+        if (family && conventionAgrees(s.pattern, asserted)) backed.add(assertionFamily(family));
+      } else if (s.dimension === "convention" || s.dimension === "workflow") {
+        for (const f of familiesVouchedBy(s.pattern, asserted)) backed.add(f);
+      }
+    } else if (e.type === "user.correction") {
+      const p = e.payload as { action?: string; reason?: string; target_id?: string };
+      if (p.action !== "delete") for (const f of familiesVouchedBy(`${p.target_id ?? ""} ${p.reason ?? ""}`, asserted)) backed.add(f);
+    }
+  }
+  return backed;
+}
 
 const INSTRUCTION = `You are the user's personal model. An AI agent is asking a question about this user so it can proceed without interrupting them. Answer ONLY from the evidence provided.
 
 Rules:
 - Answer directly and concisely (1–3 sentences), as actionable guidance to the asking agent.
+- Name only the tool(s) the question asks about. Every tool you name is a claim about the user, and a claim the evidence does not back makes the whole answer unusable.
 - confidence = how strongly the evidence supports the answer: 0.9+ directly evidenced, 0.7–0.9 clear pattern, below 0.7 weak or speculative.
 - If the evidence doesn't support an answer, say so and set confidence low. A wrong answer is far worse than a deferral.
 - List the event ids (given in [brackets]) your answer rests on.`;
@@ -38,6 +283,13 @@ export interface AskOptions {
   provenance: Provenance;
   /** Category allowlist for scoped clients; null = unscoped (full material). */
   allowed?: Category[] | null;
+  /**
+   * Workspace the question is being asked about. Conventions are project-scoped,
+   * and `voice()` withholds another project's — so without this the ask path
+   * cannot see which package manager, test runner or merge strategy the user
+   * uses anywhere, which is most of what an agent asks about.
+   */
+  project?: string;
 }
 
 export interface AskResult {
@@ -56,31 +308,68 @@ export async function askUserModel(
   engine: { extract: LlmExtract; model: string } | null,
 ): Promise<AskResult> {
   const allowed = opts.allowed ?? null;
-  const { content, knownIds } = buildMaterial(store, opts.question, allowed);
+  const { content, knownIds, served } = buildMaterial(store, opts.question, allowed, opts.project);
 
   if (!engine) return record(store, opts, { deferred: true, reason: "no-engine" });
   if (!content) return record(store, opts, { deferred: true, reason: "not-enough-context" });
 
-  const raw = await engine.extract({
-    model: engine.model,
-    instruction: INSTRUCTION,
-    schema: answerSchema,
-    content: `Question from agent "${opts.asker}":\n${opts.question}\n\n## Evidence about the user\n${content}`,
-    maxTokens: 1000,
-  });
-  const parsed = answerSchema.parse(raw);
-  const evidence = parsed.evidence_event_ids.filter((id) => knownIds.has(id));
+  let parsed: z.infer<typeof answerSchema>;
+  try {
+    const raw = await engine.extract({
+      model: engine.model,
+      instruction: INSTRUCTION,
+      schema: answerSchema,
+      content: `Question from agent "${opts.asker}":\n${opts.question}\n\n## Evidence about the user\n${content}`,
+      maxTokens: 1000,
+    });
+    parsed = answerSchema.parse(raw);
+  } catch (e) {
+    // A reply the engine could not shape into an answer is not an answer. It
+    // used to propagate and take the caller down; a deferral is the honest result.
+    console.error(`ask: engine reply unusable — ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
+    return record(store, opts, { deferred: true, reason: "low-confidence", confidence: 0 });
+  }
+  // A citation is not support. A small model cited a real "uses npm" convention
+  // under an answer that said pnpm — so a cited convention only counts when the
+  // answer actually names its leading tool, the same test implied evidence
+  // passes. Tone, corrections and prose cannot be checked against the text and
+  // keep their own caps.
+  // Only the miner's patterns name a tool that can be checked ("uses npm",
+  // "prefers X over Y"); a live-observed convention ("tests before merge") and
+  // a contested family (capped at 0.5, which defers anyway) are kept as cited.
+  // A citation is not support. A small model cited a real "uses npm" convention
+  // under "pnpm", then a tone signal under "pnpm", then an unrelated correction
+  // under "vitest" — each time the cap trusted the citation. An answer that
+  // names any known tool is a tool choice, and only evidence naming that tool
+  // can carry it.
+  const asserted = familiesAsserted(parsed.answer);
+  const toolAnswer = asserted.size > 0;
+  const citedEvents = store.getEvents(parsed.evidence_event_ids.filter((id) => knownIds.has(id)))
+    .filter((e) => citationSupports(e, parsed.answer, toolAnswer));
+  let evidenceEvents = citedEvents.length ? citedEvents : store.getEvents(impliedEvidence(parsed.answer, served));
+  // The answer's headline claim — the first tool it names — has to be backed,
+  // and nothing else it names may contradict what is served for this project.
+  // A paragraph that leads with the right package manager and then asserts
+  // the wrong test runner is a wrong answer about the test runner; one that
+  // mentions an unbacked tool in passing is not.
+  if (toolAnswer) {
+    const headline = headlineFamily(parsed.answer);
+    const backed = familiesBacked(evidenceEvents, asserted);
+    if ((headline && !backed.has(headline)) || contradictedFamilies(asserted, served).length) evidenceEvents = [];
+  }
+  const evidence = evidenceEvents.map((e) => e.id);
+  const confidence = Math.min(normalizeConfidence(parsed.confidence), evidenceCap(evidenceEvents));
 
-  if (parsed.confidence < CONFIDENCE_THRESHOLD) {
+  if (confidence < CONFIDENCE_THRESHOLD) {
     return record(store, opts, {
       deferred: true,
       reason: "low-confidence",
       answer: parsed.answer,
-      confidence: parsed.confidence,
+      confidence,
       evidence,
     });
   }
-  return record(store, opts, { deferred: false, answer: parsed.answer, confidence: parsed.confidence, evidence });
+  return record(store, opts, { deferred: false, answer: parsed.answer, confidence, evidence });
 }
 
 // Identity-level material (profile, corrections, voice) is relevant to any
@@ -101,8 +390,9 @@ const TOPIC_CANDIDATES = 1000;
 /** Evidence corpus for the model, ranked against the question. Scoped clients
     get only their allowed categories' topics (never the cross-category profile
     or assertions) — the same boundary the daemon enforces on /profile. */
-function buildMaterial(store: EventStore, question: string, allowed: Category[] | null): { content: string; knownIds: Set<string> } {
+function buildMaterial(store: EventStore, question: string, allowed: Category[] | null, project?: string): { content: string; knownIds: Set<string>; served: ServedStyleSignal[] } {
   const knownIds = new Set<string>();
+  if (readsNothing(allowed)) return { content: "", knownIds, served: [] };
   const lines: string[] = [];
   const q = queryTokens(question);
 
@@ -127,6 +417,27 @@ function buildMaterial(store: EventStore, question: string, allowed: Category[] 
     }
   }
 
+  // Project-scoped facts have to say what they are scoped to. Serving "prefers
+  // npm over pnpm" unlabelled leaves a model unable to tell whether it applies
+  // to the repo being asked about — the evidence was present and unusable.
+  // Every served signal carries its id so the model can cite it, and the
+  // citation is what lets the answer's confidence be bounded by the evidence.
+  const voice = store.voice(project);
+  const scoped = voice.items.filter((i) => i.dimension === "convention" || i.dimension === "workflow");
+  const tone = voice.items.filter((i) => !scoped.includes(i));
+  if (tone.length) {
+    for (const s of tone) knownIds.add(s.id);
+    lines.push("", "## How the user writes", assemblePack(tone), `(evidence: ${tone.map((s) => `[${s.id}]`).join(" ")})`);
+  }
+  if (scoped.length) {
+    lines.push("", `## How the user works${project ? ` in ${projectLabel(project)}` : ""}` + " (observed behaviour — outranks the general claims above)");
+    for (const s of scoped) {
+      knownIds.add(s.id);
+      lines.push(`- [${s.id}] ${statedConvention(s)}`);
+    }
+  }
+
+
   if (!allowed) {
     const profile = store.getProfile();
     if (profile) {
@@ -145,7 +456,7 @@ function buildMaterial(store: EventStore, question: string, allowed: Category[] 
       .sort((a, b) => b.score - a.score)
       .slice(0, ASSERTION_BUDGET);
     if (assertions.length) {
-      lines.push("", "## Extracted assertions");
+      lines.push("", "## Claims extracted from conversation prose (a model's reading, and may be stale — the observed counts above take precedence on tooling)");
       for (const { e, p } of assertions) {
         knownIds.add(e.id);
         lines.push(`- [${e.id}] (${p.kind}, conf ${p.confidence}) ${p.claim}`);
@@ -170,10 +481,7 @@ function buildMaterial(store: EventStore, question: string, allowed: Category[] 
     }
   }
 
-  const voice = store.voice();
-  if (voice.pack) lines.push("", "## How the user writes and works", voice.pack);
-
-  return { content: lines.join("\n").trim(), knownIds };
+  return { content: lines.join("\n").trim(), knownIds, served: scoped };
 }
 
 function record(
@@ -192,7 +500,13 @@ function record(
   const a = newEvent(
     "agent.answer",
     opts.source,
-    { question_id: q.id, answer: outcome.answer ?? "", confidence, deferred: outcome.deferred },
+    {
+      question_id: q.id,
+      answer: outcome.answer ?? "",
+      confidence,
+      deferred: outcome.deferred,
+      evidence_event_ids: outcome.evidence ?? [],
+    },
     { kind: "derived", from: [q.id] },
   );
   store.append([q, a]);

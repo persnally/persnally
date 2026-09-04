@@ -61,6 +61,10 @@ export const PAYLOAD_SCHEMAS = {
     answer: z.string(),
     confidence: z.number().min(0).max(1),
     deferred: z.boolean(),
+    // What the answer rested on. Without this the audit trail can't show the
+    // evidence the answer claimed at the time; defaulted so answers recorded
+    // before it existed still parse.
+    evidence_event_ids: z.array(z.string()).default([]),
   }),
   "feedback.signal": z.object({
     subject_id: z.string(),
@@ -81,6 +85,21 @@ export const PAYLOAD_SCHEMAS = {
         Optional: batches imported before versioning carry none. */
     extractor_version: z.number().int().positive().optional(),
   }),
+  /**
+   * One per conversation whose extraction call succeeded, written regardless
+   * of how many topics it found. `signal.topic` alone can't mark "this was
+   * looked at" — a conversation that genuinely has nothing topic-worthy
+   * produces zero signal.topic events, which is indistinguishable from
+   * "never attempted." Without this, such a conversation is retried on every
+   * future import, forever, at real token cost, since nothing ever records
+   * that a working engine already looked at it and found nothing.
+   * `conversation_uuid`/`message_uuid` on the event's own provenance carry
+   * the identity and watermark; this payload is only the count that explains
+   * why the event exists.
+   */
+  "system.conversation_processed": z.object({
+    topics_found: z.number().int().nonnegative(),
+  }),
 } as const;
 
 export type EventType = keyof typeof PAYLOAD_SCHEMAS;
@@ -94,13 +113,34 @@ export const provenanceSchema = z.discriminatedUnion("kind", [
     file: z.string(),
     conversation_uuid: z.string().optional(),
     message_uuid: z.string().optional(),
+    /** Which workspace this came from. The same person works differently per
+        project — pnpm in one repo, npm in another — and both claims are true
+        only with this attached. Optional: events predate it. */
+    project: z.string().optional(),
   }),
   z.object({ kind: z.literal("git"), repo: z.string(), ref: z.string().optional(), batch: z.string().optional() }),
   z.object({ kind: z.literal("derived"), from: z.array(z.string()).min(1) }),
-  z.object({ kind: z.literal("local"), surface: z.enum(["cli", "dashboard"]) }),
+  z.object({
+    kind: z.literal("local"),
+    surface: z.enum(["cli", "dashboard", "hook"]),
+    /** Who consumed it. A SessionStart hook read is performed by the CLI but
+        injected into a client's session, so the mechanism and the consumer are
+        different facts and both are recorded. */
+    client: z.string().optional(),
+  }),
 ]);
 
-const sourcePattern = /^(mcp:[a-z0-9._-]+|import:(claude-code|claude|chatgpt|git)|cli|dashboard|system)$/;
+// Sources are an enumerated namespace, not free text — a new read channel has
+// to be declared here. `hook:` is a context injection performed by the CLI on
+// behalf of a client's session, which is neither an MCP call nor the owner's own
+// `cli` read.
+//
+// `import:` is the one open slot: it names an *importer module*
+// (src/importers/<name>.ts), not a fixed list. The list used to be enumerated
+// here (claude-code|claude|chatgpt|git), so every new source needed a schema
+// edit before its own importer could write a single event — the wrong file to
+// touch when adding Cursor or Codex support has nothing to do with validation.
+const sourcePattern = /^(mcp:[a-z0-9._-]+|hook:[a-z0-9._-]+|import:[a-z][a-z0-9-]*|cli|dashboard|system)$/;
 
 export const eventSchema = z.object({
   id: z.string().uuid(),

@@ -1,0 +1,11 @@
+{
+  "name": "persnally",
+  "owner": { "name": "Persnally", "url": "https://persnally.com" },
+  "plugins": [
+    {
+      "name": "persnally",
+      "source": "./plugins/persnally",
+      "description": "A model of you, on your machine, read at session start. Your agent stops asking you what you already told it."
+    }
+  ]
+}

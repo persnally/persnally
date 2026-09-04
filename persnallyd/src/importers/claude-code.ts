@@ -9,26 +9,36 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { anthropicExtract, DEFAULT_EXTRACT_MODEL, type LlmExtract } from "../llm.js";
 import type { EventStore } from "../store.js";
-import { extractEvents, type ImportResult, type ParsedConversation, type ParsedExport } from "./extract.js";
+import { extractEvents, type ImportResult, type ParsedExport } from "./extract.js";
+import { runIncrementalImport, type IncrementalImportResult, type WatermarkedConversation } from "./incremental.js";
 
 export const DEFAULT_TRANSCRIPTS_DIR = join(homedir(), ".claude", "projects");
-export const DEFAULT_MAX_SESSIONS = 200;
-const MIN_USER_MESSAGES = 2;
-// A resumed session tops up only once this many new messages have accrued —
-// the daemon ticks every 30 min, and re-extracting an active session one
-// message at a time would pay for the same context over and over.
-const MIN_TOPUP_MESSAGES = 2;
 
-/** A parsed session with per-message metadata, so resumed sessions can be
-    diffed against the watermark recorded at their last import. Ids/timestamps
-    are parallel to `userMessages` ("" where the transcript line had none). */
-export interface SessionConversation extends ParsedConversation {
-  messageIds: string[];
-  messageTimestamps: string[];
+/**
+ * Stable identity for a workspace: the absolute path, normalized. A path can't
+ * collide, where a short name can — "website" is three different repos here,
+ * and "apps/web" is every monorepo. A git worktree folds back into its repo so
+ * reviewing a PR isn't a separate project. Display shortening is a render-time
+ * concern, not an identity one (see projectLabel).
+ */
+export function projectKey(cwd: string): string {
+  const cut = cwd.replace(/\/+$/, "").split(/\/(?:\.claude-worktrees|worktrees)\//)[0];
+  return cut || cwd;
 }
 
+/** Short label for a project path — the last segment, or the last two when that
+    segment is a generic monorepo folder that would read the same everywhere. */
+export function projectLabel(key: string): string {
+  const parts = key.split("/").filter(Boolean);
+  const last = parts[parts.length - 1] ?? key;
+  const generic = new Set(["web", "app", "apps", "src", "packages", "server", "client", "api", "www"]);
+  return generic.has(last) && parts.length > 1 ? parts.slice(-2).join("/") : last;
+}
+export const DEFAULT_MAX_SESSIONS = 200;
+const MIN_USER_MESSAGES = 2;
+
 export interface ClaudeCodeParse {
-  parsed: ParsedExport & { conversations: SessionConversation[] };
+  parsed: ParsedExport & { conversations: WatermarkedConversation[] };
   sessionsFound: number;
   sessionsDropped: number; // beyond maxSessions — most recent are kept
 }
@@ -38,7 +48,7 @@ export function parseClaudeCodeTranscripts(
   maxSessions: number = DEFAULT_MAX_SESSIONS,
 ): ClaudeCodeParse {
   if (!existsSync(root)) throw new Error(`No Claude Code transcripts at ${root}`);
-  const sessions: SessionConversation[] = [];
+  const sessions: WatermarkedConversation[] = [];
   for (const project of readdirSync(root, { withFileTypes: true })) {
     if (!project.isDirectory()) continue;
     const dir = join(root, project.name);
@@ -56,7 +66,7 @@ export function parseClaudeCodeTranscripts(
   };
 }
 
-function parseSession(path: string): SessionConversation | null {
+function parseSession(path: string): WatermarkedConversation | null {
   let title = "";
   let cwd = "";
   let firstTs = "";
@@ -102,6 +112,7 @@ function parseSession(path: string): SessionConversation | null {
   return {
     uuid: sessionId || basename(path, ".jsonl"),
     name: title || (cwd ? `Claude Code session in ${basename(cwd)}` : "Claude Code session"),
+    project: cwd ? projectKey(cwd) : undefined,
     summary: "",
     created_at: firstTs || new Date().toISOString(),
     userMessages,
@@ -162,73 +173,22 @@ export async function extractClaudeCodeEvents(
   return extractEvents(parsed, { source: "import:claude-code", importer: "claude-code", file, onProgress }, extract, model);
 }
 
-export interface IncrementalImport {
-  newSessions: number;
-  toppedUp: number; // resumed sessions that contributed messages past their watermark
-  events: number;
-  skipped: number; // sessions already in the store with nothing new past the watermark
-  /** The engine failed outright, so nothing was marked as imported. The caller
-      must back off: these sessions will otherwise be retried on every tick. */
-  engineFailed: boolean;
-}
-
-/** The suffix of a resumed session past its watermark, as its own conversation:
-    same uuid (topics attribute to the session), timestamped at the first new
-    message so decay treats the activity as current, watermark advanced. */
-function topUpOf(c: SessionConversation, from: number): SessionConversation {
-  const messageIds = c.messageIds.slice(from);
-  return {
-    ...c,
-    userMessages: c.userMessages.slice(from),
-    messageIds,
-    messageTimestamps: c.messageTimestamps.slice(from),
-    created_at: c.messageTimestamps[from] || c.created_at,
-    lastMessageId: messageIds[messageIds.length - 1] || c.lastMessageId,
-  };
-}
-
 /**
  * Import the Claude Code sessions not already in the store, plus the new tail
- * of any resumed session — the path the daemon runs on its loop. New sessions
- * are matched by the conversation_uuid in each topic's provenance; resumed
- * ones (`claude --continue` appends to the same JSONL, same sessionId) are
- * diffed against the message_uuid watermark their last import recorded.
- * Sessions imported before watermarks existed can't be diffed and never top
- * up — re-importing them whole would double their signals.
+ * of any resumed session — the path the daemon runs on its loop. Thin wrapper
+ * over the shared incremental engine (see incremental.ts); everything
+ * source-specific is the parse and extract functions handed to it.
  */
 export async function importNewClaudeCodeSessions(
   store: EventStore,
   extract: LlmExtract,
   model = DEFAULT_EXTRACT_MODEL,
   root: string = DEFAULT_TRANSCRIPTS_DIR,
-): Promise<IncrementalImport> {
-  const none: IncrementalImport = { newSessions: 0, toppedUp: 0, events: 0, skipped: 0, engineFailed: false };
-  if (!existsSync(root)) return none;
-  const { parsed } = parseClaudeCodeTranscripts(root);
-  const seen = store.importedConversationUuids("import:claude-code");
-  const marks = store.conversationWatermarks("import:claude-code");
-
-  const fresh: SessionConversation[] = [];
-  const topUps: SessionConversation[] = [];
-  let skipped = 0;
-  for (const c of parsed.conversations) {
-    if (!seen.has(c.uuid)) { fresh.push(c); continue; }
-    const mark = marks.get(c.uuid);
-    // No watermark (pre-watermark import) or an id no longer in the transcript
-    // (rewritten/compacted file): can't tell what's new — don't pay twice.
-    const at = mark ? c.messageIds.lastIndexOf(mark) : -1;
-    if (at === -1 || c.messageIds.length - (at + 1) < MIN_TOPUP_MESSAGES) { skipped++; continue; }
-    topUps.push(topUpOf(c, at + 1));
-  }
-
-  const jobs = [...fresh, ...topUps];
-  if (!jobs.length) return { ...none, skipped };
-  const { events, extractionsSucceeded, extractionsFailed } =
-    await extractClaudeCodeEvents({ ...parsed, conversations: jobs }, extract, model, root);
-  store.append(events);
-  // Nothing extracted and something failed = the engine, not the transcripts.
-  // These sessions stay unmarked and will retry, so the caller has to stop
-  // calling — otherwise the same content is re-attempted every tick forever.
-  const engineFailed = extractionsSucceeded === 0 && extractionsFailed > 0;
-  return { newSessions: fresh.length, toppedUp: topUps.length, events: events.length, skipped, engineFailed };
+): Promise<IncrementalImportResult> {
+  if (!existsSync(root)) return { newConversations: 0, toppedUp: 0, events: 0, skipped: 0, engineFailed: false };
+  return runIncrementalImport(store, {
+    source: "import:claude-code",
+    parse: () => parseClaudeCodeTranscripts(root).parsed,
+    extract: (jobs) => extractClaudeCodeEvents({ conversations: jobs, memoryText: "", projects: [] }, extract, model, root),
+  });
 }
