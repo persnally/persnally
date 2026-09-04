@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { PersnallyClient } from "../../api/client";
-import type { EngineStatus, EventEnvelope, Mutation, Scopes, Stats } from "../../api/types";
+import type {
+  EngineStatus, ImportRun, Mutation, Scopes, Stats,
+} from "../../api/types";
 import type { Boot } from "../../lib/boot-state";
 import { fmtN, timeAgo } from "../../lib/format";
 import { importedText } from "../../lib/import-result";
-import { num, str } from "../../lib/payload";
 import { prettyClient } from "../../lib/provenance";
 import { usePoll } from "../../lib/use-poll";
 import { Bar, Flash, Panel } from "../../ui/bits";
@@ -22,6 +23,8 @@ const IMPORTERS: Record<string, string> = {
   claude: "Claude export",
   chatgpt: "ChatGPT export",
   "claude-code": "Claude Code sessions",
+  cursor: "Cursor chat history",
+  codex: "Codex sessions",
   git: "git repositories",
 };
 
@@ -30,7 +33,7 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
   const [engine, setEngine] = useState<EngineStatus | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [scopes, setScopes] = useState<Scopes>({});
-  const [imports, setImports] = useState<EventEnvelope[]>([]);
+  const [imports, setImports] = useState<ImportRun[]>([]);
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
@@ -41,7 +44,7 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
       client.engine(),
       client.stats(),
       client.scopes(),
-      client.events({ type: "system.import", limit: 500 }),
+      client.imports(),
     ]);
     setEngine(e);
     setStats(s);
@@ -101,16 +104,10 @@ export function ConnectionsView({ client, boot }: { client: PersnallyClient; boo
         ? `local via Ollama · ${engine.models.extract} — nothing leaves this machine`
         : "not configured";
 
-  const byImporter = new Map<string, { events: number; last: string }>();
-  for (const e of imports) {
-    const name = str(e.payload.importer);
-    if (!name) continue;
-    const prev = byImporter.get(name);
-    byImporter.set(name, {
-      events: (prev?.events ?? 0) + num(e.payload.events),
-      last: prev?.last && prev.last > e.ts ? prev.last : e.ts,
-    });
-  }
+  // From the daemon's SQL aggregate, not from a page of recent events: with
+  // hundreds of Claude Code imports on file, a windowed read reported the
+  // oldest sources as never imported.
+  const byImporter = new Map(imports.map((r) => [r.importer, r]));
 
   return (
     <div class="flow-col">

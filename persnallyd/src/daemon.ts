@@ -166,6 +166,9 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
         return json(res, 403, { error: "the owner's surface — not reachable with a client token" });
       }
 
+      if (req.method === "GET" && url.pathname === "/imports") {
+        return json(res, 200, store.importSummary());
+      }
       if (req.method === "GET" && url.pathname === "/stats") {
         const stats = store.stats();
         if (auth.kind !== "client") return json(res, 200, stats);
