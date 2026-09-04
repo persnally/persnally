@@ -75,7 +75,8 @@ function normalizeConfidence(raw: number): number {
 function labelAt(answer: string, label: string): number {
   const tokens = label.toLowerCase().split(/\s+/).map((t) => t.replace(/^-+/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const m = new RegExp(`(^|[^a-z0-9])${tokens.join("[\\s:\\-]*")}([^a-z0-9]|$)`).exec(answer.toLowerCase());
-  return m ? m.index : -1;
+  // The label's own start, not the boundary character captured before it.
+  return m ? m.index + m[1]!.length : -1;
 }
 
 /**
@@ -87,13 +88,32 @@ function labelAt(answer: string, label: string): number {
 export function familiesAsserted(answer: string): Map<string, string> {
   const first = new Map<string, { label: string; at: number }>();
   for (const { label, family } of toolFamilies()) {
-    const at = labelAt(answer, label);
+    const at = positiveLabelAt(answer, label);
     if (at === -1) continue;
     const key = assertionFamily(family);
     const cur = first.get(key);
     if (!cur || at < cur.at) first.set(key, { label, at });
   }
   return new Map([...first].map(([family, v]) => [family, v.label]));
+}
+
+/**
+ * Where a tool is named as something the user *does*, or -1: a mention right
+ * after a negation ("never pnpm", "not rebase", "no vitest") is a claim
+ * against it, not for it. The same reading applies to an answer and to the
+ * free-form text of a correction or an observed convention.
+ */
+const NEGATION = /(?:^|[^a-z])(?:never|not|no|avoid(?:s|ed)?|without|instead of|rather than|don'?t|doesn'?t)\s+(?:use\s+|using\s+|run\s+|running\s+)?$/;
+function positiveLabelAt(text: string, label: string): number {
+  const lower = text.toLowerCase();
+  let from = 0;
+  for (;;) {
+    const at = labelAt(lower.slice(from), label);
+    if (at === -1) return -1;
+    const abs = from + at;
+    if (!NEGATION.test(lower.slice(Math.max(0, abs - 24), abs))) return abs;
+    from = abs + 1;
+  }
 }
 
 /** The family of the first tool the answer names at all — its headline claim. */
@@ -173,9 +193,16 @@ export function namesAnyTool(answer: string): boolean {
   return familiesAsserted(answer).size > 0;
 }
 
-/** The families this free-form text (an observed convention, a correction) can vouch for: those whose asserted tool it names. */
+/**
+ * The families a free-form text (an observed convention, a correction) can
+ * vouch for: those where what the text asserts — its first positively named
+ * tool in the family — is what the answer asserts. "prefers merge over
+ * rebase" asserts merge, so it vouches for "merge" and never for "rebase";
+ * "uses npm, never pnpm" vouches for npm only.
+ */
 function familiesVouchedBy(text: string, asserted: Map<string, string>): string[] {
-  return [...asserted].filter(([, label]) => labelAt(text, label) !== -1).map(([family]) => family);
+  const claims = familiesAsserted(text);
+  return [...asserted].filter(([family, label]) => claims.get(family)?.toLowerCase() === label.toLowerCase()).map(([family]) => family);
 }
 
 /**

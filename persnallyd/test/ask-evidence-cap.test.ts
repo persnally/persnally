@@ -290,3 +290,31 @@ test("the first-named tool in a family is the assertion, so 'pnpm … npm' asser
   assert.equal(ok.deferred, false);
   assert.equal(ok.confidence, 0.85);
 });
+
+// ── Direction matters: a text that names the alternative is not a vote for it ──
+
+test("an observed 'prefers merge over rebase' backs merge and never rebase", async () => {
+  const q = { ...OPTS, question: "merge or rebase?" };
+  const wrong = await askUserModel(store, q, engine(0.9, [live.id], undefined, "rebase"));
+  assert.equal(wrong.deferred, true, "the citation names rebase only as the thing the user avoids");
+  assert.equal(wrong.evidence_event_ids.length, 0);
+  const right = await askUserModel(store, q, engine(0.9, [live.id], undefined, "merge"));
+  assert.equal(right.deferred, false);
+  assert.deepEqual(right.evidence_event_ids, [live.id]);
+});
+
+test("a correction 'uses npm, never pnpm' backs npm and never pnpm", async () => {
+  const wrong = await askUserModel(store, OPTS, engine(0.95, [correction.id], undefined, "pnpm"));
+  assert.equal(wrong.deferred, true);
+  assert.equal(wrong.evidence_event_ids.length, 0);
+  const right = await askUserModel(store, OPTS, engine(0.95, [correction.id], undefined, "npm"));
+  assert.equal(right.deferred, false);
+  assert.equal(right.confidence, 0.95);
+});
+
+test("negation reads the same way in an answer: 'not pnpm — npm' asserts npm", () => {
+  assert.deepEqual([...familiesAsserted("not pnpm — npm, always").entries()], [["package-manager", "npm"]]);
+  assert.deepEqual([...familiesAsserted("never rebase; merge").entries()], [["git-integrate", "merge"]]);
+  assert.deepEqual([...familiesAsserted("avoid vitest").entries()], [], "a lone negated mention asserts nothing");
+  assert.deepEqual([...familiesAsserted("Node --test (no vitest)").entries()], [["test-runner", "node --test"]]);
+});
