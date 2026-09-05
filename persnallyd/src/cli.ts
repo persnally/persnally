@@ -9,7 +9,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { applyApiKey, configPath, loadConfig, saveConfig } from "./config.js";
-import { CLIENTS, connectAll, connectClient, installClaudeCodeHook, type Client } from "./connect.js";
+import { claudeCodePluginInstalled, CLIENTS, connectAll, connectClient, installClaudeCodeHook, type Client } from "./connect.js";
 import {
   installedHook, newestSession, render as renderChecks, resolveBin, runChecks, worst,
   type Facts,
@@ -138,6 +138,7 @@ async function gatherFacts(port: number): Promise<Facts> {
     lastReadAt,
     newestSessionAt: newestSession(DEFAULT_TRANSCRIPTS_DIR),
     hookCommand: installedHook(),
+    pluginHook: claudeCodePluginInstalled(),
     hasEngine,
     now: Date.now(),
     platform: process.platform,
