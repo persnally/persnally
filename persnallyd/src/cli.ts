@@ -4,6 +4,7 @@
  * Merges into the `persnally` npm identity at Phase 1 launch.
  */
 
+import "./node-gate.js";
 import { execFileSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
