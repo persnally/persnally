@@ -48,6 +48,8 @@ export interface Facts {
   newestSessionAt: string | null;
   /** The SessionStart command referencing Persnally, if installed. */
   hookCommand: string | null;
+  /** The Claude Code plugin is installed, enabled, user-scoped, and ships the hook. */
+  pluginHook: boolean;
   /** Extraction engine available for conversation imports. */
   hasEngine: boolean;
   now: number;
@@ -134,8 +136,21 @@ export function checkCapture(f: Facts): Check {
   return ok("capture", "Live capture current", `Last read ${f.lastReadAt}`);
 }
 
-/** Without the hook, context is served only when a tool explicitly asks. */
+/**
+ * Without the hook, context is served only when a tool explicitly asks. The
+ * plugin ships the same hook; both at once inject the context twice a session.
+ */
 export function checkHook(f: Facts): Check {
+  if (f.pluginHook && f.hookCommand) {
+    return {
+      id: "hook", level: "warn", title: "Claude Code SessionStart hook installed twice",
+      detail: "The Persnally plugin and ~/.claude/settings.json both inject your context; every session gets it twice.",
+      fix: "remove the Persnally entry under hooks.SessionStart in ~/.claude/settings.json — the plugin keeps injecting",
+    };
+  }
+  if (f.pluginHook) {
+    return ok("hook", "SessionStart hook provided by the Persnally plugin", "Claude Code injects your context at session start; nothing to add to settings.json.");
+  }
   if (!f.hookCommand) {
     return {
       id: "hook", level: "warn", title: "Claude Code SessionStart hook not installed",
