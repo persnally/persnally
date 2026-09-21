@@ -16,9 +16,9 @@ import {
   type Facts,
 } from "./doctor.js";
 import { runConsolidation } from "./consolidate.js";
-import { buildBundle, renderMarkdown } from "./export.js";
+import { buildBundle, publicCut, renderMarkdown, type ExportBundle } from "./export.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL, type ChosenExtractor } from "./llm.js";
-import { CATEGORIES, clearScope, dashboardKey, loadScopes, rotateDashboardKey, setScope, type Category } from "./permissions.js";
+import { CATEGORIES, clearScope, dashboardKey, loadScopes, PUBLIC_CATEGORIES, rotateDashboardKey, setScope, type Category } from "./permissions.js";
 import {
   alreadyImported, DENSITY_QUESTIONS, eventsFromAnswers, importAllSources, importedMemoryHashes,
   isThin, markImported, markMemoryImported,
@@ -40,10 +40,10 @@ import {
 } from "./lifecycle.js";
 import { newEvent } from "./events.js";
 import { refreshVoice } from "./voice.js";
-import { refreshScopedProfiles, renderProfile, synthesizeProfile, synthesizeScopedProfile } from "./profile.js";
+import { refreshScopedProfiles, renderProfile, scopeKey, synthesizeProfile, synthesizeScopedProfile } from "./profile.js";
 import { askUserModel } from "./ask.js";
 import { renderHits, searchContext } from "./search.js";
-import { DEFAULT_DB_PATH, EventStore } from "./store.js";
+import { DEFAULT_DB_PATH, EventStore, type StoredProfile } from "./store.js";
 import { buildContextPack, recordContextRead } from "./context-pack.js";
 
 /** One spelling in everything the user is told to retype. `persnallyd` is the
@@ -76,6 +76,7 @@ Usage:
   persnally show [topics|events|profile]   Show topics (default), recent events, or the profile
   persnally context [--full]       Emit profile + interests for AI injection (records a context read)
   persnally export [--md] [--out <file>]   Take everything with you (JSON by default; --md for a readable portrait)
+  persnally export --md --public           The portrait you can post: finance, health and lifestyle stripped
   persnally forget <topic>         Hard-delete a topic and everything derived from it
   persnally forget --style <dimension> <pattern>   Forget a "how you write" pattern for good
   persnally forget --all           Delete all data
@@ -703,9 +704,19 @@ async function main(): Promise<void> {
     }
     case "export": {
       const store = new EventStore();
-      const bundle = buildBundle(store, VERSION);
-      store.close();
-      const markdown = args.includes("--md");
+      let bundle = buildBundle(store, VERSION);
+      const isPublic = args.includes("--public");
+      try {
+        if (isPublic) bundle = publicCut(bundle, await publicProfile(store, bundle));
+      } finally {
+        store.close();
+      }
+      if (bundle.public_cut) {
+        const { stripped_categories, topics_stripped } = bundle.public_cut;
+        console.error(`Public cut: ${topics_stripped} ${stripped_categories.join("/")} topic(s) stripped${bundle.profile ? "; narrative written from public topics only" : ""}. Read it before you post — a category is not a guarantee.`);
+      }
+      // The public cut is a portrait to paste; there is no public event log to take out as JSON.
+      const markdown = isPublic || args.includes("--md");
       const body = markdown ? renderMarkdown(bundle) : JSON.stringify(bundle, null, 2);
       const outFlag = args.indexOf("--out");
       const out = outFlag >= 0 ? args[outFlag + 1] : undefined;
@@ -713,7 +724,9 @@ async function main(): Promise<void> {
       if (!out) { console.log(body); return; }
       writeFileSync(out, body.endsWith("\n") ? body : body + "\n", { mode: 0o600 });
       // stderr, so `persnallyd export --out f && cat f` stays clean to pipe.
-      console.error(`Exported ${bundle.counts.events} events, ${bundle.counts.topics} topics → ${out}`);
+      console.error(isPublic
+        ? `Exported the public cut, ${bundle.counts.topics} topics → ${out}`
+        : `Exported ${bundle.counts.events} events, ${bundle.counts.topics} topics → ${out}`);
       return;
     }
     case "activity": {
@@ -1014,6 +1027,25 @@ function announceDashboard(port: number, open = true): void {
     : ["xdg-open"];
   try { execFileSync(cmd, [...pre, url], { stdio: "ignore" }); }
   catch { /* non-fatal — the link is printed above */ }
+}
+
+/** The narrative for the public cut: the cached one while it is newer than the
+    main profile, otherwise one model call over public-category topics only.
+    null when there is nothing public to write about or no engine to write it. */
+async function publicProfile(store: EventStore, bundle: ExportBundle): Promise<StoredProfile | null> {
+  const main = bundle.profile;
+  const cached = store.getScopedProfile(scopeKey(PUBLIC_CATEGORIES));
+  if (cached && (!main || cached.generated_at >= main.generated_at)) return cached;
+  if (!bundle.topics.some((t) => PUBLIC_CATEGORIES.includes(t.category as Category))) return null;
+  // No engine is a legitimate setup (git-only), so the cut ships without a
+  // narrative; an engine that is configured but failing stays a loud error.
+  const engine = await chooseExtractor("profile").catch(() => null);
+  if (!engine) {
+    console.error(`No AI engine configured — the public cut has topics but no narrative. Set one up, then re-run: ${BIN} export --md --public`);
+    return null;
+  }
+  console.error(`Writing the public narrative with ${engine.label}...`);
+  return synthesizeScopedProfile(store, PUBLIC_CATEGORIES, engine.extract, engine.model);
 }
 
 function die(msg: string): void {

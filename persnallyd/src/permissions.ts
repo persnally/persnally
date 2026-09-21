@@ -16,6 +16,10 @@ export const CATEGORIES = [
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
 
+/** What a person would rather not post. The public cut is the scope of everything else. */
+export const PRIVATE_CATEGORIES: readonly Category[] = ["finance", "health", "lifestyle"];
+export const PUBLIC_CATEGORIES: Category[] = CATEGORIES.filter((c) => !PRIVATE_CATEGORIES.includes(c));
+
 export type Scopes = Record<string, Category[]>;
 
 export function loadScopes(): Scopes {

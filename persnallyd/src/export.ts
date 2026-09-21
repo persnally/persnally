@@ -12,7 +12,8 @@
 
 import type { PersnallyEvent } from "./events.js";
 import type { EventStore, StoredProfile, TopicRow } from "./store.js";
-import type { StyleSignal } from "./stylometry.js";
+import { PRIVATE_CATEGORIES, PUBLIC_CATEGORIES, type Category } from "./permissions.js";
+import { assemblePack, type StyleSignal } from "./stylometry.js";
 
 export const EXPORT_FORMAT_VERSION = 1;
 
@@ -26,6 +27,7 @@ export interface ExportBundle {
   voice: { pack: string; items: StyleSignal[] };
   corrections: { id: string; ts: string; subject: string; correction: string }[];
   events: PersnallyEvent[];
+  public_cut?: { stripped_categories: readonly string[]; topics_stripped: number };
 }
 
 export function buildBundle(store: EventStore, version: string, now = new Date()): ExportBundle {
@@ -53,11 +55,35 @@ export function buildBundle(store: EventStore, version: string, now = new Date()
   };
 }
 
+/**
+ * The shareable portrait. Only a topic carries a category, so only topics can
+ * be shown to be public: the narrative is the one synthesized from public
+ * topics alone, and everything uncategorized — corrections, verbatim phrasing,
+ * the event log — stays out rather than being trusted to be harmless.
+ */
+export function publicCut(b: ExportBundle, publicProfile: StoredProfile | null): ExportBundle {
+  const topics = b.topics.filter((t) => PUBLIC_CATEGORIES.includes(t.category as Category));
+  const items = b.voice.items.filter((s) => s.dimension !== "emphasis");
+  return {
+    ...b,
+    counts: { events: 0, topics: topics.length, style: items.length, corrections: 0 },
+    profile: publicProfile,
+    topics,
+    voice: { pack: assemblePack(items), items },
+    corrections: [],
+    events: [],
+    public_cut: { stripped_categories: PRIVATE_CATEGORIES, topics_stripped: b.topics.length - topics.length },
+  };
+}
+
 export function renderMarkdown(b: ExportBundle): string {
   const out: string[] = [];
   const date = b.exported_at.slice(0, 10);
 
-  out.push(`# Your Persnally context`, "", `_Exported ${date} by ${b.generator}. ${b.counts.events} events._`, "");
+  const note = b.public_cut
+    ? `Public cut: ${b.public_cut.stripped_categories.join(", ")} stripped (${b.public_cut.topics_stripped} topics).`
+    : `${b.counts.events} events.`;
+  out.push(`# Your Persnally context`, "", `_Exported ${date} by ${b.generator}. ${note}_`, "");
 
   if (b.profile) {
     out.push(`## ${b.profile.headline}`, "");
