@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { after, beforeEach, describe, test } from "node:test";
 import { loadConfig, saveConfig } from "../src/config.js";
 import {
-  disableMetrics, disclosure, enableMetrics, metricsState, pingPayload, pingsPending, reachedStages, sendPendingPings, type Ping,
+  disableMetrics, disclosure, enableMetrics, metricsState, PING_URL, pingPayload, pingsPending, reachedStages, sendPendingPings, type Ping,
 } from "../src/metrics.js";
 import type { Activity } from "../src/store.js";
 
@@ -74,7 +74,8 @@ describe("what is sent", () => {
   test("the disclosure shows the literal payload and the real destination", () => {
     const text = disclosure("3.3.0", "abc");
     assert.ok(text.includes(JSON.stringify(pingPayload("abc", "activated", "3.3.0"))));
-    assert.ok(text.includes("https://persnally.com/api/ping"));
+    assert.equal(PING_URL, "https://persnally.com/api/ping");
+    assert.ok(text.split(/\s+/).includes(`${PING_URL}:`), "the destination must appear verbatim");
   });
   test("each reached stage goes once, in order, and is never repeated", async () => {
     const { id } = enableMetrics();
