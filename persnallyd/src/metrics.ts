@@ -1,6 +1,6 @@
 /**
  * The opt-in funnel ping. Off unless the person turns it on, and when on it
- * sends one request per stage, once: a random install id, the stage name and
+ * sends one ping per stage (retried until accepted): a random install id, the stage name and
  * the version — `pingPayload` is the whole of it. No topic, claim, path, count
  * or hostname can reach it because none is ever handed to this module.
  *

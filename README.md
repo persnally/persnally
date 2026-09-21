@@ -108,7 +108,7 @@ Or add the MCP server to any client manually. It exposes six tools backed by the
 ## Your data, your rules
 
 - **On your machine.** State lives in `~/.persnally`. Extraction runs fully offline with Ollama, or through your own key — either way, nothing leaves your machine except the text you choose to send to the model you chose, at import and synthesis.
-- **No telemetry unless you say yes.** `persnally metrics on` turns on a funnel ping and prints the literal payload first: a random install id, a stage name (`installed`, `activated`, `returned`, `week2`) and the version — four requests in the life of an install, nothing else, ever. Off by default; a non-interactive setup never turns it on; `persnally metrics off` discards the id.
+- **No telemetry unless you say yes.** `persnally metrics on` turns on a funnel ping and prints the literal payload first: a random install id, a stage name (`installed`, `activated`, `returned`, `week2`) and the version — one ping per stage, retried only until the server accepts it, and nothing else, ever. Off by default; a non-interactive setup never turns it on; `persnally metrics off` discards the id.
 - **Structured signals only.** Raw conversations are never stored — only `{ topic, weight, intent, sentiment, category, … }` and provenance pointers.
 - **Inspectable & deletable.** The dashboard shows everything; the delete button means it.
 - **Source-available.** Read the engine, audit the claims, run it yourself. Licensed FSL-1.1-MIT: free to use, read and run; converts to MIT two years after each release.
