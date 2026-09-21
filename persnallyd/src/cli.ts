@@ -43,6 +43,7 @@ import { refreshVoice } from "./voice.js";
 import { refreshScopedProfiles, renderProfile, scopeKey, synthesizeProfile, synthesizeScopedProfile } from "./profile.js";
 import { askUserModel } from "./ask.js";
 import { renderHits, searchContext } from "./search.js";
+import { disableMetrics, disclosure, enableMetrics, metricsState, reachedStages, sendPendingPings } from "./metrics.js";
 import { DEFAULT_DB_PATH, EventStore, type StoredProfile } from "./store.js";
 import { buildContextPack, recordContextRead } from "./context-pack.js";
 
@@ -78,6 +79,7 @@ Usage:
   persnally export [--md] [--out <file>]   Take everything with you (JSON by default; --md for a readable portrait)
   persnally export --md --public           The portrait you can post: finance, health and lifestyle stripped
   persnally forget <topic>         Hard-delete a topic and everything derived from it
+  persnally metrics [on|off]       Anonymous funnel ping: off by default; shows exactly what is sent
   persnally forget --style <dimension> <pattern>   Forget a "how you write" pattern for good
   persnally forget --all           Delete all data
   persnally forget --batch <id>    Undo one import batch
@@ -246,6 +248,18 @@ async function main(): Promise<void> {
             ? "✓ Context hook installed (injects on every Claude Code session)"
             : "· Context hook: the Persnally plugin already provides it — skipped");
         } catch (e) { console.error(`· Context hook skipped: ${e instanceof Error ? e.message : String(e)}`); }
+      }
+
+      // 7. Funnel ping: asked once, of a person, never assumed. A non-interactive
+      //    setup (the plugin skill, an agent) leaves it off.
+      if (!metricsState().asked && process.stdin.isTTY) {
+        console.log(`\n${disclosure(VERSION)}`);
+        const { createInterface } = await import("node:readline/promises");
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        const yes = /^y(es)?$/i.test((await rl.question("Turn it on? [y/N] ")).trim());
+        rl.close();
+        if (yes) enableMetrics(); else disableMetrics();
+        console.log(yes ? `✓ On — change it with: ${BIN} metrics off` : `· Off — change it with: ${BIN} metrics on`);
       }
 
       // Never report plain success over history we silently passed over: the
@@ -700,6 +714,22 @@ async function main(): Promise<void> {
         for (const p of problems) console.log(`${p.level === "fail" ? "✗" : "!"} ${p.title}`);
         console.log(`  Details: ${BIN} doctor`);
       }
+      return;
+    }
+    case "metrics": {
+      if (args[0] === "off") { disableMetrics(); console.log("The funnel ping is off. The install id was discarded."); return; }
+      if (args[0] && args[0] !== "on") return die(`Usage: ${BIN} metrics [on|off]`);
+      if (args[0] === "on") enableMetrics();
+      const { state } = metricsState();
+      console.log(disclosure(VERSION, state?.id));
+      if (!state) { console.log(`\nStatus: off. Turn on with: ${BIN} metrics on`); return; }
+      const store = new EventStore();
+      const activity = store.activity();
+      store.close();
+      const landed = await sendPendingPings(activity, VERSION);
+      const sent = [...state.sent, ...landed];
+      const pending = reachedStages(activity).filter((s) => !sent.includes(s));
+      console.log(`\nStatus: on. Sent: ${sent.join(", ") || "nothing yet"}.${pending.length ? ` Pending (server unreachable): ${pending.join(", ")}.` : ""}`);
       return;
     }
     case "export": {
