@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import { newEvent } from "../src/events.js";
-import { buildBundle, EXPORT_FORMAT_VERSION, renderMarkdown, type ExportBundle } from "../src/export.js";
+import { buildBundle, EXPORT_FORMAT_VERSION, publicCut, renderMarkdown, type ExportBundle } from "../src/export.js";
 import { dashboardKey, issueToken } from "../src/permissions.js";
 import { EventStore } from "../src/store.js";
 
@@ -145,5 +145,70 @@ describe("the markdown portrait is readable", () => {
     assert.equal(b.profile, null);
     assert.match(renderMarkdown(b), /No profile synthesized yet/);
     empty.close();
+  });
+});
+
+describe("the public cut carries only what a category can vouch for", () => {
+  const prov = { kind: "import", batch: "b1", file: "conversations.json" } as const;
+  const topic = (name: string, category: string) => newEvent("signal.topic", "import:claude", {
+    topic: name, weight: 0.9, intent: "building", sentiment: "neutral", depth: "deep", category, entities: [],
+  }, prov);
+  const style = (dimension: string, pattern: string) => newEvent("signal.style", "import:claude", {
+    dimension, pattern, polarity: "does", confidence: 0.9, evidence: "seen often", basis: "observed",
+  }, prov);
+  let cut: ExportBundle;
+  let md: string;
+
+  before(() => {
+    const s = new EventStore(join(dir, "public.db"));
+    s.append([
+      topic("home loan refinancing", "finance"),
+      topic("thyroid medication", "health"),
+      topic("apartment hunting", "lifestyle"),
+      topic("SQLite internals", "technology"),
+      style("voice", "terse imperatives"),
+      style("emphasis", "never mention the loan to the bank"),
+      newEvent("user.correction", "cli", {
+        target_id: "pay", action: "contradict", reason: "paid in USD, not INR",
+      }, { kind: "local", surface: "cli" }),
+    ]);
+    s.rebuild();
+    s.saveProfile({
+      headline: "Someone refinancing a loan",
+      sections: [{ title: "Money", body: "Carries a home loan.", evidence_event_ids: [] }],
+      generated_at: "2026-08-07T00:00:00Z", model: "m",
+    });
+    const full = buildBundle(s, "3.2.0", new Date("2026-09-22T12:00:00Z"));
+    s.close();
+    cut = publicCut(full, {
+      headline: "A database tinkerer",
+      sections: [{ title: "What they build", body: "Reads SQLite internals.", evidence_event_ids: [] }],
+      generated_at: "2026-09-22T00:00:00Z", model: "m",
+    });
+    md = renderMarkdown(cut);
+  });
+
+  test("private-category topics are gone, public ones stay, and the header says what was stripped", () => {
+    assert.deepEqual(cut.topics.map((t) => t.topic), ["SQLite internals"]);
+    assert.match(md, /SQLite internals/);
+    assert.match(md, /Public cut: finance, health, lifestyle stripped \(3 topics\)/);
+  });
+
+  test("the narrative is the public one — the full portrait's prose never reaches it", () => {
+    assert.match(md, /## A database tinkerer/);
+    assert.doesNotMatch(md, /loan/i);
+  });
+
+  test("nothing uncategorized survives anywhere in the cut: corrections, verbatim phrasing, the event log", () => {
+    const everything = JSON.stringify(cut);
+    for (const leak of ["loan", "thyroid", "apartment", "paid in USD"]) {
+      assert.ok(!everything.includes(leak), `"${leak}" leaked into the public cut`);
+    }
+    assert.equal(cut.events.length, 0);
+    assert.match(md, /terse imperatives/);
+  });
+
+  test("with no public narrative yet it says so instead of falling back to the full portrait", () => {
+    assert.match(renderMarkdown(publicCut(cut, null)), /No profile synthesized yet/);
   });
 });
