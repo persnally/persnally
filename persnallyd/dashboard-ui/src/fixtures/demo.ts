@@ -5,11 +5,24 @@
  */
 
 import type {
-  Activity, AskResult, EngineStatus, EventEnvelope, Health, Profile, Questions, Scopes, Skill, Stats,
+  Activity, AskResult, EngineStatus, EventEnvelope, Health, ImportRun, Profile, Questions, Scopes, Skill, Stats,
   TopicRow, Voice,
 } from "../api/types";
 
 export const DEMO_HEALTH: Health = { ok: true, version: "preview" };
+
+// Ago-relative so the preview never shows a stale "last imported" date. All six
+// importers appear, because the panel's job is to say what feeds the engine.
+const daysAgo = (d: number) => new Date(Date.now() - d * 86400000).toISOString();
+
+export const DEMO_IMPORTS: ImportRun[] = [
+  { importer: "claude-code", events: 1840, runs: 96, last: daysAgo(0.1) },
+  { importer: "cursor", events: 212, runs: 3, last: daysAgo(3) },
+  { importer: "codex", events: 168, runs: 2, last: daysAgo(4) },
+  { importer: "claude", events: 604, runs: 1, last: daysAgo(21) },
+  { importer: "chatgpt", events: 431, runs: 1, last: daysAgo(24) },
+  { importer: "git", events: 96, runs: 1, last: daysAgo(26) },
+];
 
 export const DEMO_STATS: Stats = {
   total: 1284,

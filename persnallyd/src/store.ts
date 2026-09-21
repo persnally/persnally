@@ -298,6 +298,26 @@ export class EventStore {
   }
 
   /**
+   * Every importer that has ever run, with its all-time event total and most
+   * recent run. Aggregated in SQL because the dashboard used to derive this
+   * from the 500 newest `system.import` events: on a store with 545 Claude
+   * Code imports, the oldest sources fell outside that window and their rows
+   * read "not imported yet" against data that was on file.
+   */
+  importSummary(): { importer: string; events: number; runs: number; last: string }[] {
+    return this.db
+      .prepare(`SELECT json_extract(payload, '$.importer') importer,
+                       COALESCE(SUM(json_extract(payload, '$.events')), 0) events,
+                       COUNT(*) runs, MAX(ts) last
+                FROM events
+                WHERE type = 'system.import'
+                  AND json_extract(payload, '$.importer') IS NOT NULL
+                GROUP BY importer
+                ORDER BY last DESC`)
+      .all() as { importer: string; events: number; runs: number; last: string }[];
+  }
+
+  /**
    * Engagement over time from context.read events — the retention pulse.
    * Local/per-install only (this machine); aggregate cohort retention would
    * require opt-in telemetry. `now` is injectable for deterministic tests.

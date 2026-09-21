@@ -1,6 +1,10 @@
 {
   "name": "persnally",
-  "owner": { "name": "Persnally", "url": "https://persnally.com" },
+  "owner": {
+    "name": "Persnally",
+    "url": "https://persnally.com"
+  },
+  "description": "Persnally builds a model of you from your own AI history, on your machine, and every AI you use reads it. This marketplace carries the Claude Code plugin: the SessionStart hook and the setup skill.",
   "plugins": [
     {
       "name": "persnally",

@@ -9,13 +9,12 @@
  */
 
 import type {
-  Activity, AskResponse, AskResult, BootProbe, Category, ConsolidationResult, EnginePull, EngineStatus,
-  Deleted, EventEnvelope, Health, ImportResult, Mutation, Profile, Questions, Scopes, SearchHit, Skill, Stats,
-  TopicRow, Voice,
+  Activity, AskResponse, AskResult, BootProbe, Category, ConsolidationResult, Deleted, EnginePull, EngineStatus, EventEnvelope, Health, ImportResult, ImportRun, Mutation, Profile, Questions, Scopes, SearchHit, Skill, Stats, TopicRow, Voice,
 } from "./types";
 import {
   DEMO_ACTIVITY, DEMO_ASK, DEMO_ENGINE, DEMO_EVENTS, DEMO_HEALTH, DEMO_PROFILE, DEMO_QUESTIONS,
   DEMO_SCOPES, DEMO_SKILLS, DEMO_STATS, DEMO_TOPICS, DEMO_VOICE,
+  DEMO_IMPORTS,
 } from "../fixtures/demo";
 
 export interface PersnallyClient {
@@ -38,6 +37,7 @@ export interface PersnallyClient {
   scopes(): Promise<Scopes | null>;
   questions(limit?: number): Promise<Questions | null>;
   events(opts: { ids?: string[]; type?: string; limit?: number }): Promise<EventEnvelope[]>;
+  imports(): Promise<ImportRun[]>;
   search(q: string): Promise<SearchHit[]>;
   pullStatus(): Promise<EnginePull | null>;
   // mutations
@@ -125,6 +125,7 @@ function liveClient(onUnauthorized: () => void): PersnallyClient {
     engine: () => g<EngineStatus>("/engine"),
     scopes: () => g<Scopes>("/scopes"),
     questions: (limit = 12) => g<Questions>(`/questions?limit=${limit}`),
+    imports: async () => (await g<ImportRun[]>("/imports")) ?? [],
     async events(opts) {
       const q = opts.ids?.length
         ? `ids=${opts.ids.map(encodeURIComponent).join(",")}`
@@ -186,6 +187,7 @@ function demoClient(): PersnallyClient {
     engine: () => Promise.resolve(DEMO_ENGINE),
     scopes: () => Promise.resolve(DEMO_SCOPES),
     questions: () => Promise.resolve(DEMO_QUESTIONS),
+    imports: () => Promise.resolve(DEMO_IMPORTS),
     events: (opts) =>
       Promise.resolve(
         opts.ids?.length

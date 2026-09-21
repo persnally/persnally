@@ -37,6 +37,7 @@ const healthy: Facts = {
   lastReadAt: iso(2 * 3600_000),
   newestSessionAt: iso(3 * 3600_000),
   hookCommand: "persnallyd context --hook 2>/dev/null",
+  pluginHook: false,
   hasEngine: true,
   now: NOW,
   platform: "darwin",
@@ -151,6 +152,22 @@ describe("hook and engine are warnings, not failures", () => {
   test("warnings alone do not make the run a failure", () => {
     const checks = runChecks(facts({ hookCommand: null, hasEngine: false }));
     assert.equal(worst(checks), "warn", "exit code must distinguish degraded from broken");
+  });
+});
+
+describe("the Claude Code plugin can own the hook", () => {
+  test("plugin only: healthy, and nothing tells the user to run connect", () => {
+    const c = checkHook(facts({ hookCommand: null, pluginHook: true }));
+    assert.equal(c.level, "ok");
+    assert.match(c.title, /plugin/);
+    assert.equal(c.fix, undefined);
+  });
+
+  test("plugin and settings.json both: a warning whose fix names the settings entry", () => {
+    const c = checkHook(facts({ pluginHook: true }));
+    assert.equal(c.level, "warn");
+    assert.match(c.title, /twice/);
+    assert.match(c.fix!, /settings\.json/);
   });
 });
 
