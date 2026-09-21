@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { askUserModel } from "./ask.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { runConsolidation, shouldRunNow } from "./consolidate.js";
+import { pingsPending, sendPendingPings } from "./metrics.js";
 import {
   allowedCategories, CATEGORIES, clearScope, clientForToken, createSession, dashboardKey,
   hasToken, isRevoked, loadScopes, SESSION_COOKIE, SESSION_TTL_SECONDS, sessionNeedsRefresh, sessionValid, setScope,
@@ -555,6 +556,11 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
   // Every 30 min: pick up new Claude Code chats, then run the once-a-day reflection.
   const timer = setInterval(async () => {
     await autoImportNewSessions(store);
+    try {
+      if (pingsPending()) await sendPendingPings(store.activity(), VERSION);
+    } catch (e) {
+      console.error(`funnel ping skipped: ${e instanceof Error ? e.message : String(e)}`);
+    }
     // The attempt timestamp, not the success one: a failing run must back off to
     // daily instead of retrying on every tick.
     const lastAttempt = loadConfig().last_consolidation_attempt;
