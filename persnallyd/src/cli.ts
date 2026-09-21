@@ -16,7 +16,7 @@ import {
   type Facts,
 } from "./doctor.js";
 import { runConsolidation } from "./consolidate.js";
-import { buildBundle, publicCut, renderMarkdown } from "./export.js";
+import { buildBundle, publicCut, renderMarkdown, type ExportBundle } from "./export.js";
 import { chooseExtractor, ollamaTags, pullOllamaModel, RECOMMENDED_LOCAL_MODEL, type ChosenExtractor } from "./llm.js";
 import { CATEGORIES, clearScope, dashboardKey, loadScopes, PUBLIC_CATEGORIES, rotateDashboardKey, setScope, type Category } from "./permissions.js";
 import {
@@ -707,13 +707,13 @@ async function main(): Promise<void> {
       let bundle = buildBundle(store, VERSION);
       const isPublic = args.includes("--public");
       try {
-        if (isPublic) bundle = publicCut(bundle, await publicProfile(store, bundle.profile));
+        if (isPublic) bundle = publicCut(bundle, await publicProfile(store, bundle));
       } finally {
         store.close();
       }
       if (bundle.public_cut) {
         const { stripped_categories, topics_stripped } = bundle.public_cut;
-        console.error(`Public cut: ${topics_stripped} ${stripped_categories.join("/")} topic(s) stripped; narrative written from public topics only. Read it before you post — a category is not a guarantee.`);
+        console.error(`Public cut: ${topics_stripped} ${stripped_categories.join("/")} topic(s) stripped${bundle.profile ? "; narrative written from public topics only" : ""}. Read it before you post — a category is not a guarantee.`);
       }
       // The public cut is a portrait to paste; there is no public event log to take out as JSON.
       const markdown = isPublic || args.includes("--md");
@@ -1030,11 +1030,20 @@ function announceDashboard(port: number, open = true): void {
 }
 
 /** The narrative for the public cut: the cached one while it is newer than the
-    main profile, otherwise one model call over public-category topics only. */
-async function publicProfile(store: EventStore, main: StoredProfile | null): Promise<StoredProfile | null> {
+    main profile, otherwise one model call over public-category topics only.
+    null when there is nothing public to write about or no engine to write it. */
+async function publicProfile(store: EventStore, bundle: ExportBundle): Promise<StoredProfile | null> {
+  const main = bundle.profile;
   const cached = store.getScopedProfile(scopeKey(PUBLIC_CATEGORIES));
   if (cached && (!main || cached.generated_at >= main.generated_at)) return cached;
-  const engine = await chooseExtractor("profile");
+  if (!bundle.topics.some((t) => PUBLIC_CATEGORIES.includes(t.category as Category))) return null;
+  // No engine is a legitimate setup (git-only), so the cut ships without a
+  // narrative; an engine that is configured but failing stays a loud error.
+  const engine = await chooseExtractor("profile").catch(() => null);
+  if (!engine) {
+    console.error(`No AI engine configured — the public cut has topics but no narrative. Set one up, then re-run: ${BIN} export --md --public`);
+    return null;
+  }
   console.error(`Writing the public narrative with ${engine.label}...`);
   return synthesizeScopedProfile(store, PUBLIC_CATEGORIES, engine.extract, engine.model);
 }
