@@ -130,6 +130,7 @@ persnally show [topics|events|profile]
 persnally dashboard                     # open the local dashboard (authenticated link)
 persnally activity [--json]             # context-read engagement over time (retention pulse)
 persnally export [--md] [--out <file>] # take everything with you (JSON, or a readable portrait)
+persnally export --md --public         # the portrait you can post: finance, health and lifestyle stripped
 persnally forget <topic> | --all | --batch <id> | --style <dim> <pattern>
 persnally metrics [on|off]              # anonymous funnel ping: off by default; shows exactly what is sent
 persnally config set-key <sk-ant-…>     # key for the background daemon
