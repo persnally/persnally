@@ -2,6 +2,25 @@
 
 All notable changes to Persnally will be documented in this file.
 
+## [3.3.0] - 2026-09-22
+
+The portrait Persnally builds is accurate enough to be too intimate to post, so there is now a cut of it you can: `persnally export --md --public`. And Persnally can now measure whether an install turns into use — through a funnel ping that is off until you say yes and shows you the literal payload first.
+
+### Added
+
+- **`persnally export --md --public` — the portrait you can post.** It strips finance, health and lifestyle. Only a topic carries a category — assertions, corrections and style signals do not — so only topics can be *shown* to be public, and the cut is built on that rather than on hope: the narrative is synthesized from public-category topics alone (the same path that already serves a category-scoped client), the topic table is filtered, and everything uncategorized — corrections, verbatim phrasing, the event log — is dropped rather than trusted to be harmless. The narrative is cached and reused while it is newer than your main profile, so iterating on a post costs one model call, not one per run. With no engine configured the cut ships topics without a narrative and says so; a configured engine that fails stays a loud error. The header and stderr state what was stripped, and stderr adds the honest caveat: a category is not a guarantee, so read it before you post. `--public` implies `--md`.
+- **An opt-in funnel ping, and `persnally metrics [on|off]`.** Off by default. Turning it on prints exactly what is sent before anything is: `{"id": "<random uuid>", "stage": "installed|activated|returned|week2", "v": "<version>"}` — one ping per stage, retried only until the server accepts it, and nothing else, ever. The module that sends is handed only activity timestamps and the version, so no topic, claim, path, count or hostname can reach it. The id is random rather than derived from your machine, and `persnally metrics off` discards it — turning it on again is a new install as far as the server can tell. An interactive `persnally setup` asks once, after the same disclosure; a non-interactive setup (the Claude Code plugin's skill, an agent install) never asks and never enables it. Like any HTTPS request the ping reaches our host from your IP; the row we keep has no IP and no user agent.
+
+### Fixed
+
+- **The CLI refuses to run on Node older than 22 instead of segfaulting.** A global install made under Node 22 and run under an older Node first on `PATH` loaded the wrong SQLite prebuild and crashed on the first query — invisibly inside the Claude Code SessionStart hook, where stderr is discarded and the hook exits 0. It now prints which Node it found and where, and exits 1. `persnally-mcp` is not gated: it never touches SQLite.
+- **`persnally doctor` tells plugin users the truth.** With the Claude Code plugin installed, doctor reported "SessionStart hook not installed" and recommended `persnally connect claude-code`, which then declined because the plugin owns the hook. The plugin now counts as the hook, and having both the plugin and a `settings.json` hook is a warning with the fix.
+- **The dashboard's Connections panel lists all six import sources, with all-time counts.** Cursor and Codex shipped as import sources and the panel still listed four, so an import from either had no row at all. Underneath, per-source totals were derived from the 500 newest import events, so on a store with more than that the oldest sources read "not imported yet" against data on file. The daemon now aggregates in SQL (`GET /imports`, owner-only) and the panel reads that.
+
+### Security
+
+- Transitive dependency advisories picked up: `hono` 4.13.8 (file writes outside the output directory in `toSSG()`, memory exhaustion in `parseBody()`, query parameters read past the URL fragment). The marketing site picks up `sharp` 0.35.4 (libheif).
+
 ## [3.2.0] - 2026-09-04
 
 Your agents can now trust what Persnally answers, because an answer is only as confident as the evidence behind it. Cursor and Codex join the import sources, so an agent-CLI developer's whole history is finally visible to their own context engine. The workspace dashboard ships on `/next`, and Persnally installs into Claude Code as a plugin.
