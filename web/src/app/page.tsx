@@ -139,15 +139,15 @@ function Hero() {
               className="font-display rise text-balance text-[3.6rem] leading-[0.95] sm:text-[5.2rem] lg:text-[6.2rem]"
               style={{ animationDelay: "80ms" }}
             >
-              Finally, every AI knows <Em>you.</Em>
+              So every AI finally knows <Em>you.</Em>
             </h1>
 
             <p
               className="rise mt-8 max-w-xl text-pretty text-lg leading-relaxed text-mute"
               style={{ animationDelay: "160ms" }}
             >
-              Persnally builds a model of you from your own AI history — your chats, your code,
-              your decisions — on your machine, and every AI you use reads it. Yours.
+              Persnally builds a model of you from your own AI history, on your machine, and every
+              AI you use reads it.
             </p>
 
             <div className="rise mt-10 flex max-w-xl flex-col gap-4" style={{ animationDelay: "240ms" }}>
@@ -197,7 +197,8 @@ function Marquee() {
         </div>
       </div>
       <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
-        One command connects them all · ChatGPT history imports too
+        Eight clients read it over MCP: Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI,
+        Windsurf, Zed, VS Code · ChatGPT imports today; live reads need the agent relay
       </p>
     </Section>
   );
@@ -337,7 +338,7 @@ function HowItWorks() {
   ];
   return (
     <Section id="how" className="py-24">
-      <SectionHead n="02" eyebrow="How it works" title="Your context, in every tool you touch." />
+      <SectionHead n="02" eyebrow="How it works" title="One import. Every AI you use reads it." />
 
       <div className="mt-12 grid gap-5 lg:grid-cols-3">
         {steps.map((s) => (
@@ -620,7 +621,7 @@ function Engine() {
       <SectionHead
         n="05"
         eyebrow="Under the hood"
-        title="More than memory. An engine."
+        title="A model you can walk, down to every event."
         lede="Structured events, derived views, a walkable provenance graph — decay-aware, and entirely your own."
       />
 
@@ -654,7 +655,7 @@ function Engine() {
             ))}
           </div>
           <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
-            speaks MCP — adopted by every major AI
+            eight clients over MCP · ChatGPT imports today
           </p>
         </div>
 
@@ -756,7 +757,7 @@ function Compare() {
         eyebrow="How it compares"
         title={
           <>
-            Everyone remembers. Persnally <Em>answers.</Em>
+            Memory stores facts. This is <Em>a model.</Em>
           </>
         }
         lede="No one else answers what you'd do, learns when you correct it, and lets you verify all of it on your own machine."
@@ -901,7 +902,7 @@ function Trust() {
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 border-y border-ink/25 px-4 py-5">
-        {["No account", "Bring your own keys", "Works offline", "Open spec"].map((c) => (
+        {["No account", "Runs fully offline with Ollama", "Or bring your own key", "Open spec"].map((c) => (
           <span key={c} className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-mute">
             <Check className="size-3 text-electric" />
             {c}
@@ -986,7 +987,7 @@ function Pricing() {
     "The full engine — import, learn, synthesize your profile",
     "Serve your context to every AI over MCP",
     "The dashboard: inspect, audit provenance, delete",
-    "Bring your own key, or run fully local with Ollama",
+    "Runs fully offline with Ollama, or bring your own key",
   ];
   // The page's one full-bleed color moment: pricing on the electric field.
   return (
@@ -1133,8 +1134,8 @@ function GetStarted() {
       <div id="start" className="mx-auto mt-10 max-w-2xl scroll-mt-24">
         <SetupTabs />
         <p className="mt-5 text-center font-mono text-[11px] leading-relaxed text-faint">
-          macOS · Linux · Windows · Node 20+ · background autostart on macOS &amp; Linux · bring your
-          own key, or run fully local with Ollama
+          macOS · Linux · Windows · Node 22+ · background autostart on macOS &amp; Linux · runs
+          fully offline with Ollama, or bring your own key
         </p>
       </div>
     </Section>
