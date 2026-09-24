@@ -338,7 +338,7 @@ function HowItWorks() {
   ];
   return (
     <Section id="how" className="py-24">
-      <SectionHead n="02" eyebrow="How it works" title="One import. Every AI you use reads it." />
+      <SectionHead n="02" eyebrow="How it works" title="One import. The tools you already run read it." />
 
       <div className="mt-12 grid gap-5 lg:grid-cols-3">
         {steps.map((s) => (
