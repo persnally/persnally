@@ -48,8 +48,9 @@ export function AnswersView({ client, boot }: { client: PersnallyClient; boot: B
       {asks === null && <Empty>Couldn't read the ledger — is the daemon running?</Empty>}
       {asks && asks.items.length === 0 && (
         <Empty>
-          Nothing asked yet. A connected AI calls <code>persnally_ask</code> before interrupting you — run{" "}
-          <code>persnally connect --all</code>, then start a session.
+          Nothing asked yet. This is the ledger: every question an AI asks your model instead of you lands
+          here, with its answer, the evidence and your verdict. A connected AI calls <code>persnally_ask</code>{" "}
+          before interrupting you — run <code>persnally connect --all</code>, then start a session.
         </Empty>
       )}
       {asks?.items.map((a) => (

@@ -8,9 +8,22 @@ Your context lives on your machine. Not in our cloud, not in any model vendor's 
 
 > **The giants build the intelligence. Persnally makes it yours.**
 
+## What it is, and what it becomes
+
+Not a chat. Not a profile page. **You, consulted.**
+
+- **Now — the mirror.** You see the model of you, with receipts: import your history, read the portrait, walk from any claim to the conversations it came from, delete what you like.
+- **Next — the layer and the loop** (shipping in 3.x). Every AI you use reads it at session start. Your coding agent asks it before asking you — which package manager, which test runner, how you'd decide — and gets an answer with evidence, or gets sent back to you. Correct it once; it sticks.
+- **Then — the person layer.** Any agent acting for you — writing, buying, booking, coding — consults the model of you first and stops asking. It compounds every month.
+
+The end product is a ledger, not a chat. The dashboard's home is every question an agent asked your model instead of you, the answer it gave, the evidence, and your verdict. A real row from the founder's store:
+
+> **Claude Code asked:** For a new lightweight mobile-first web frontend served by a Go JSON API (hackathon, 2-day deadline), would Sidhanth pick Vite + Preact + TypeScript over htmx/templ or SvelteKit/Next?…
+> **Persnally answered:** yes, Vite + Preact + TypeScript — you've already rejected Next/SPA for 3G budgets and migrated htmx to this exact stack.… *(confidence 0.87 · 3 evidence events)*
+
 ## Why
 
-Every AI you use is brilliant and amnesiac. ChatGPT doesn't know what you told Claude. Your coding agent doesn't know your stack or your tolerances. Each one relearns you from zero, every session — or interrupts you to ask.
+Every AI you use is brilliant and amnesiac, and now it acts on its own. ChatGPT doesn't know what you told Claude. Your coding agent doesn't know your stack or your tolerances, so it either stops to ask or chooses for you, wrongly.
 
 The fix isn't a better model. It's a layer underneath all of them that holds *you*: your interests, your projects, how you decide, what you're avoiding. The model vendors won't build this — they can't share your context with each other, and their business is keeping you inside their walls. So it has to be neutral, and it has to be yours.
 

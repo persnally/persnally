@@ -40,6 +40,7 @@ export default function Home() {
       <main>
         <Hero />
         <Marquee />
+      <WhatThisIs />
         <Wedge />
         <HowItWorks />
         <SeeIt />
@@ -251,6 +252,63 @@ function Wedge() {
         </div>
         <RepetitionFeed />
       </div>
+    </Section>
+  );
+}
+
+/* ── № 00 · What this is ─────────────────────────────────────── */
+
+function WhatThisIs() {
+  const rungs = [
+    {
+      when: "Now",
+      name: "The mirror",
+      body: "You see the model of you, with receipts. Import your history, read the portrait, walk from any claim to the conversations it came from, delete what you like. Delete means delete.",
+      state: "shipped",
+    },
+    {
+      when: "Next",
+      name: "The layer and the loop",
+      body: "Every AI you use reads it at session start. Your coding agent asks it before asking you — which package manager, which test runner, how you'd decide — and gets an answer with evidence, or gets sent back to you. Correct it once; it sticks.",
+      state: "shipping in 3.x",
+    },
+    {
+      when: "Then",
+      name: "The person layer",
+      body: "Any agent acting for you — writing, buying, booking, coding — consults the model of you first and stops asking. It compounds every month. The giants build the intelligence. Persnally makes it yours.",
+      state: "where this goes",
+    },
+  ];
+  return (
+    <Section id="what" className="py-24">
+      <SectionHead
+        n="00"
+        eyebrow="What this is"
+        title={
+          <>
+            Not a chat. Not a profile page. <Em>You,</Em> consulted.
+          </>
+        }
+        lede={
+          <>
+            Persnally builds a model of you from your own AI history, on your machine, and every AI you use
+            reads it. The end product is a ledger: every question an agent asked your model instead of you,
+            the answer it gave, the evidence, and your verdict.
+          </>
+        }
+      />
+      <ol className="mt-12 grid gap-5 md:grid-cols-3">
+        {rungs.map((r) => (
+          <li key={r.when} className={`plate flex flex-col p-6${r.when === "Then" ? " border-electric" : ""}`}>
+            <p className="flex items-baseline justify-between font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
+              <span className={r.when === "Then" ? "text-electric" : ""}>{r.when}</span>
+              <span className="normal-case tracking-normal">{r.state}</span>
+            </p>
+            <h3 className="font-display mt-3 text-2xl text-ink">{r.name}</h3>
+            <p className="mt-2.5 text-[15px] leading-relaxed text-mute">{r.body}</p>
+          </li>
+        ))}
+      </ol>
     </Section>
   );
 }
