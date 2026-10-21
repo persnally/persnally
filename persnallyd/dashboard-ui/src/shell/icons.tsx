@@ -71,21 +71,10 @@ export const PanelIcon = () => (
   </svg>
 );
 
-export const PlusIcon = () => (
-  <svg {...S}>
-    <path d="M12 4.8v14.4M4.8 12h14.4" />
-  </svg>
-);
-
-/** Recent asks — a speech bubble: these are questions your AIs asked. */
+/** Answers — a speech bubble: the questions your AIs asked your model. */
 export const AskIcon = () => (
   <svg {...S}>
     <path d="M20.5 11.7c0 4.3-3.8 7.8-8.5 7.8-1 0-2-.16-2.9-.45L3.9 20.6l1.5-4.2a7.4 7.4 0 0 1-1.9-4.7c0-4.3 3.8-7.8 8.5-7.8s8.5 3.5 8.5 7.8Z" />
   </svg>
 );
 
-export const SendIcon = () => (
-  <svg {...S}>
-    <path d="M12 19.2V4.8M5.2 11.6 12 4.8l6.8 6.8" />
-  </svg>
-);

@@ -1,7 +1,7 @@
 import Image, { type StaticImageData } from "next/image";
 import { CopyCommand } from "./_components/CopyCommand";
 import { Nav } from "./_components/Nav";
-import { EngravedSelf } from "./_components/EngravedSelf";
+import { AnsweredForYou } from "./_components/AnsweredForYou";
 import { SetupTabs } from "./_components/SetupTabs";
 import { RepetitionFeed } from "./_components/RepetitionFeed";
 import { ProCard } from "./_components/ProCard";
@@ -166,7 +166,7 @@ function Hero() {
         </div>
 
         <div className="rise" style={{ animationDelay: "300ms" }}>
-          <EngravedSelf />
+          <AnsweredForYou />
         </div>
       </div>
     </Section>
@@ -544,17 +544,6 @@ function AskProof() {
             sizes={SIZES.medallion}
             natural
           />
-          <div className="mt-auto">
-            <Terminal>
-              <p className="font-mono text-[12px] opacity-75">
-                persnally_ask <span className="opacity-60">&ldquo;tests before I merge?&rdquo;</span>
-              </p>
-              <p className="mt-2 font-mono text-[12px]">
-                ↳ yes — you demand proof before merge; add e2e on the changed paths.
-              </p>
-              <p className="mt-1.5 font-mono text-[11px] opacity-60">confidence 0.92 · 3 evidence events</p>
-            </Terminal>
-          </div>
         </div>
         <div className="plate flex flex-col p-6">
           <h3 className="font-display text-2xl text-ink">Correct it once, it sticks</h3>

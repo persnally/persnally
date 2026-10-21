@@ -5,7 +5,7 @@
  */
 
 import type {
-  Activity, AskResult, EngineStatus, EventEnvelope, Health, ImportRun, Profile, Questions, Scopes, Skill, Stats,
+  Activity, EngineStatus, EventEnvelope, Health, ImportRun, Profile, Questions, Scopes, Skill, Stats,
   TopicRow, Voice,
 } from "../api/types";
 
@@ -201,15 +201,6 @@ export const DEMO_QUESTIONS: Questions = {
     { question_id: "demo-q-b", answer_id: "demo-a-b", ts: "2026-08-11T11:05:00Z", asker: "cursor", question: "npm or pnpm for this repo?", answer: "npm — it's what every repo of theirs uses.", confidence: 0.91, deferred: false, evidence_event_ids: ["demo-ev-2"], verdict: null },
     { question_id: "demo-q-c", answer_id: "demo-a-c", ts: "2026-08-10T19:42:00Z", asker: "claude-desktop", question: "Should I email the investor update tonight?", answer: "", confidence: 0.31, deferred: true, evidence_event_ids: [], verdict: null },
   ],
-  stats: { asked: 3, answered: 2, deferred: 1, approved: 1, edited: 0, vetoed: 0, precision: 1 },
+  stats: { asked: 3, answered: 2, deferred: 1, approved: 1, edited: 0, vetoed: 0, precision: 1, asked7d: 3, answered7d: 2 },
 };
 
-export const DEMO_ASK: AskResult = {
-  question_id: "demo-q-1",
-  answer_id: "demo-a-1",
-  answer:
-    "Sample answer: they would want an integration test before merging — they treat unverified changes as unfinished, and they've said so repeatedly across tools.",
-  confidence: 0.84,
-  deferred: false,
-  evidence_event_ids: ["demo-ev-2", "demo-ev-3"],
-};

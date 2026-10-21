@@ -66,24 +66,6 @@ code { font-family: var(--mono); font-size: 0.86em; }
 }
 .rail-toggle:hover { color: var(--text); background: var(--panel-2); }
 
-/* primary action — the reference apps' "New" slot */
-.rail-primary {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 8px 9px;
-  margin-bottom: 10px;
-  border: 1px solid var(--line-2);
-  color: var(--text);
-  font-size: 13.5px;
-  font-weight: 550;
-  white-space: nowrap;
-  transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
-}
-.rail-primary:hover { background: var(--panel-2); border-color: var(--dim); }
-.rail-primary .glyph { flex: none; display: inline-flex; }
-
 /* nav + list rows share one row shape */
 .rail-item {
   display: flex;
@@ -105,18 +87,8 @@ code { font-family: var(--mono); font-size: 0.86em; }
 
 
 /* section label */
-.rail-label {
-  padding: 16px 9px 5px;
-  font-size: 11.5px;
-  color: var(--faint);
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-.rail-hint { padding: 2px 9px 0; font-size: 12.5px; color: var(--faint); line-height: 1.45; }
 
-.rail-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; margin: 0 -8px; padding: 0 8px; }
-.rail-scroll::-webkit-scrollbar { width: 6px; }
-.rail-scroll::-webkit-scrollbar-thumb { background: var(--line-2); }
+.rail-nav { flex: 1; }
 
 /* footer status block — where the reference apps put the account row */
 .rail-foot {
@@ -204,11 +176,8 @@ code { font-family: var(--mono); font-size: 0.86em; }
 .flow { flex: 1; overflow-y: auto; padding: 8px 24px 34px; }
 .flow-col { max-width: var(--canvas-max); margin: 0 auto; }
 
-/* empty state: centered greeting, composer directly beneath (dock centers too) */
-.canvas.empty-state .flow { display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8px; }
-/* Nothing docked below on a fresh install, so the setup step centres instead of
-   hugging the bottom edge where the composer would have been. */
-.canvas.empty-state.no-dock .flow { align-items: center; padding-bottom: 34px; }
+/* empty state: the setup step, centred */
+.canvas.empty-state .flow { display: flex; align-items: center; justify-content: center; padding-bottom: 34px; }
 .greeting { text-align: center; }
 .greeting .mark { width: 30px; height: 30px; margin: 0 auto 14px; color: var(--text); display: block; }
 .greeting h1 { font: 400 30px/1.25 var(--display); letter-spacing: -0.01em; }
@@ -262,51 +231,13 @@ code { font-family: var(--mono); font-size: 0.86em; }
 
 .defer-note { color: var(--dim); font-size: 13.5px; margin-top: 7px; }
 
-/* ── docked composer ────────────────────────────────────── */
+/* ── the ledger's lead number ───────────────────────────── */
 
-.dock { flex: none; padding: 0 24px 14px; }
-.dock-col { max-width: var(--canvas-max); margin: 0 auto; }
+.ledger-stat { display: flex; flex-direction: column; padding: 28px 0 22px; border-bottom: 1px solid var(--line); }
+.ledger-num { font: 400 64px/1 var(--display); letter-spacing: -0.02em; color: var(--text); }
+.ledger-label { margin-top: 10px; font-size: 15px; color: var(--text-2); }
+.ledger-sub { margin-top: 4px; font-size: 12.5px; color: var(--faint); }
 
-.ask {
-  border: 1px solid var(--line-2);
-  background: var(--panel);
-  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
-}
-.ask:focus-within { border-color: var(--dim); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05); }
-.ask textarea {
-  display: block;
-  width: 100%;
-  min-height: 46px;
-  max-height: 190px;
-  resize: none;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  padding: 14px 15px 4px;
-}
-.ask textarea::placeholder { color: var(--faint); }
-.ask-foot { display: flex; align-items: center; gap: 10px; padding: 6px 8px 8px 15px; }
-.ask-count { color: var(--faint); font-size: 12px; }
-.ask-model { color: var(--faint); font-size: 12.5px; margin-left: auto; }
-.ask-send {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  background: var(--text);
-  color: var(--bg);
-  transition: opacity 0.15s var(--ease);
-}
-.ask-send:disabled { opacity: 0.3; cursor: default; }
-.ask-send.waiting { background: var(--panel-2); color: var(--dim); }
-
-.disclaimer { text-align: center; font-size: 11.5px; color: var(--faint); padding-top: 8px; }
-.notice { color: var(--warn); font-size: 13px; padding-top: 8px; }
-.error-text { color: var(--danger); font-size: 13px; padding-top: 8px; }
 
 /* ── empty / stub states ────────────────────────────────── */
 
@@ -360,7 +291,6 @@ code { font-family: var(--mono); font-size: 0.86em; }
 @media (max-width: 760px) {
   :root { --rail-w: 196px; }
   .flow { padding: 8px 16px 20px; }
-  .dock { padding: 0 16px 12px; }
 }
 
 /* ── panels & rows: the shared vocabulary of Data / Access / Connections / Control ── */

@@ -103,6 +103,9 @@ export interface AskStats {
   edited: number;
   vetoed: number;
   precision: number | null; // approved / labeled; edited and vetoed both count against — conservative on purpose
+  /** The last 7 days — the number the dashboard leads with. */
+  asked7d: number;
+  answered7d: number;
 }
 
 export class EventStore {
@@ -426,11 +429,14 @@ export class EventStore {
     // The stats are counts over every answer, so they are counted in SQL. Only
     // the rows actually rendered are read back, and only the questions those
     // rows cite — this used to pull three whole event types into memory.
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
     const counts = this.db
       .prepare(`SELECT COUNT(*) asked,
-                       SUM(CASE WHEN json_extract(payload, '$.deferred') IN (1, 'true') THEN 1 ELSE 0 END) deferred
+                       SUM(CASE WHEN json_extract(payload, '$.deferred') IN (1, 'true') THEN 1 ELSE 0 END) deferred,
+                       SUM(CASE WHEN ts >= ? THEN 1 ELSE 0 END) asked7d,
+                       SUM(CASE WHEN ts >= ? AND json_extract(payload, '$.deferred') NOT IN (1, 'true') THEN 1 ELSE 0 END) answered7d
                 FROM events WHERE type = 'agent.answer'`)
-      .get() as { asked: number; deferred: number | null };
+      .get(weekAgo, weekAgo) as { asked: number; deferred: number | null; asked7d: number | null; answered7d: number | null };
 
     // Latest verdict per answer, resolved in one descending pass. A correlated
     // "max ts per subject" subquery reads far worse here: json_extract can't use
@@ -455,6 +461,8 @@ export class EventStore {
       answered: counts.asked - (counts.deferred ?? 0),
       deferred: counts.deferred ?? 0,
       approved: 0, edited: 0, vetoed: 0, precision: null,
+      asked7d: counts.asked7d ?? 0,
+      answered7d: counts.answered7d ?? 0,
     };
     // Count each judged answer once, under its latest verdict only.
     for (const v of verdicts.values()) {

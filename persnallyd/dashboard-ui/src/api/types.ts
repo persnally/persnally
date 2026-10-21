@@ -142,16 +142,6 @@ export interface EngineStatus {
 /** Absent key = full access · [] = revoked · non-empty = limited to those. */
 export type Scopes = Record<string, Category[]>;
 
-export interface AskResult {
-  question_id: string;
-  answer_id: string;
-  answer: string;
-  confidence: number;
-  deferred: boolean;
-  reason?: "low-confidence" | "not-enough-context" | "no-engine";
-  evidence_event_ids: string[];
-}
-
 export interface AskRow {
   question_id: string;
   answer_id: string;
@@ -174,6 +164,9 @@ export interface AskStats {
   edited: number;
   vetoed: number;
   precision: number | null;
+  /** The last 7 days — the number the dashboard leads with. */
+  asked7d: number;
+  answered7d: number;
 }
 
 export interface Questions {
@@ -193,12 +186,6 @@ export interface ConsolidationResult {
   profileRefreshed: boolean;
   stylePruned: number;
 }
-
-/** POST /ask outcomes the composer must render distinctly. */
-export type AskResponse =
-  | { kind: "ok"; result: AskResult }
-  | { kind: "rate-limited"; message: string }
-  | { kind: "http-error"; message: string };
 
 /** What a delete actually removed — 0 means the row was already gone. */
 export interface Deleted { deleted: number }
