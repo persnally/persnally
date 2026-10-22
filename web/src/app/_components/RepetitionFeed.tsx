@@ -5,17 +5,17 @@ import { RotateCw } from "lucide-react";
 import { AnimatedList } from "@/components/magicui/animated-list";
 import { Glyph, brand, type BrandName } from "@/components/ui/logos";
 
-/* The repetition tax: you re-explaining the same context to tool after tool,
-   stacking up via Magic UI AnimatedList. Each tool meets you as a stranger. */
+/* The interruption tax: tool after tool stopping to ask what you already told
+   another one, stacking up via Magic UI AnimatedList. Each meets you as a stranger. */
 
 const icon = (name: BrandName) => brand(name);
 
 const MESSAGES: { id: string; tool: BrandName; to: string; text: string }[] = [
-  { id: "m1", tool: "Claude", to: "Claude", text: "My stack: TypeScript, Next.js, Tailwind." },
-  { id: "m2", tool: "ChatGPT", to: "ChatGPT", text: "As I said — SQLite, not Postgres." },
-  { id: "m3", tool: "Cursor", to: "Cursor", text: "Again: I ship the smallest thing that works." },
-  { id: "m4", tool: "Copilot", to: "Copilot", text: "Reminder — I guard user trust above all." },
-  { id: "m5", tool: "Claude", to: "Claude · new chat", text: "Like I told the others, my stack is…" },
+  { id: "m1", tool: "Claude", to: "Claude", text: "Which framework should I scaffold this with?" },
+  { id: "m2", tool: "ChatGPT", to: "ChatGPT", text: "Do you want Postgres or SQLite here?" },
+  { id: "m3", tool: "Cursor", to: "Cursor", text: "Should I add tests before this lands?" },
+  { id: "m4", tool: "Copilot", to: "Copilot", text: "How strict should the auth check be?" },
+  { id: "m5", tool: "Claude", to: "Claude · new chat", text: "Quick question before I start: what's your stack?" },
 ];
 
 function Message({ tool, to, text }: { tool: BrandName; to: string; text: string }) {
@@ -24,10 +24,10 @@ function Message({ tool, to, text }: { tool: BrandName; to: string; text: string
       <div className="flex items-center justify-between gap-3">
         <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.1em] text-mute">
           <Glyph icon={icon(tool)} className="size-3.5 text-ink" />
-          To {to}
+          {to} asks
         </span>
         <span className="inline-flex shrink-0 items-center gap-1 border border-ink/25 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-faint">
-          <RotateCw className="size-3" /> said before
+          <RotateCw className="size-3" /> answered before
         </span>
       </div>
       <p className="mt-2 text-[15px] italic leading-snug text-ink">“{text}”</p>
