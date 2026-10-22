@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import type { PersnallyClient } from "../../api/client";
 import type { AskRow, Questions } from "../../api/types";
 import type { Boot } from "../../lib/boot-state";
@@ -13,8 +13,15 @@ import { AskEntry } from "./AskEntry";
 export function AnswersView({ client, boot }: { client: PersnallyClient; boot: Boot }) {
   const [asks, setAsks] = useState<Questions | null | undefined>(undefined);
   const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
+  const generation = useRef(0);
 
-  const load = async () => setAsks(await client.questions(50));
+  // A poll tick in flight when a verdict lands would otherwise resolve after
+  // the judgment's reload and put the unjudged snapshot back on screen.
+  const load = async () => {
+    const mine = ++generation.current;
+    const q = await client.questions(50);
+    if (mine === generation.current) setAsks(q);
+  };
   usePoll(boot, load);
 
   async function judge(a: AskRow, verdict: "approved" | "vetoed") {
