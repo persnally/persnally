@@ -215,16 +215,17 @@ function Wedge() {
         eyebrow="The problem"
         title={
           <>
-            You explain yourself. Again. <span className="text-mute">And again.</span>
+            Your agents keep asking. <span className="text-mute">You already answered.</span>
           </>
         }
       />
       <div className="mt-12 grid items-start gap-12 lg:grid-cols-2 lg:gap-16">
         <div>
           <p className="text-lg leading-relaxed text-mute">
-            ChatGPT doesn&apos;t know what you told Claude. Your coding agent relearns your stack
-            every session. Each tool meets you as a stranger — and the vendors can&apos;t fix it,
-            because their business is keeping you inside their walls.
+            Which test runner. Postgres or SQLite. Merge without tests, or wait. Your coding agent
+            stops to ask what you told another tool last week, because ChatGPT doesn&apos;t know
+            what you told Claude. Each tool meets you as a stranger — and the vendors can&apos;t fix
+            it, because their business is keeping you inside their walls.
           </p>
           <figure className="mt-10">
             <div className="grid grid-cols-3 items-center gap-4">
@@ -1032,7 +1033,7 @@ function Positioning() {
 function Pricing() {
   const free = [
     "The full engine — import, learn, synthesize your profile",
-    "Serve your context to every AI over MCP",
+    "Answers your agents over MCP — with evidence, or sends them back to you",
     "The dashboard: inspect, audit provenance, delete",
     "Runs fully offline with Ollama, or bring your own key",
   ];

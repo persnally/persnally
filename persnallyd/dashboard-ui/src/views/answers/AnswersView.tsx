@@ -20,7 +20,8 @@ export function AnswersView({ client, boot }: { client: PersnallyClient; boot: B
   const load = async () => {
     const mine = ++generation.current;
     const q = await client.questions(50);
-    if (mine === generation.current) setAsks(q);
+    // null is a failed read, not an empty ledger — keep what is on screen.
+    if (mine === generation.current) setAsks((prev) => q ?? prev ?? null);
   };
   usePoll(boot, load);
 
