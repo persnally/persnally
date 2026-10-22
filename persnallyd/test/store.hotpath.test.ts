@@ -108,6 +108,17 @@ describe("askHistory: counts in SQL", () => {
     );
   });
 
+  test("the 7-day window counts only answers given this week, and never a deferral", () => {
+    const store = freshStore();
+    seedAsk(store, 1);
+    seedAsk(store, 2, true);
+    store.append([newEvent("agent.answer", "mcp:cursor", {
+      question_id: "q-old", answer: "a", confidence: 0.8, deferred: false, evidence_event_ids: [],
+    }, { kind: "mcp", client: "cursor" }, new Date(Date.now() - 8 * 86_400_000).toISOString())]);
+    const { stats } = store.askHistory();
+    assert.deepEqual({ asked: stats.asked, asked7d: stats.asked7d, answered7d: stats.answered7d }, { asked: 3, asked7d: 2, answered7d: 1 });
+  });
+
   test("a re-submitted verdict counts once, under the latest value", () => {
     const store = freshStore();
     const id = seedAsk(store, 1);

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
 
-export const AREAS = ["mirror", "data", "access", "connections", "control"] as const;
+export const AREAS = ["answers", "mirror", "data", "access", "connections", "control"] as const;
 export type Area = (typeof AREAS)[number];
 
 const parse = (): Area => {
   const h = location.hash.replace(/^#\/?/, "");
-  return (AREAS as readonly string[]).includes(h) ? (h as Area) : "mirror";
+  return (AREAS as readonly string[]).includes(h) ? (h as Area) : "answers";
 };
 
 export function useHashRoute(): Area {

@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import type { PersnallyClient } from "../../api/client";
 import type { Profile } from "../../api/types";
-import { EvidenceWalk } from "./EvidenceWalk";
+import { EvidenceWalk } from "../answers/EvidenceWalk";
 
 /** The portrait as editorial prose — no card chrome, hairline-separated
     sections, each expandable to the events it rests on. */

@@ -1,37 +1,34 @@
 import { useState } from "preact/hooks";
 import type { PersnallyClient } from "../../api/client";
-import { CATEGORIES, type Activity, type AskRow, type Category, type EventEnvelope, type Questions, type Scopes, type Stats } from "../../api/types";
+import { CATEGORIES, type Activity, type Category, type EventEnvelope, type Scopes, type Stats } from "../../api/types";
 import type { Boot } from "../../lib/boot-state";
 import { timeAgo } from "../../lib/format";
 import { list, num, str } from "../../lib/payload";
 import { clientOf, isClientRead, prettyClient } from "../../lib/provenance";
 import { usePoll } from "../../lib/use-poll";
-import { Bar, ConfirmButton, Empty, Flash, Panel } from "../../ui/bits";
+import { ConfirmButton, Empty, Flash, Panel } from "../../ui/bits";
 import { BrandMark } from "../../ui/BrandMark";
 
-/** Access — "who reads it, and what?" The authority surface: grants, the read
-    audit trail, and every question your AIs asked. */
+/** Access — "who reads it, and what?" The authority surface: grants and the
+    read audit trail. What they asked lives in Answers. */
 export function AccessView({ client, boot }: { client: PersnallyClient; boot: Boot }) {
   const [scopes, setScopes] = useState<Scopes>({});
   const [reads, setReads] = useState<EventEnvelope[]>([]);
   const [activity, setActivity] = useState<Activity | null>(null);
-  const [asks, setAsks] = useState<Questions | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = async () => {
-    const [sc, rd, ac, qs, st] = await Promise.all([
+    const [sc, rd, ac, st] = await Promise.all([
       client.scopes(),
       client.events({ type: "context.read", limit: 60 }),
       client.activity(),
-      client.questions(30),
       client.stats(),
     ]);
     setScopes(sc ?? {});
     setReads(rd);
     setActivity(ac);
-    setAsks(qs);
     setStats(st);
   };
 
@@ -75,12 +72,6 @@ export function AccessView({ client, boot }: { client: PersnallyClient; boot: Bo
     const r = await client.clearScope(c);
     setFlash(r.ok ? { ok: true, text: `${prettyClient(c)} reads everything again.` } : { ok: false, text: r.error });
     if (r.ok) await load();
-  }
-
-  async function judge(a: AskRow, verdict: "approved" | "vetoed") {
-    const r = await client.judge(a.answer_id, verdict);
-    setFlash(r.ok ? { ok: true, text: verdict === "approved" ? "Marked right." : "Marked wrong — it won't repeat that answer." } : { ok: false, text: r.error });
-    if (r.ok) setAsks(await client.questions(30));
   }
 
   const maxDaily = Math.max(1, ...(activity?.daily ?? []).map((d) => d.reads));
@@ -193,52 +184,6 @@ export function AccessView({ client, boot }: { client: PersnallyClient; boot: Bo
         )}
       </Panel>
 
-      <Panel
-        title="What your AIs asked"
-        sub={
-          asks
-            ? `${asks.stats.asked} asked · ${asks.stats.answered} answered · ${asks.stats.deferred} deferred${
-                asks.stats.precision !== null ? ` · ${Math.round(asks.stats.precision * 100)}% precision` : ""
-              }`
-            : undefined
-        }
-      >
-        {!asks || asks.items.length === 0 ? (
-          <Empty>Nothing asked yet. Connected AIs call <code>persnally_ask</code> before interrupting you.</Empty>
-        ) : (
-          <ul class="rows">
-            {asks.items.map((a) => (
-              <li key={a.answer_id} class="row col">
-                <span class="row-main">
-                  {a.question}
-                  <span class="row-sub">
-                    {prettyClient(a.asker)} · {timeAgo(a.ts)}
-                    {a.deferred ? " · deferred to you" : ` · ${Math.round(a.confidence * 100)}% confident`}
-                  </span>
-                </span>
-                {!a.deferred && <span class="row-answer">{a.answer}</span>}
-                <span class="row-line">
-                  {!a.deferred && <Bar value={a.confidence} tone={a.confidence >= 0.7 ? "var(--active)" : undefined} />}
-                  {a.verdict ? (
-                    <span class={`tag ${a.verdict === "approved" ? "ok" : "off"}`}>{a.verdict}</span>
-                  ) : (
-                    !a.deferred && (
-                      <>
-                        <button class="mini" onClick={() => void judge(a, "approved")}>
-                          right
-                        </button>
-                        <button class="mini" onClick={() => void judge(a, "vetoed")}>
-                          wrong
-                        </button>
-                      </>
-                    )
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
     </div>
   );
 }

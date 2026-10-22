@@ -9,10 +9,10 @@
  */
 
 import type {
-  Activity, AskResponse, AskResult, BootProbe, Category, ConsolidationResult, Deleted, EnginePull, EngineStatus, EventEnvelope, Health, ImportResult, ImportRun, Mutation, Profile, Questions, Scopes, SearchHit, Skill, Stats, TopicRow, Voice,
+  Activity, BootProbe, Category, ConsolidationResult, Deleted, EnginePull, EngineStatus, EventEnvelope, Health, ImportResult, ImportRun, Mutation, Profile, Questions, Scopes, SearchHit, Skill, Stats, TopicRow, Voice,
 } from "./types";
 import {
-  DEMO_ACTIVITY, DEMO_ASK, DEMO_ENGINE, DEMO_EVENTS, DEMO_HEALTH, DEMO_PROFILE, DEMO_QUESTIONS,
+  DEMO_ACTIVITY, DEMO_ENGINE, DEMO_EVENTS, DEMO_HEALTH, DEMO_PROFILE, DEMO_QUESTIONS,
   DEMO_SCOPES, DEMO_SKILLS, DEMO_STATS, DEMO_TOPICS, DEMO_VOICE,
   DEMO_IMPORTS,
 } from "../fixtures/demo";
@@ -41,7 +41,6 @@ export interface PersnallyClient {
   search(q: string): Promise<SearchHit[]>;
   pullStatus(): Promise<EnginePull | null>;
   // mutations
-  ask(question: string): Promise<AskResponse>;
   forgetTopic(topic: string): Promise<Mutation<Deleted>>;
   forgetStyle(dimension: string, pattern: string): Promise<Mutation<Deleted>>;
   setScope(client: string, categories: Category[]): Promise<Mutation>;
@@ -135,27 +134,6 @@ function liveClient(onUnauthorized: () => void): PersnallyClient {
     search: async (q) => (await g<SearchHit[]>(`/search?q=${encodeURIComponent(q)}&limit=10`)) ?? [],
     pullStatus: () => g<EnginePull>("/engine/pull"),
 
-    async ask(question) {
-      const r = await fetch("/ask", {
-        method: "POST",
-        headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ question }),
-      }).catch(() => null);
-      if (!r) return { kind: "http-error", message: "The daemon didn't answer — is it still running?" };
-      if (r.status === 401) {
-        onUnauthorized();
-        return { kind: "http-error", message: "Session expired." };
-      }
-      const body = (await r.json().catch(() => ({}))) as Record<string, unknown>;
-      if (r.status === 429) {
-        return { kind: "rate-limited", message: typeof body.error === "string" ? body.error : "Ask limit reached — try again in a few minutes." };
-      }
-      if (!r.ok) {
-        return { kind: "http-error", message: typeof body.error === "string" ? body.error : `Ask failed (${r.status})` };
-      }
-      return { kind: "ok", result: body as unknown as AskResult };
-    },
-
     forgetTopic: (topic) => s(`/topics/${encodeURIComponent(topic)}`, { method: "DELETE" }),
     forgetStyle: (dimension, pattern) =>
       s(`/voice/${encodeURIComponent(dimension)}/${encodeURIComponent(pattern)}`, { method: "DELETE" }),
@@ -205,7 +183,6 @@ function demoClient(): PersnallyClient {
         })),
       ),
     pullStatus: () => Promise.resolve(DEMO_ENGINE.pull),
-    ask: () => new Promise((resolve) => setTimeout(() => resolve({ kind: "ok", result: DEMO_ASK }), 600)),
     forgetTopic: blocked,
     forgetStyle: blocked,
     setScope: blocked,
