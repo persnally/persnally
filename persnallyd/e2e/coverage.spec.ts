@@ -46,7 +46,7 @@ function trapErrors(page: Page): string[] {
 }
 
 async function signIn(page: Page, port: number, k: string) {
-  await page.goto(`http://127.0.0.1:${port}/next?k=${k}`);
+  await page.goto(`http://127.0.0.1:${port}/?k=${k}`);
   await expect(page.locator(".rail-head .wordmark")).toHaveText("persnally");
 }
 
@@ -81,14 +81,18 @@ test.describe.configure({ mode: "serial" });
 
 // ── the fresh install: every "nothing yet" state, and no crash anywhere ──────
 
-test("a fresh install offers the import that starts the model, not a chat box", async ({ page }) => {
-  // With nothing on file the composer could only defer, and a lone text box is
-  // indistinguishable from a chat app — the first screen leads with import.
+test("a fresh install shows an empty ledger, and Mirror offers the import that starts the model", async ({ page }) => {
+  // Nothing on file: the ledger is honestly empty and there is no text box
+  // (a lone text box is indistinguishable from a chat app); Mirror leads with import.
   const errors = trapErrors(page);
   await signIn(page, EMPTY, emptyKey);
+  await expect(page.locator(".ledger-num")).toHaveText("0");
+  await expect(page.locator(".flow-col")).toContainText("Nothing asked yet.");
+  await expect(page.locator(".ask-entry")).toHaveCount(0);
+  await expect(page.locator("textarea")).toHaveCount(0);
+  await openArea(page, "mirror");
   await expect(page.locator(".greeting h1")).toHaveText("Nothing imported yet");
   await expect(page.locator(".greeting-actions .btn")).toHaveText("Import your AI history");
-  await expect(page.locator(".ask textarea")).toHaveCount(0);
   await expect(page.locator(".greeting p")).toContainText("nothing leaves this machine");
   expect(errors).toEqual([]);
 });
@@ -96,6 +100,7 @@ test("a fresh install offers the import that starts the model, not a chat box", 
 test("an import that finds nothing says so on the first screen too", async ({ page }) => {
   test.setTimeout(120_000);
   await signIn(page, EMPTY, emptyKey);
+  await openArea(page, "mirror");
   await page.locator(".greeting-actions .btn").click();
   await expect(page.locator(".greeting .flash")).toContainText("Nothing found to import", { timeout: 90_000 });
 });
@@ -112,14 +117,13 @@ test("empty store: Data admits every panel is empty, and says how to fill it", a
   expect(errors).toEqual([]);
 });
 
-test("empty store: Access shows no grants, no reads, no asks — without inventing any", async ({ page }) => {
+test("empty store: Access shows no grants and no reads — without inventing any", async ({ page }) => {
   const errors = trapErrors(page);
   await signIn(page, EMPTY, emptyKey);
   await openArea(page, "access");
   const body = page.locator(".flow-col");
   await expect(body).toContainText("No AI client holds a grant yet");
   await expect(body).toContainText("No reads recorded yet.");
-  await expect(body).toContainText("Nothing asked yet.");
   expect(errors).toEqual([]);
 });
 
@@ -176,11 +180,10 @@ test("rich store: the read audit lists real reads, and the owner's own CLI read 
 
 test("rich store: an ask from a client shows its asker, and 'wrong' records a veto", async ({ page }) => {
   await signIn(page, RICH, richKey);
-  await openArea(page, "access");
-  const ask = page.locator(".row.col", { hasText: "does he prefer npm or pnpm?" });
+  const ask = page.locator(".ask-entry", { hasText: "does he prefer npm or pnpm?" });
   await expect(ask).toBeVisible();
-  await expect(ask).toContainText("Cursor"); // asked by the client, not the dashboard
-  await ask.getByRole("button", { name: "wrong" }).click();
+  await expect(ask.locator(".ask-label")).toContainText("Cursor asked"); // the client, not the dashboard
+  await ask.getByRole("button", { name: "wrong", exact: true }).click();
   await expect(ask.locator(".tag")).toContainText("vetoed");
 });
 
@@ -226,20 +229,10 @@ test("rich store: saving a key is accepted and immediately reflected in the engi
     .toContainText("Claude API");
 });
 
-// ── the composer's limits ───────────────────────────────────────────────────
-
-test("the composer caps a very long question instead of sending it whole", async ({ page }) => {
-  await signIn(page, RICH, richKey);
-  const box = page.locator(".ask textarea");
-  await box.fill("x".repeat(900));
-  const len = await box.inputValue();
-  expect(len.length).toBeLessThanOrEqual(550); // maxlength holds
-  await box.fill("");
-});
-
 // ── preview mode, every view ────────────────────────────────────────────────
 
 for (const [area, marker] of [
+  ["answers", ".ask-entry"],
   ["mirror", ".portrait-head h1"],
   ["data", ".rows"],
   ["access", ".rows"],
@@ -335,26 +328,21 @@ test("forgetting something already gone reports that, instead of claiming a dele
   expect((await again.json() as { deleted: number }).deleted).toBe(0);
 });
 
-test("reopening a different ask fetches its own evidence, never the previous ask's", async ({ page }) => {
+test("each ledger row walks its own evidence, never another row's", async ({ page }) => {
   // Two seeded asks cite different events. The entry component used to be
-  // reused across them, so the first ask's cached rows rendered under the
-  // second — the same answer shown over someone else's evidence.
+  // reused across them, so one ask's cached rows rendered under the other —
+  // the same answer shown over someone else's evidence.
   await signIn(page, RICH, richKey);
-  const recents = page.locator(".rail-scroll .rail-item");
-  await expect(recents).toHaveCount(2);
+  const a = page.locator(".ask-entry", { hasText: "npm or pnpm" });
+  await a.getByRole("button", { name: /evidence · 1/ }).click();
+  const aRows = a.locator(".evidence.open .evidence-row");
+  await expect(aRows).toHaveCount(1); // retries while the fetch lands
 
-  await recents.filter({ hasText: "npm or pnpm" }).click();
-  await page.locator(".ask-entry").first().getByRole("button", { name: /evidence · 1/ }).click();
-  const rows = page.locator(".evidence.open .evidence-row");
-  await expect(rows).toHaveCount(1); // retries while the fetch lands
-  const first = await rows.allTextContents();
-
-  await recents.filter({ hasText: "ship behind a flag" }).click();
-  const button = page.locator(".ask-entry").first().getByRole("button", { name: /evidence · 2/ });
-  await expect(button).toBeVisible(); // the count must follow the ask, not the instance
-  await button.click();
-  await expect(rows).toHaveCount(2);
-  expect(await rows.allTextContents()).not.toEqual(first);
+  const b = page.locator(".ask-entry", { hasText: "ship behind a flag" });
+  await b.getByRole("button", { name: /evidence · 2/ }).click();
+  const bRows = b.locator(".evidence.open .evidence-row");
+  await expect(bRows).toHaveCount(2);
+  expect(await bRows.allTextContents()).not.toEqual(await aRows.allTextContents());
 });
 
 
@@ -364,7 +352,7 @@ test("the rail never claims the daemon is unreachable before it has checked", as
     await new Promise((r) => setTimeout(r, 1500));
     await route.continue();
   });
-  await page.goto(`http://127.0.0.1:${RICH}/next?k=${richKey}`);
+  await page.goto(`http://127.0.0.1:${RICH}/?k=${richKey}`);
   await expect(page.locator(".rail-foot .line1")).toHaveText("checking…");
   await expect(page.locator(".rail-foot .line1")).toHaveText("daemon running", { timeout: 15_000 });
   await page.unroute("**/health");
@@ -372,6 +360,7 @@ test("the rail never claims the daemon is unreachable before it has checked", as
 
 test("a transient /profile failure keeps the portrait instead of claiming there is none", async ({ page }) => {
   await signIn(page, RICH, richKey);
+  await openArea(page, "mirror");
   await expect(page.locator(".portrait-head h1")).toBeVisible();
   // One failed poll must not rewrite what the user is told about their data.
   await page.route("**/profile", (route) => route.abort());

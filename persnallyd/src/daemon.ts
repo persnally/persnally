@@ -155,10 +155,11 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       if (req.method === "GET" && url.pathname === "/") {
         return serveDashboard(req, res, url);
       }
-      // The workspace dashboard (Preact, single-file build) — parallel to the
-      // classic page while it grows to parity; same session gate, same headers.
+      // /next was the SPA's address while the classic page still held /.
       if (req.method === "GET" && url.pathname === "/next") {
-        return serveDashboard(req, res, url, nextDashboardHtml, "/next");
+        res.writeHead(302, { Location: "/" + url.search });
+        res.end();
+        return;
       }
 
       const auth = authenticate(req, url.searchParams.get("client"));
@@ -717,12 +718,6 @@ function dashboardHtml(): string {
   return cachedHtml;
 }
 
-let cachedNextHtml: string | undefined;
-function nextDashboardHtml(): string {
-  cachedNextHtml ??= readFileSync(new URL("./dashboard-next.html", import.meta.url), "utf-8");
-  return cachedNextHtml;
-}
-
 // The page itself never carries the credential — the key arrives once as ?k=,
 // is exchanged for an HttpOnly cookie, and the redirect drops it from the
 // address bar so it can't leak through history or a Referer on an outbound link.
@@ -737,14 +732,12 @@ function serveDashboard(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   url: URL,
-  page: () => string = dashboardHtml,
-  selfPath = "/",
 ): void {
   const key = url.searchParams.get("k");
   if (key && verifyDashboardKey(key)) {
     res.writeHead(302, {
       ...DASHBOARD_HEADERS,
-      "Location": selfPath,
+      "Location": "/",
       "Set-Cookie": `${SESSION_COOKIE}=${createSession()}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict`,
     });
     res.end();
@@ -760,7 +753,7 @@ function serveDashboard(
       headers["Set-Cookie"] = `${SESSION_COOKIE}=${createSession()}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict`;
     }
     res.writeHead(200, headers);
-    res.end(page());
+    res.end(dashboardHtml());
     return;
   }
   res.writeHead(401, DASHBOARD_HEADERS);

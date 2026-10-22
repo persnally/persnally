@@ -1,5 +1,5 @@
 /**
- * End-to-end suite for the workspace dashboard (/next), driven through a real
+ * End-to-end suite for the dashboard, driven through a real
  * browser against real daemons:
  *   :4998 — seeded store, no API key → Ollama engine (asks actually run)
  *   :4997 — same seed, invalid Anthropic key → deterministic error path
@@ -73,18 +73,18 @@ test.describe.configure({ mode: "serial" });
 
 // ── auth ────────────────────────────────────────────────────────────────────
 
-test("unauthenticated /next gets the locked page, never data", async ({ page }) => {
+test("unauthenticated / gets the locked page, never data", async ({ page }) => {
   const errors = trapErrors(page);
-  const resp = await page.goto(`http://127.0.0.1:${OK}/next`);
+  const resp = await page.goto(`http://127.0.0.1:${OK}/`);
   expect(resp!.status()).toBe(401);
   await expect(page.locator("body")).toContainText(/locked/i);
   await expect(page.locator("body")).not.toContainText("PostgreSQL");
   expect(errors).toEqual([]);
 });
 
-test("?k= exchanges for a cookie, redirects to /next, and drops the key from the URL", async ({ page }) => {
-  await page.goto(`http://127.0.0.1:${OK}/next?k=${key}`);
-  await expect(page).toHaveURL(`http://127.0.0.1:${OK}/next`);
+test("?k= exchanges for a cookie, redirects to /, and drops the key from the URL", async ({ page }) => {
+  await page.goto(`http://127.0.0.1:${OK}/?k=${key}`);
+  await expect(page).toHaveURL(`http://127.0.0.1:${OK}/`);
   await expect(page.locator(".rail-head .wordmark")).toHaveText("persnally");
   const cookies = await page.context().cookies();
   const session = cookies.find((c) => c.name === "persnally_session");
@@ -93,24 +93,24 @@ test("?k= exchanges for a cookie, redirects to /next, and drops the key from the
 });
 
 test("a wrong key stays locked", async ({ page }) => {
-  const resp = await page.goto(`http://127.0.0.1:${OK}/next?k=wrong`);
+  const resp = await page.goto(`http://127.0.0.1:${OK}/?k=wrong`);
   expect(resp!.status()).toBe(401);
   await expect(page.locator("body")).toContainText(/locked/i);
 });
 
 // ── shell ───────────────────────────────────────────────────────────────────
 
-test("hash routing loads each area directly, and an unknown hash falls back to Mirror", async ({ page }) => {
+test("hash routing loads each area directly, and an unknown hash falls back to Answers", async ({ page }) => {
   await signIn(page, OK, key);
-  for (const [hash, title] of [["data", "Data"], ["access", "Access"], ["connections", "Connections"], ["control", "Control"]] as const) {
+  for (const [hash, title] of [["mirror", "Mirror"], ["data", "Data"], ["access", "Access"], ["connections", "Connections"], ["control", "Control"]] as const) {
     // full load each time — the bookmark/deep-link case, not same-document routing
-    await page.goto(`http://127.0.0.1:${OK}/next#/${hash}`);
+    await page.goto(`http://127.0.0.1:${OK}/#/${hash}`);
     await page.reload();
     await expect(page.locator(".topbar .title")).toHaveText(title);
   }
-  await page.goto(`http://127.0.0.1:${OK}/next#/nonsense`);
+  await page.goto(`http://127.0.0.1:${OK}/#/nonsense`);
   await page.reload();
-  await expect(page.locator(".topbar .title")).toHaveText("Mirror");
+  await expect(page.locator(".topbar .title")).toHaveText("Answers");
 });
 
 test("collapsing hides the rail completely, and the state survives a reload", async ({ page }) => {
@@ -177,7 +177,7 @@ test("every rail glyph is drawn on the same optical grid", async ({ page }) => {
       return { w: +b.width.toFixed(1), h: +b.height.toFixed(1) };
     }),
   );
-  expect(boxes.length).toBe(5);
+  expect(boxes.length).toBe(6);
   for (const b of boxes) {
     // Every glyph fills its box on at least one axis, and none overflows it.
     expect(Math.max(b.w, b.h)).toBeGreaterThanOrEqual(14);
@@ -188,15 +188,17 @@ test("every rail glyph is drawn on the same optical grid", async ({ page }) => {
 });
 
 
-test("before any ask, the rail shows the honest empty-recents hint", async ({ page }) => {
+test("before any ask, the ledger says so — and offers no text box", async ({ page }) => {
   await signIn(page, OK, key);
-  await expect(page.locator(".rail-hint")).toContainText("Questions your AIs ask show up here");
+  await expect(page.locator(".ledger-num")).toHaveText("0");
+  await expect(page.locator(".ask-entry")).toHaveCount(0);
+  await expect(page.locator("textarea")).toHaveCount(0);
 });
 
 // ── mirror ──────────────────────────────────────────────────────────────────
 
 async function signIn(page: Page, port: number, k: string) {
-  await page.goto(`http://127.0.0.1:${port}/next?k=${k}`);
+  await page.goto(`http://127.0.0.1:${port}/?k=${k}`);
   await expect(page.locator(".rail-head .wordmark")).toHaveText("persnally");
 }
 
@@ -222,6 +224,7 @@ async function openArea(page: Page, area: string) {
 test("Mirror renders the portrait and the evidence walk resolves real events", async ({ page }) => {
   const errors = trapErrors(page);
   await signIn(page, OK, key);
+  await openArea(page, "mirror");
   await expect(page.locator(".portrait-head h1")).toHaveText("A builder who verifies before shipping");
   await page.getByRole("button", { name: /why\? · 1/ }).click();
   const row = page.locator(".evidence.open .evidence-row");
@@ -230,62 +233,32 @@ test("Mirror renders the portrait and the evidence walk resolves real events", a
   expect(errors).toEqual([]);
 });
 
-test("the composer guards empty input, and Shift+Enter is a newline, not a send", async ({ page }) => {
-  await signIn(page, OK, key);
-  const box = page.locator(".ask textarea");
-  await expect(page.locator(".ask-send")).toBeDisabled(); // empty → unsendable
-  await box.fill("line one");
-  await box.press("Shift+Enter");
-  await box.type("line two");
-  await expect(box).toHaveValue("line one\nline two");
-  await expect(page.locator(".ask-entry")).toHaveCount(0); // nothing sent
-  await box.fill(""); // leave clean for the real ask
-});
-
-test("the composer asks the model and renders answer, confidence, and evidence", async ({ page }) => {
+test("an ask made over the API lands on the ledger with its answer and confidence", async ({ page }) => {
   test.setTimeout(120_000); // local model inference
   const errors = trapErrors(page);
   await signIn(page, OK, key);
-  await page.locator(".ask textarea").fill("npm or pnpm?");
-  await page.keyboard.press("Enter");
-  const entry = page.locator(".ask-entry");
-  await expect(entry).toBeVisible({ timeout: 90_000 });
-  await expect(entry.locator(".q")).toHaveText("npm or pnpm?");
+  const r = await page.request.post(`http://127.0.0.1:${OK}/ask`, {
+    headers: { "content-type": "application/json" },
+    data: { question: "npm or pnpm?" },
+    timeout: 90_000,
+  });
+  expect(r.ok()).toBeTruthy();
+  const entry = page.locator(".ask-entry", { hasText: "npm or pnpm?" });
+  await expect(entry).toBeVisible({ timeout: 40_000 }); // the next poll tick
   await expect(entry.locator(".a")).not.toBeEmpty();
-  // answered or honestly deferred — never blank
-  await expect(entry.locator(".ask-meta")).toContainText(/%|deferred/);
+  // answered or honestly sent back — never blank
+  await expect(entry.locator(".ask-meta")).toContainText(/%/);
   expect(errors).toEqual([]);
-});
-
-test("a recent ask opens from the rail with its provenance label", async ({ page }) => {
-  await signIn(page, OK, key);
-  const recent = page.locator(".rail-scroll .rail-item").first();
-  await expect(recent).toContainText("npm or pnpm?");
-  await recent.click();
-  await expect(page.locator(".ask-label")).toContainText(/asked by dashboard/);
-  await page.locator(".ask-label button", { hasText: "close" }).click();
-  await expect(page.locator(".ask-label")).toHaveCount(0);
 });
 
 test("with data but no portrait, Mirror offers the synthesis rather than a CLI command", async ({ page }) => {
   // Distinct from a fresh install: there is evidence on file, so asking works
   // and the missing step is synthesis — offered as a button, not as prose.
   await signIn(page, BAD, badKey);
+  await openArea(page, "mirror");
   await expect(page.locator(".greeting h1")).toHaveText("No portrait yet");
   await expect(page.locator(".greeting")).toContainText("events on file");
   await expect(page.locator(".greeting-actions .btn")).toHaveText("Synthesize the portrait");
-  await expect(page.locator(".ask textarea")).toBeVisible();
-});
-
-
-test("the ask error path surfaces the real API failure, honestly", async ({ page }) => {
-  const errors = trapErrors(page);
-  await signIn(page, BAD, badKey);
-  await page.locator(".ask textarea").fill("does the error path work?");
-  await page.keyboard.press("Enter");
-  await expect(page.locator(".error-text")).toContainText(/./, { timeout: 30_000 });
-  await expect(page.locator(".ask-entry")).toHaveCount(0); // no fake answer
-  expect(errors).toEqual([]);
 });
 
 test("an expired session flips to the signed-out overlay — never to stale or sample data", async ({ page }) => {
@@ -362,37 +335,19 @@ test("Access: the scope editor narrows, revokes, and restores a grant", async ({
   await expect(page.locator(".flash")).toContainText("reads everything again");
 });
 
-test("Access: judging an answer records the verdict and updates precision", async ({ page }) => {
+test("judging an answer on the ledger records the verdict and updates the count", async ({ page }) => {
   await signIn(page, OK, key);
-  await openArea(page, "access");
-  const ask = page.locator(".row.col", { hasText: "npm or pnpm?" });
-  await expect(ask).toBeVisible(); // panel loads async — settle before branching
-  // the earlier ask may have answered or deferred; judge only if judgeable
-  const right = ask.getByRole("button", { name: "right" });
+  const ask = page.locator(".ask-entry", { hasText: "npm or pnpm?" });
+  await expect(ask).toBeVisible(); // loads async — settle before branching
+  // the earlier ask may have answered or been sent back; judge only if judgeable
+  const right = ask.getByRole("button", { name: "right", exact: true });
   if (await right.count()) {
     await right.click();
     await expect(ask.locator(".tag")).toContainText("approved");
-    await expect(page.locator(".panel", { hasText: "What your AIs asked" }).locator(".panel-sub")).toContainText("precision");
+    await expect(page.locator(".ledger-sub")).toContainText("1 of 1 judged marked right");
   } else {
-    await expect(ask).toContainText("deferred");
+    await expect(ask).toContainText("sent back");
   }
-});
-
-test("the ask rate limit surfaces the daemon's message and cools the composer down", async ({ page }) => {
-  await signIn(page, BAD, badKey);
-  // Exhaust the 20/10min window at the API level — the limiter counts before
-  // inference, so bad-key asks trip it fast and cost nothing.
-  for (let i = 0; i < 21; i++) {
-    const r = await page.request.post(`http://127.0.0.1:${BAD}/ask`, {
-      headers: { "content-type": "application/json" },
-      data: { question: `limit filler ${i}` },
-    });
-    if (r.status() === 429) break;
-  }
-  await page.locator(".ask textarea").fill("one more?");
-  await page.keyboard.press("Enter");
-  await expect(page.locator(".notice")).toContainText("ask limit reached");
-  await expect(page.locator(".ask-send")).toBeDisabled();
 });
 
 // ── connections & control ───────────────────────────────────────────────────
@@ -436,6 +391,8 @@ test("?demo=1 shows sample data with the preview ribbon", async ({ page }) => {
   const errors = trapErrors(page);
   await page.goto(`http://127.0.0.1:${STATIC}/index.html?demo=1`);
   await expect(page.locator(".ribbon")).toContainText("nothing is real");
+  await expect(page.locator(".ledger-num")).toHaveText("2");
+  await openArea(page, "mirror");
   await expect(page.locator(".portrait-head h1")).toContainText("A systems thinker");
   expect(errors).toEqual([]);
 });
@@ -456,10 +413,14 @@ test("a mutation in preview mode is blocked and destroys nothing", async ({ page
 });
 
 test("a key that fails every call is reported as failing, not as a healthy engine", async ({ page }) => {
-  // The BAD daemon holds an invalid key. The earlier ask already forced a real
-  // API rejection, so the daemon has an outage on record — a configured key
-  // that never works used to render as "Claude API" with a green dot.
+  // The BAD daemon holds an invalid key. One synthesis forces a real API
+  // rejection (an ask would honestly defer instead), so the daemon has an
+  // outage on record — a configured key that never works used to render as
+  // "Claude API" with a green dot.
   await signIn(page, BAD, badKey);
+  const r = await page.request.post(`http://127.0.0.1:${BAD}/synthesize`, { timeout: 30_000 });
+  expect(r.ok()).toBeFalsy(); // no fake portrait
+  await page.reload(); // the rail reads engine health at boot, then on its own poll
   await openArea(page, "connections");
   const engine = page.locator(".panel", { hasText: "Extraction engine" });
   await expect(engine.locator(".flash.bad")).toContainText("The engine is failing");
@@ -467,13 +428,9 @@ test("a key that fails every call is reported as failing, not as a healthy engin
   await expect(page.locator(".rail-foot .line2")).toContainText("failing");
 });
 
-test("a recent ask shows who asked it — the client's own mark, or Persnally's", async ({ page }) => {
-  // Provenance at a glance: the seeded ask came from Cursor, and the one made
-  // here belongs to Persnally. A generic chat bubble said neither.
+test("a ledger row says who asked — here, the owner's own session", async ({ page }) => {
+  // Provenance at a glance (a client's ask is covered on the rich store).
+  // A generic chat bubble said neither.
   await signIn(page, OK, key);
-  const rows = page.locator(".rail-scroll .rail-item");
-  await expect(rows.first()).toBeVisible();
-  const dash = rows.filter({ hasText: "npm or pnpm?" });
-  await expect(dash).toHaveAttribute("title", /^dashboard:/);
-  await expect(dash.locator(".brand.bare .brand-mark")).toBeVisible(); // Persnally's mark
+  await expect(page.locator(".ask-entry", { hasText: "npm or pnpm?" }).first().locator(".ask-label")).toContainText("dashboard asked");
 });

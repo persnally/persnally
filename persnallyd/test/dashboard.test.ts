@@ -1,47 +1,162 @@
 /**
- * The dashboard is a single self-contained HTML file with no DOM harness in
- * this repo, so these are source invariants rather than rendering tests. They
- * are here because the property they guard is a trust claim, not a layout
- * detail: sample data is a portrait of a person who does not exist, and it must
- * never appear except when explicitly asked for.
+ * The dashboard's honesty invariants, on the SPA source and its built
+ * artifact. The claims under test: a real user never sees fabricated data,
+ * demo is opt-in via ?demo=1 only, a 401 is signed-out (never demo), and the
+ * built page stays self-contained.
  */
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
 
-const html = readFileSync(new URL("../../src/dashboard.html", import.meta.url), "utf-8");
-const page = readFileSync(new URL("../../../web/src/app/page.tsx", import.meta.url), "utf-8");
+// Compiled test runs from build/test/ — the repo root is two levels up.
+// fileURLToPath, not .pathname: pathname keeps %20 and breaks Windows drives.
+const root = fileURLToPath(new URL("../../", import.meta.url));
+const ui = (p: string) => readFileSync(join(root, "dashboard-ui/src", p), "utf-8");
+const artifact = readFileSync(join(root, "build/src/dashboard.html"), "utf-8");
 
-describe("sample data is opt-in", () => {
-  test("the demo flag is read from the query string, not assumed", () => {
-    assert.match(html, /const PREVIEW = new URLSearchParams\(location\.search\)\.has\("demo"\)/);
+describe("boot-state: the trust logic", () => {
+  const src = ui("lib/boot-state.ts");
+
+  test("demo mode is opt-in via the query string, nothing else", () => {
+    assert.match(src, /const PREVIEW = new URLSearchParams\(location\.search\)\.has\("demo"\)/);
   });
 
-  test("the daemon-down branch bails to an honest state before touching sample data", () => {
-    const gate = html.indexOf("if (!PREVIEW) return renderNoDaemon();");
-    const useSample = html.indexOf("= DEMO_DATA()");
-    assert.ok(gate > 0, "the preview gate must exist in the failure branch");
-    assert.ok(useSample > gate, "sample data must only be reachable after that gate");
-  });
-
-  test("the honest state names the real situation and the fix", () => {
-    // The apostrophe is backslash-escaped inside the single-quoted JS string.
-    assert.match(html, /Persnally isn\\?'t running/);
-    assert.match(html, /persnally start/);
-    // The user's data still exists — the daemon serving it is what's down.
-    // (The sentence is split across source lines by the string concatenation.)
-    assert.match(html, /Your data is still on this/);
-  });
-
-  test("polling stops once the daemon is known to be down", () => {
-    assert.match(html, /if \(DEMO \|\| SIGNED_OUT \|\| DAEMON_DOWN\) return;/);
+  test("401 outranks demo, and the no-daemon gate precedes any demo return", () => {
+    const signedOut = src.indexOf('if (unauthorized) return "signed-out"');
+    const noDaemon = src.indexOf('if (!PREVIEW) return "no-daemon"');
+    const demo = src.indexOf('return "demo"');
+    assert.ok(signedOut !== -1, "signed-out branch exists");
+    assert.ok(noDaemon !== -1, "no-daemon gate exists");
+    assert.ok(demo !== -1, "demo branch exists");
+    assert.ok(signedOut < noDaemon, "a 401 must resolve before the daemon-down branches");
+    assert.ok(noDaemon < demo, "the honest no-daemon page must gate the demo branch");
   });
 });
 
-describe("the marketing preview opts itself in", () => {
+describe("fixtures have exactly one door", () => {
+  test("fixtures/demo is imported only by the API client factory", () => {
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) {
+          walk(p);
+          continue;
+        }
+        if (!/\.(ts|tsx)$/.test(name)) continue;
+        if (!readFileSync(p, "utf-8").includes("fixtures/demo")) continue;
+        const rel = p.slice(join(root, "dashboard-ui/src").length + 1);
+        if (rel !== "api/client.ts" && !rel.startsWith("fixtures/")) offenders.push(rel);
+      }
+    };
+    walk(join(root, "dashboard-ui/src"));
+    assert.deepEqual(offenders, [], "sample data must flow only through the demo client");
+  });
+});
+
+describe("preview mode cannot change anything", () => {
+  const client = ui("api/client.ts");
+
+  test("the demo client makes no network call at all", () => {
+    // Every read answers from fixtures and every mutation is a no-op; a fetch
+    // inside this branch would let the marketing preview touch a real daemon.
+    const start = client.indexOf("function demoClient()");
+    const end = client.indexOf("export function createClient");
+    assert.ok(start !== -1 && end > start, "demoClient must exist ahead of createClient");
+    const body = client.slice(start, end);
+    assert.doesNotMatch(body, /fetch\s*\(/, "demoClient must never call fetch");
+  });
+
+  test("every mutation on the interface has a demo implementation", () => {
+    // A method missing from the demo branch would fall back to the live client
+    // and mutate the user's store from a preview.
+    const start = client.indexOf("function demoClient()");
+    const body = client.slice(start, client.indexOf("export function createClient"));
+    for (const method of [
+      "forgetTopic", "forgetStyle", "setScope", "clearScope", "judge",
+      "synthesize", "consolidate", "importAll", "saveKey", "pullModel",
+    ]) {
+      assert.match(body, new RegExp(`\\b${method}\\s*:`), `demoClient must implement ${method}`);
+    }
+  });
+});
+
+describe("the marketing preview", () => {
   test("the site's iframe asks for demo data explicitly", () => {
-    assert.match(page, /src="\/dashboard-preview\.html\?demo=1"/,
-      "otherwise the published preview renders the daemon-down state instead of the demo");
+    // Otherwise the published preview renders the daemon-down state.
+    const page = readFileSync(join(root, "../web/src/app/page.tsx"), "utf-8");
+    assert.match(page, /src="\/dashboard-preview\.html\?demo=1"/);
+  });
+
+  test("the site's copy is the artifact the daemon serves", () => {
+    const copy = readFileSync(join(root, "../web/public/dashboard-preview.html"), "utf-8");
+    assert.equal(copy, artifact, "re-sync with: cp persnallyd/dashboard-ui/dist/index.html web/public/dashboard-preview.html");
   });
 });
+
+describe("the poll stops when the page isn't live", () => {
+  test("use-poll gates every tick on boot state and visibility", () => {
+    assert.match(ui("lib/use-poll.ts"), /if \(boot !== "live" \|\| document\.hidden\) return/);
+  });
+});
+
+describe("the built artifact", () => {
+
+  test("carries the honest-state copy through minification", () => {
+    for (const literal of ["Persnally isn", "persnally start", "Your data is still on this", "Your session expired", "persnally dashboard"]) {
+      assert.ok(artifact.includes(literal), `artifact must contain "${literal}"`);
+    }
+  });
+
+  test("is self-contained — no external scripts, styles, or images", () => {
+    assert.doesNotMatch(artifact, /<script[^>]+src=/);
+    assert.doesNotMatch(artifact, /<link[^>]+rel="stylesheet"[^>]+href="http/);
+    assert.doesNotMatch(artifact, /<img[^>]+src="http/);
+  });
+
+  test("the build emits exactly one file — the daemon serves nothing else", () => {
+    // A <link> or asset reference that escapes the bundle becomes a sibling in
+    // dist/ and would 404 at runtime, since only the HTML reaches build/src/.
+    assert.deepEqual(readdirSync(join(root, "dashboard-ui/dist")), ["index.html"]);
+  });
+
+  test("stays under the size guard", () => {
+    assert.ok(artifact.length < 400_000, `artifact is ${artifact.length} bytes; the single-file build must stay lean`);
+  });
+});
+
+test("the Connections panel lists every importer the product actually has", () => {
+  // Cursor and Codex shipped as import sources and the panel was never
+  // updated, so a user who had imported from either saw "not imported yet"
+  // against a store that held their data. The list is now pinned to the
+  // importer names the extractors emit, so a seventh source fails here first.
+  const emitted = new Set(
+    readdirSync(join(root, "src/importers"))
+      .filter((f) => f.endsWith(".ts"))
+      .flatMap((f) => [...readFileSync(join(root, "src/importers", f), "utf-8").matchAll(/importer: "([a-z-]+)"/g)].map((m) => m[1]!)),
+  );
+  assert.ok(emitted.size >= 6, `expected the six known importers, found ${[...emitted].join(", ")}`);
+
+  const listed = new Set(
+    [...ui("views/connections/ConnectionsView.tsx").matchAll(/^\s+"?([a-z-]+)"?:\s*"[^"]+",$/gm)].map((m) => m[1]!),
+  );
+  for (const name of emitted) {
+    assert.ok(listed.has(name), `importer "${name}" emits events but has no row in the Connections panel`);
+  }
+
+  // And each one resolves to a brand mark rather than a fallback initial.
+  const marks = BrandMarkSource();
+  for (const name of emitted) {
+    if (name === "git") continue; // git has its own mark keyed identically
+    assert.ok(marks.has(name), `importer "${name}" has no brand mark — it would render as a bare initial`);
+  }
+});
+
+function BrandMarkSource(): Set<string> {
+  return new Set(
+    [...ui("ui/BrandMark.tsx").matchAll(/^\s+"?([a-z-]+)"?:\s*\{ path:/gm)].map((m) => m[1]!),
+  );
+}
