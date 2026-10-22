@@ -1,5 +1,5 @@
 /** Honest full-screen states. Copy is verbatim from the classic dashboard —
-    test/dashboard-next.test.ts asserts these literals survive into the build. */
+    test/dashboard.test.ts asserts these literals survive into the build. */
 
 export function SignedOut() {
   return (

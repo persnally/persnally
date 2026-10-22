@@ -29,11 +29,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: persnallyd/package-lock.json
+      # --ignore-scripts: the UI build needs no native module compiled.
+      - run: npm ci --ignore-scripts && npm run build:ui
+        working-directory: persnallyd
       - name: dashboard-preview.html matches the dashboard it mirrors
         run: |
-          if ! diff -q persnallyd/src/dashboard.html web/public/dashboard-preview.html; then
-            echo "::error file=web/public/dashboard-preview.html::Drifted from persnallyd/src/dashboard.html. Re-sync with: cp persnallyd/src/dashboard.html web/public/dashboard-preview.html"
-            diff persnallyd/src/dashboard.html web/public/dashboard-preview.html | head -40
+          if ! diff -q persnallyd/dashboard-ui/dist/index.html web/public/dashboard-preview.html; then
+            echo "::error file=web/public/dashboard-preview.html::Drifted from the built dashboard. Re-sync with: npm run build:ui --prefix persnallyd && cp persnallyd/dashboard-ui/dist/index.html web/public/dashboard-preview.html"
+            diff persnallyd/dashboard-ui/dist/index.html web/public/dashboard-preview.html | head -40
             exit 1
           fi
 
