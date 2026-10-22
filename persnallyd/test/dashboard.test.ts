@@ -48,7 +48,8 @@ describe("fixtures have exactly one door", () => {
         }
         if (!/\.(ts|tsx)$/.test(name)) continue;
         if (!readFileSync(p, "utf-8").includes("fixtures/demo")) continue;
-        const rel = p.slice(join(root, "dashboard-ui/src").length + 1);
+        // join() yields backslashes on Windows; the allowlist is written with slashes.
+        const rel = p.slice(join(root, "dashboard-ui/src").length + 1).replaceAll("\\", "/");
         if (rel !== "api/client.ts" && !rel.startsWith("fixtures/")) offenders.push(rel);
       }
     };

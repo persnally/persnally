@@ -58,11 +58,13 @@ describe("GET / — the dashboard", () => {
     assert.match(setCookie, /SameSite=Strict/);
   });
 
-  test("the old /next address redirects to /, key and all", async () => {
+  test("the old /next address still exchanges a key, and lands on /", async () => {
     const r = await fetch(`${BASE}/next?k=${key}`, { redirect: "manual" });
     assert.equal(r.status, 302);
-    assert.equal(r.headers.get("location"), `/?k=${key}`);
-    assert.equal(r.headers.get("set-cookie"), null, "the redirect itself must not mint a session");
+    assert.equal(r.headers.get("location"), "/");
+    assert.match(r.headers.get("set-cookie") ?? "", new RegExp(`^${SESSION_COOKIE}=`));
+    const locked = await fetch(BASE + "/next");
+    assert.equal(locked.status, 401, "no key, no session — the old address is no back door");
   });
 
   test("a wrong key gets the locked page, not a redirect", async () => {

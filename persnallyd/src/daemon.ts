@@ -152,14 +152,10 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
       if (req.method === "GET" && url.pathname === "/health") {
         return json(res, 200, { ok: true, version: VERSION });
       }
-      if (req.method === "GET" && url.pathname === "/") {
+      // /next was the SPA's address while the classic page still held /; a
+      // key sent there still lands on / like any other.
+      if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/next")) {
         return serveDashboard(req, res, url);
-      }
-      // /next was the SPA's address while the classic page still held /.
-      if (req.method === "GET" && url.pathname === "/next") {
-        res.writeHead(302, { Location: "/" + url.search });
-        res.end();
-        return;
       }
 
       const auth = authenticate(req, url.searchParams.get("client"));
