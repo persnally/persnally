@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { newEvent, type PersnallyEvent, type Provenance } from "./events.js";
-import type { LlmExtract } from "./llm.js";
+import { type LlmExtract, UnusableReply } from "./llm.js";
 import { type Category, readsNothing } from "./permissions.js";
 import { overlapScore, queryTokens } from "./search.js";
 import type { EventStore, ServedStyleSignal } from "./store.js";
@@ -32,7 +32,7 @@ export const CONFIDENCE_THRESHOLD = 0.7;
 const UNSUPPORTED_CAP = 0.6;
 const PROSE_CAP = 0.65;
 const OBSERVED_CAP = 0.95;
-export function evidenceCap(cited: PersnallyEvent[]): number {
+export function evidenceCap(cited: PersnallyEvent[], toolAnswer = false): number {
   let cap = 0;
   for (const e of cited) {
     if (e.type === "user.correction") {
@@ -41,6 +41,10 @@ export function evidenceCap(cited: PersnallyEvent[]): number {
     } else if (e.type === "signal.style") {
       const s = e.payload as StyleSignal;
       cap = Math.max(cap, s.basis === "stylometry" ? s.confidence : OBSERVED_CAP);
+    } else if (e.type === "signal.assertion" && !toolAnswer) {
+      // A claim read from prose bears what its extractor gave it — except
+      // under a tool choice, which only observed use or a correction can carry.
+      cap = Math.max(cap, (e.payload as { confidence?: number }).confidence ?? PROSE_CAP);
     } else cap = Math.max(cap, PROSE_CAP);
   }
   // Nothing cited, or nothing cited that can bear a claim, is the same case.
@@ -189,6 +193,24 @@ export function namesServedTool(answer: string, served: { pattern: string }[]): 
 }
 
 /** Whether the answer names any tool the rule table knows — the whole vocabulary, not just what is served here. */
+/**
+ * Whether a question asks which tool: two tools of one family are named
+ * ("npm or pnpm?", "merge or rebase?") or a family is asked for by name.
+ * "Before a PR is merged…" names one tool once, and asks about process.
+ */
+const FAMILY_WORDS = ["package manager", "test runner", "linter", "formatter", "type checker", "which tool", "what tool"];
+export function asksForTool(question: string): boolean {
+  const q = question.toLowerCase();
+  if (FAMILY_WORDS.some((w) => q.includes(w))) return true;
+  const named = new Map<string, number>();
+  for (const { label, family } of toolFamilies()) {
+    if (labelAt(q, label) === -1) continue;
+    const key = assertionFamily(family);
+    named.set(key, (named.get(key) ?? 0) + 1);
+  }
+  return [...named.values()].some((n) => n >= 2);
+}
+
 export function namesAnyTool(answer: string): boolean {
   return familiesAsserted(answer).size > 0;
 }
@@ -324,8 +346,10 @@ export async function askUserModel(
     });
     parsed = answerSchema.parse(raw);
   } catch (e) {
-    // A reply the engine could not shape into an answer is not an answer. It
-    // used to propagate and take the caller down; a deferral is the honest result.
+    // A reply the engine could not shape into an answer is not an answer; a
+    // deferral is the honest result. An engine that could not reply at all is
+    // an outage, and the caller reports it as one — never as low confidence.
+    if (!(e instanceof UnusableReply || e instanceof z.ZodError)) throw e;
     console.error(`ask: engine reply unusable — ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
     return record(store, opts, { deferred: true, reason: "low-confidence", confidence: 0 });
   }
@@ -343,7 +367,10 @@ export async function askUserModel(
   // names any known tool is a tool choice, and only evidence naming that tool
   // can carry it.
   const asserted = familiesAsserted(parsed.answer);
-  const toolAnswer = asserted.size > 0;
+  // Prose names tools in passing ("grep the logs", "before merge"). That is a
+  // tool choice only when the question asked for one, or when the answer
+  // contradicts what this project is observed to use.
+  const toolAnswer = asserted.size > 0 && (asksForTool(opts.question) || contradictedFamilies(asserted, served).length > 0);
   const citedEvents = store.getEvents(parsed.evidence_event_ids.filter((id) => knownIds.has(id)))
     .filter((e) => citationSupports(e, parsed.answer, toolAnswer));
   let evidenceEvents = citedEvents.length ? citedEvents : store.getEvents(impliedEvidence(parsed.answer, served));
@@ -358,7 +385,7 @@ export async function askUserModel(
     if ((headline && !backed.has(headline)) || contradictedFamilies(asserted, served).length) evidenceEvents = [];
   }
   const evidence = evidenceEvents.map((e) => e.id);
-  const confidence = Math.min(normalizeConfidence(parsed.confidence), evidenceCap(evidenceEvents));
+  const confidence = Math.min(normalizeConfidence(parsed.confidence), evidenceCap(evidenceEvents, toolAnswer));
 
   if (confidence < CONFIDENCE_THRESHOLD) {
     return record(store, opts, {

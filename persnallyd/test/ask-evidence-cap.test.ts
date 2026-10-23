@@ -11,9 +11,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { askUserModel, citationSupports, CONFIDENCE_THRESHOLD, contradictedFamilies, evidenceCap, familiesAsserted, impliedEvidence, namesAnyTool, namesServedTool } from "../src/ask.js";
+import { askUserModel, asksForTool, citationSupports, CONFIDENCE_THRESHOLD, contradictedFamilies, evidenceCap, familiesAsserted, impliedEvidence, namesAnyTool, namesServedTool } from "../src/ask.js";
 import { newEvent } from "../src/events.js";
-import type { LlmExtract } from "../src/llm.js";
+import { type LlmExtract, UnusableReply } from "../src/llm.js";
 import { EventStore } from "../src/store.js";
 
 const dir = mkdtempSync(join(tmpdir(), "ask-cap-"));
@@ -51,14 +51,47 @@ const engine = (confidence: number, ids: string[], seen?: { content: string }, a
 
 test("evidenceCap: what each class of evidence can bear", () => {
   assert.equal(evidenceCap([]), 0.6, "nothing cited stays under the threshold");
-  assert.equal(evidenceCap([prose]), 0.65, "a model's reading of prose stays under the threshold");
+  assert.equal(evidenceCap([prose], true), 0.65, "under a tool choice, a model's reading of prose stays under the threshold");
+  assert.equal(evidenceCap([prose]), 0.9, "under any other answer a claim bears its extractor's confidence");
   assert.equal(evidenceCap([observedNpm]), 0.85, "an observed convention bears exactly what its count earned");
   assert.equal(evidenceCap([thin]), 0.575, "three uses is a thin habit and defers");
   assert.equal(evidenceCap([contested]), 0.5, "a contested family defers");
   assert.equal(evidenceCap([live]), 0.95, "a live-observed signal is strong evidence");
   assert.equal(evidenceCap([correction]), 1, "a stated correction can back anything");
   assert.equal(evidenceCap([deletion]), 0.6, "a deletion says what is false, not what is true — it backs nothing");
-  assert.equal(evidenceCap([prose, observedNpm]), 0.85, "the strongest cited evidence sets the cap");
+  assert.equal(evidenceCap([prose, observedNpm], true), 0.85, "the strongest cited evidence sets the cap");
+});
+
+test("asksForTool: a choice between tools, or a family by name — not a tool mentioned once", () => {
+  for (const q of ["npm or pnpm here?", "merge or rebase?", "vitest or jest?", "which package manager?", "What test runner do they use?"]) {
+    assert.equal(asksForTool(q), true, q);
+  }
+  for (const q of ["Before a PR is merged, does he want it verified live?", "tests before merge?", "should I grep the deploy logs first?", "how does he decide what to ship?"]) {
+    assert.equal(asksForTool(q), false, q);
+  }
+});
+
+test("a process question answered from a claim is answered at the claim's confidence, tools in passing or not", async () => {
+  // The live case: "yes — live e2e … grep the logs … before merge" cited the
+  // 0.95 verification claim, and "grep"/"merge" made it a tool answer with
+  // nothing observed to back them. Correct answer, sent back.
+  const q = { ...OPTS, question: "Before a PR is merged, does he want it verified against a live instance?" };
+  const r = await askUserModel(store, q, engine(0.92, [prose.id], undefined, "Yes — live, on real data. grep the logs and curl the endpoint before merge."));
+  assert.equal(r.deferred, false);
+  assert.equal(r.confidence, 0.9, "the claim's own confidence, not the model's");
+  assert.deepEqual(r.evidence_event_ids, [prose.id]);
+  // …but naming a tool that contradicts what this project is observed to use still sinks it.
+  const contra = await askUserModel(store, q, engine(0.92, [prose.id], undefined, "Yes — run it with pnpm first."));
+  assert.equal(contra.deferred, true, "pnpm contradicts the served 'uses npm'");
+});
+
+test("an engine that cannot reply is an outage and propagates; an unusable reply defers", async () => {
+  const down = { model: "fake", extract: (() => Promise.reject(new Error("401 invalid x-api-key"))) as LlmExtract };
+  await assert.rejects(askUserModel(store, OPTS, down), /401/);
+  const garbage = { model: "fake", extract: (() => Promise.reject(new UnusableReply("no parseable output"))) as LlmExtract };
+  const r = await askUserModel(store, OPTS, garbage);
+  assert.equal(r.deferred, true);
+  assert.equal(r.reason, "low-confidence");
 });
 
 test("a confident answer resting only on prose defers — the pnpm-at-0.92 case", async () => {
@@ -133,10 +166,7 @@ test("an engine reply that cannot be shaped into an answer defers instead of thr
   const r = await askUserModel(store, OPTS, broken);
   assert.equal(r.deferred, true);
   assert.equal(r.confidence, 0);
-  const thrown = { extract: (async () => { throw new Error("engine down"); }) as LlmExtract, model: "fake" };
-  const r2 = await askUserModel(store, OPTS, thrown);
-  assert.equal(r2.deferred, true);
-  assert.equal(store.query({ type: "agent.answer" }).length >= 2, true, "both exchanges are still recorded");
+  assert.equal(store.query({ type: "agent.answer" }).length >= 1, true, "the exchange is still recorded");
 });
 
 test("an uncited answer that names a served convention's leading tool is attributed to it", async () => {

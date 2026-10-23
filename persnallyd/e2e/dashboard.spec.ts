@@ -414,7 +414,7 @@ test("a mutation in preview mode is blocked and destroys nothing", async ({ page
 
 test("a key that fails every call is reported as failing, not as a healthy engine", async ({ page }) => {
   // The BAD daemon holds an invalid key. One synthesis forces a real API
-  // rejection (an ask would honestly defer instead), so the daemon has an
+  // rejection, so the daemon has an
   // outage on record — a configured key that never works used to render as
   // "Claude API" with a green dot.
   await signIn(page, BAD, badKey);
