@@ -40,6 +40,7 @@ const MAX_CONVO_CHARS = 30_000;
 // longer than prompts, so they get a smaller total budget and a per-turn head
 // cap (an answer's substance is near its start).
 const MAX_ASSISTANT_CHARS = 10_000;
+const MAX_ASSERTIONS_PER_CONVO = 3;
 const MAX_ASSISTANT_TURN_CHARS = 700;
 const MAX_IMPORT_FILE_BYTES = 400 * 1024 * 1024; // ~400 MB — under Node's ~512 MB string cap; larger needs streaming
 const DEFAULT_CONCURRENCY = 4;
@@ -242,14 +243,17 @@ export async function extractEvents(
         instruction:
           "Extract 1-5 topic signals from this conversation. Weight = centrality to the USER, depth = engagement level, sentiment = the user's attitude toward the topic. Capture decisions and rejected options as their own signals. " +
           "Assistant replies, when present, are context for what the user was told and what got resolved — use them to identify outcomes and what the user now knows, but never treat a topic the assistant raised on its own as one of the user's interests. " +
-          "Also extract 0-3 assertions: what the USER decided, chose over an alternative, rejected, or stated as a lasting preference or way of working — not what the assistant recommended unless the user accepted it. Evidence quotes or closely paraphrases the user. Return none when the user only asked questions.",
+          `Also extract 0-${MAX_ASSERTIONS_PER_CONVO} assertions: what the USER decided, chose over an alternative, rejected, or stated as a lasting preference or way of working — not what the assistant recommended unless the user accepted it. Evidence quotes or closely paraphrases the user. Return none when the user only asked questions.`,
         schema: conversationExtraction,
         content: `Conversation title: ${convo.name}\n\nUser messages:\n${text}`
           + (replies ? `\n\nAssistant replies (context only):\n${replies}` : ""),
       });
       const parsed = conversationExtraction.parse(result);
       const topics = parsed.topics;
-      const assertions = parsed.assertions.filter((a) => a !== null);
+      const assertions = parsed.assertions
+        .filter((a) => a !== null)
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, MAX_ASSERTIONS_PER_CONVO);
       succeeded++;
       recordEngineSuccess(); // a working call clears any recorded outage
       done();

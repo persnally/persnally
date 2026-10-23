@@ -128,3 +128,11 @@ test("a malformed assertions container keeps the conversation's topics", async (
     assert.equal(events.filter((e) => e.type === "signal.topic").length, 1);
   }
 });
+
+test("at most three assertions per conversation, highest confidence first", async () => {
+  const a = (confidence: number) => ({ claim: `c${confidence}`, kind: "preference", confidence, evidence: "e" });
+  const extract: LlmExtract = async () => ({ topics: [], assertions: [a(0.5), a(0.9), a(0.6), a(0.8)] });
+  const { events } = await extractEvents(exportWith(1), OPTS, extract, "m", 1);
+  const kept = events.filter((e) => e.type === "signal.assertion").map((e) => (e.payload as { confidence: number }).confidence);
+  assert.deepEqual(kept, [0.9, 0.8, 0.6]);
+});
