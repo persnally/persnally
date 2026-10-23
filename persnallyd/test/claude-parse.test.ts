@@ -39,3 +39,15 @@ test("includes memory text and non-starter projects", () => {
 test("missing conversations.json fails loudly", () => {
   assert.throws(() => parseClaudeExport(tmpdir()), /No conversations.json/);
 });
+
+test("reads the newer memories/ folder layout", () => {
+  const d = mkdtempSync(join(tmpdir(), "claude-export-new-"));
+  try {
+    writeFileSync(join(d, "conversations.json"), "[]");
+    mkdirSync(join(d, "memories"));
+    writeFileSync(join(d, "memories", "m1.json"), JSON.stringify({ conversations_memory: "Runs Ravox and Modelia." }));
+    assert.match(parseClaudeExport(d).memoryText, /Runs Ravox/);
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+});

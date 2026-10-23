@@ -28,12 +28,18 @@ export function parseClaudeExport(dir: string): ParsedExport {
       .filter((t) => t.trim()),
   }));
 
-  let memoryText = "";
+  // Older exports ship memories.json (an array); newer ones a memories/ folder
+  // with one object per file.
+  const memories: Array<Record<string, unknown>> = [];
   const memPath = join(dir, "memories.json");
-  if (existsSync(memPath)) {
-    const memories = JSON.parse(readFileSync(memPath, "utf-8")) as Array<Record<string, unknown>>;
-    memoryText = memories.map((m) => String(m.conversations_memory ?? "")).join("\n");
+  if (existsSync(memPath)) memories.push(...(JSON.parse(readFileSync(memPath, "utf-8")) as Array<Record<string, unknown>>));
+  const memDir = join(dir, "memories");
+  if (existsSync(memDir)) {
+    for (const f of readdirSync(memDir).filter((f) => f.endsWith(".json"))) {
+      memories.push(JSON.parse(readFileSync(join(memDir, f), "utf-8")) as Record<string, unknown>);
+    }
   }
+  const memoryText = memories.map((m) => String(m.conversations_memory ?? "")).filter(Boolean).join("\n");
 
   const projects: ParsedExport["projects"] = [];
   const projDir = join(dir, "projects");

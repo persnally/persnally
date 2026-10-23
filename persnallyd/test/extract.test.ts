@@ -93,3 +93,46 @@ test("PERSNALLY_IMPORT_CONCURRENCY caps in-flight extractions", async (t) => {
   }
   await done;
 });
+
+test("a conversation's decisions land as assertions with its provenance", async () => {
+  const decision = { claim: "Chose liquid funds over PPF to avoid lock-in", kind: "preference", confidence: 0.8, evidence: "i don't want lock-in" };
+  const extract: LlmExtract = async () => ({ topics: [topic("savings")], assertions: [decision] });
+  const { events } = await extractEvents(exportWith(1), OPTS, extract, "m", 1);
+  const a = events.filter((e) => e.type === "signal.assertion");
+  assert.equal(a.length, 1);
+  assert.equal(uuidOf(a[0]!), "c0");
+  assert.equal(a[0]!.ts, "2026-01-01T00:00:00.000Z");
+});
+
+test("a reply without assertions still parses", async () => {
+  const extract: LlmExtract = async () => ({ topics: [topic("x")] });
+  const { events } = await extractEvents(exportWith(1), OPTS, extract, "m", 1);
+  assert.equal(events.filter((e) => e.type === "signal.assertion").length, 0);
+  assert.equal(events.filter((e) => e.type === "signal.topic").length, 1);
+});
+
+test("a malformed assertion is dropped without losing the conversation", async () => {
+  const good = { claim: "Builds the core before the web app", kind: "behavior", confidence: 0.9, evidence: "start with the core first" };
+  const extract: LlmExtract = async () => ({ topics: [topic("ravox")], assertions: [good, { ...good, kind: "decision" }] });
+  const { events, extractionsFailed } = await extractEvents(exportWith(1), OPTS, extract, "m", 1);
+  assert.equal(extractionsFailed, 0);
+  assert.equal(events.filter((e) => e.type === "signal.assertion").length, 1);
+  assert.equal(events.filter((e) => e.type === "signal.topic").length, 1);
+});
+
+test("a malformed assertions container keeps the conversation's topics", async () => {
+  for (const assertions of [null, {}, "none"]) {
+    const extract: LlmExtract = async () => ({ topics: [topic("x")], assertions });
+    const { events, extractionsFailed } = await extractEvents(exportWith(1), OPTS, extract, "m", 1);
+    assert.equal(extractionsFailed, 0);
+    assert.equal(events.filter((e) => e.type === "signal.topic").length, 1);
+  }
+});
+
+test("at most three assertions per conversation, highest confidence first", async () => {
+  const a = (confidence: number) => ({ claim: `c${confidence}`, kind: "preference", confidence, evidence: "e" });
+  const extract: LlmExtract = async () => ({ topics: [], assertions: [a(0.5), a(0.9), a(0.6), a(0.8)] });
+  const { events } = await extractEvents(exportWith(1), OPTS, extract, "m", 1);
+  const kept = events.filter((e) => e.type === "signal.assertion").map((e) => (e.payload as { confidence: number }).confidence);
+  assert.deepEqual(kept, [0.9, 0.8, 0.6]);
+});
