@@ -3,10 +3,7 @@
 // as a daemon that 500s on its own dashboard.
 import { copyFileSync, existsSync } from "node:fs";
 
-const copies = [
-  ["src/dashboard.html", "build/src/dashboard.html"],
-  ["dashboard-ui/dist/index.html", "build/src/dashboard-next.html"],
-];
+const copies = [["dashboard-ui/dist/index.html", "build/src/dashboard.html"]];
 
 for (const [from, to] of copies) {
   if (!existsSync(from)) {

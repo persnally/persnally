@@ -18,6 +18,9 @@ export type LlmExtract = (opts: {
   maxTokens?: number;
 }) => Promise<unknown>;
 
+/** The engine replied, but with nothing usable — not the same as the engine being down. */
+export class UnusableReply extends Error {}
+
 /** Default extractor backed by the Anthropic API; injectable for tests. */
 export const anthropicExtract: LlmExtract = async ({ model, instruction, schema, content, maxTokens }) => {
   const client = new Anthropic();
@@ -29,10 +32,10 @@ export const anthropicExtract: LlmExtract = async ({ model, instruction, schema,
     messages: [{ role: "user", content }],
   });
   if (response.stop_reason === "refusal") {
-    throw new Error("Extraction request was refused by the model's safety classifiers");
+    throw new UnusableReply("Extraction request was refused by the model's safety classifiers");
   }
   if (response.parsed_output == null) {
-    throw new Error("Extraction returned no parseable output");
+    throw new UnusableReply("Extraction returned no parseable output");
   }
   return response.parsed_output;
 };
@@ -102,7 +105,11 @@ export const ollamaExtract: LlmExtract = async ({ model, instruction, schema, co
   });
   if (!r.ok) throw new Error(`ollama: ${r.status} ${await r.text()}`);
   const body = (await r.json()) as { message?: { content?: string } };
-  return schema.parse(JSON.parse(body.message?.content ?? "{}"));
+  try {
+    return schema.parse(JSON.parse(body.message?.content ?? "{}"));
+  } catch (e) {
+    throw new UnusableReply(`ollama reply unusable: ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
+  }
 };
 
 /** Preference order, not Ollama's listing order — the two rarely agree. */

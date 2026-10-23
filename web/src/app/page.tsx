@@ -545,7 +545,7 @@ function DashboardEmbed() {
       </div>
       <iframe
         src="/dashboard-preview.html?demo=1"
-        title="The Persnally dashboard, running live in preview mode with sample data — scroll to explore your portrait, interest map, read receipts, and the ask loop"
+        title="The Persnally dashboard, running live in preview mode with sample data — the ledger of questions it answered, the portrait with its evidence, and who read what"
         className="block h-[480px] w-full bg-[#0b0b0c] sm:h-[600px] lg:h-[720px]"
         loading="lazy"
         sandbox="allow-scripts allow-same-origin allow-popups"
@@ -561,7 +561,7 @@ function SeeIt() {
         n="03"
         eyebrow="See it"
         title="Not a metaphor. The actual dashboard."
-        lede="Every engraving on this page is standing in for something real. Below is the real thing, live — the same page served at localhost:4983 on your machine. Scroll it, click a node, judge an answer. It's running in preview mode: sample data, nothing writable, nothing sent anywhere."
+        lede="Every engraving on this page is standing in for something real. Below is the real thing, live — the same page served at localhost:4983 on your machine. Read the ledger, walk the evidence behind a claim, judge an answer. It's running in preview mode: sample data, nothing writable, nothing sent anywhere."
       />
 
       <div className="mt-12">
