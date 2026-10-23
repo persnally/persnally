@@ -844,6 +844,9 @@ async function main(): Promise<void> {
       const existing = runningPid();
       if (existing) return die(`daemon already running (pid ${existing}) — stop it first`);
       const port = parsePort(args);
+      // The daemon log is the only record of what it did, and it had no clock.
+      const log = console.error.bind(console);
+      console.error = (...a: unknown[]) => log(new Date().toISOString(), ...a);
       const store = new EventStore();
       const server = startDaemon(store, port);
       server.on("error", (e: NodeJS.ErrnoException) => {

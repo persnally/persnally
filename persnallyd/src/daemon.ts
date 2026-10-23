@@ -414,6 +414,7 @@ export function startDaemon(store: EventStore, port = DEFAULT_PORT): http.Server
           recordEngineFailure(e);
           throw e;
         }
+        console.error(`ask: ${asker} → ${result.deferred ? `sent back (${result.reason})` : "answered"} · confidence ${result.confidence.toFixed(2)} · ${result.evidence_event_ids.length} evidence`);
         return json(res, 200, result);
       }
       if (req.method === "GET" && url.pathname === "/questions") {
