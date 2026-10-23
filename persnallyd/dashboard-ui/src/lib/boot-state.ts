@@ -1,6 +1,6 @@
 /**
  * The trust logic of the whole page, in one pure module. The invariants here
- * are asserted by test/dashboard-next.test.ts — a real user must NEVER see
+ * are asserted by test/dashboard.test.ts — a real user must NEVER see
  * fabricated data:
  *   - demo is opt-in via the query string, nothing else
  *   - a 401 is a signed-out state, it never falls through to demo

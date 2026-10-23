@@ -1,13 +1,16 @@
 /**
  * Sample data for the marketing preview (?demo=1). Reachable ONLY through the
  * demo client in api/client.ts — no view may import this module directly
- * (enforced by test/dashboard-next.test.ts). A real user never sees it.
+ * (enforced by test/dashboard.test.ts). A real user never sees it.
  */
 
 import type {
   Activity, EngineStatus, EventEnvelope, Health, ImportRun, Profile, Questions, Scopes, Skill, Stats,
   TopicRow, Voice,
 } from "../api/types";
+
+// Hours before now: sample rows must read as recent, not as a dated screenshot.
+const ago = (hours: number) => new Date(Date.now() - hours * 36e5).toISOString();
 
 export const DEMO_HEALTH: Health = { ok: true, version: "preview" };
 
@@ -28,7 +31,7 @@ export const DEMO_STATS: Stats = {
   total: 1284,
   byType: { "signal.topic": 903, "signal.assertion": 214, "context.read": 141, "signal.style": 26 },
   bySource: { "import:chatgpt": 640, "import:claude": 263, "mcp:claude-code": 221, "import:git": 160 },
-  first: "2025-11-02T09:14:00Z",
+  first: ago(6774),
   last: new Date().toISOString(),
 };
 
@@ -43,8 +46,8 @@ const topic = (
   sentiment_balance: 0.4,
   dominant_intent: intent,
   entities,
-  first_seen: "2026-02-11T10:00:00Z",
-  last_seen: "2026-08-09T10:00:00Z",
+  first_seen: ago(4349),
+  last_seen: ago(53),
   event_ids: [id],
 });
 
@@ -75,8 +78,8 @@ export const DEMO_VOICE: Voice = {
 };
 
 export const DEMO_ACTIVITY: Activity = {
-  firstEventAt: "2025-11-02T09:14:00Z",
-  firstReadAt: "2026-01-08T09:00:00Z",
+  firstEventAt: ago(6774),
+  firstReadAt: ago(5166),
   lastReadAt: new Date().toISOString(),
   daysSinceFirst: 283,
   daysSinceFirstRead: 216,
@@ -97,8 +100,8 @@ export const DEMO_SCOPES: Scopes = { cursor: ["technology"], "claude-desktop": [
 export const DEMO_EVENTS: EventEnvelope[] = [
   {
     id: "demo-ev-1",
-    ts: "2026-06-14T10:02:00Z",
-    recorded_at: "2026-06-14T10:02:00Z",
+    ts: ago(1397),
+    recorded_at: ago(1397),
     source: "import:chatgpt",
     type: "signal.topic",
     payload: { topic: "PostgreSQL query planning", intent: "debugging" },
@@ -107,8 +110,8 @@ export const DEMO_EVENTS: EventEnvelope[] = [
   },
   {
     id: "demo-ev-2",
-    ts: "2026-07-03T16:40:00Z",
-    recorded_at: "2026-07-03T16:40:00Z",
+    ts: ago(934),
+    recorded_at: ago(934),
     source: "mcp:claude-code",
     type: "signal.topic",
     payload: { topic: "integration tests before merging", intent: "deciding" },
@@ -117,8 +120,8 @@ export const DEMO_EVENTS: EventEnvelope[] = [
   },
   {
     id: "demo-ev-3",
-    ts: "2026-07-28T08:15:00Z",
-    recorded_at: "2026-07-28T08:15:00Z",
+    ts: ago(343),
+    recorded_at: ago(343),
     source: "import:claude",
     type: "signal.assertion",
     payload: { claim: "Prefers boring, proven infrastructure over novel tooling", kind: "behavior", confidence: 0.86 },
@@ -127,8 +130,8 @@ export const DEMO_EVENTS: EventEnvelope[] = [
   },
   {
     id: "demo-ev-4",
-    ts: "2026-05-20T12:00:00Z",
-    recorded_at: "2026-05-20T12:00:00Z",
+    ts: ago(1995),
+    recorded_at: ago(1995),
     source: "import:claude",
     type: "signal.topic",
     payload: { topic: "pricing strategy for a solo SaaS", intent: "researching" },
@@ -137,8 +140,8 @@ export const DEMO_EVENTS: EventEnvelope[] = [
   },
   {
     id: "demo-ev-8",
-    ts: "2026-08-04T09:30:00Z",
-    recorded_at: "2026-08-04T09:30:00Z",
+    ts: ago(174),
+    recorded_at: ago(174),
     source: "system",
     type: "signal.assertion",
     payload: { claim: "Treats unverified output as unfinished — demands observable proof", kind: "behavior", confidence: 0.9 },
@@ -146,9 +149,9 @@ export const DEMO_EVENTS: EventEnvelope[] = [
     schema_ver: 1,
   },
   ...[
-    ["claude-code", "session start", "2026-08-11T09:12:00Z"],
-    ["cursor", "editing a migration", "2026-08-11T08:40:00Z"],
-    ["claude-code", "session start", "2026-08-10T19:02:00Z"],
+    ["claude-code", "session start", ago(6)],
+    ["cursor", "editing a migration", ago(6)],
+    ["claude-code", "session start", ago(20)],
   ].map(([client, purpose, ts], i): EventEnvelope => ({
     id: `demo-read-${i}`,
     ts: ts!,
@@ -197,9 +200,9 @@ export const DEMO_ENGINE: EngineStatus = {
 
 export const DEMO_QUESTIONS: Questions = {
   items: [
-    { question_id: "demo-q-a", answer_id: "demo-a-a", ts: "2026-08-11T14:20:00Z", asker: "claude-code", question: "Would they want a test for this edge case?", answer: "Yes — unverified changes read as unfinished to them.", confidence: 0.88, deferred: false, evidence_event_ids: ["demo-ev-2", "demo-ev-8"], verdict: "approved" },
-    { question_id: "demo-q-b", answer_id: "demo-a-b", ts: "2026-08-11T11:05:00Z", asker: "cursor", question: "npm or pnpm for this repo?", answer: "npm — it's what every repo of theirs uses.", confidence: 0.91, deferred: false, evidence_event_ids: ["demo-ev-2"], verdict: null },
-    { question_id: "demo-q-c", answer_id: "demo-a-c", ts: "2026-08-10T19:42:00Z", asker: "claude-desktop", question: "Should I email the investor update tonight?", answer: "", confidence: 0.31, deferred: true, evidence_event_ids: [], verdict: null },
+    { question_id: "demo-q-a", answer_id: "demo-a-a", ts: ago(1), asker: "claude-code", question: "Would they want a test for this edge case?", answer: "Yes — unverified changes read as unfinished to them.", confidence: 0.88, deferred: false, evidence_event_ids: ["demo-ev-2", "demo-ev-8"], verdict: "approved" },
+    { question_id: "demo-q-b", answer_id: "demo-a-b", ts: ago(4), asker: "cursor", question: "npm or pnpm for this repo?", answer: "npm — it's what every repo of theirs uses.", confidence: 0.91, deferred: false, evidence_event_ids: ["demo-ev-2"], verdict: null },
+    { question_id: "demo-q-c", answer_id: "demo-a-c", ts: ago(19), asker: "claude-desktop", question: "Should I email the investor update tonight?", answer: "", confidence: 0.31, deferred: true, evidence_event_ids: [], verdict: null },
   ],
   stats: { asked: 3, answered: 2, deferred: 1, approved: 1, edited: 0, vetoed: 0, precision: 1, asked7d: 3, answered7d: 2 },
 };
