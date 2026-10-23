@@ -126,8 +126,8 @@ export function DataView({ client, boot }: { client: PersnallyClient; boot: Boot
                 <li key={`${h.kind}-${h.text}`} class="row">
                   <span class="row-main">
                     <span class="tag">{h.kind}</span> {h.text}
+                    <span class="row-sub">{h.detail}</span>
                   </span>
-                  <span class="row-meta">{h.detail}</span>
                 </li>
               ))}
             </ul>
