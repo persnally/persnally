@@ -178,7 +178,14 @@ export function freshConversations(
   return { parsed: next, skipped, firstImport, memoryHash: memoryIsNew ? memoryHash : "" };
 }
 
-const topicsExtraction = z.object({ topics: z.array(PAYLOAD_SCHEMAS["signal.topic"]) });
+// Topics say what a conversation was about; assertions say what the user
+// decided or holds, which is what an agent's question needs as evidence. A
+// malformed assertion (e.g. an invented `kind`) is dropped on its own rather
+// than failing the conversation and losing its topics.
+const conversationExtraction = z.object({
+  topics: z.array(PAYLOAD_SCHEMAS["signal.topic"]),
+  assertions: z.array(PAYLOAD_SCHEMAS["signal.assertion"].nullable().catch(null)).default([]),
+});
 const assertionsExtraction = z.object({ assertions: z.array(PAYLOAD_SCHEMAS["signal.assertion"]) });
 
 export async function extractEvents(
@@ -228,22 +235,25 @@ export async function extractEvents(
     // key, no credits, a provider outage — and every remaining call will fail the
     // same way. Stop paying for the rest of the batch. `ok: false` here is the
     // same as a real failure below: no processed-marker, so it retries later.
-    if (succeeded === 0 && failed >= FAILFAST_AFTER) { done(); return { topics: [], ok: false }; }
+    if (succeeded === 0 && failed >= FAILFAST_AFTER) { done(); return { topics: [], assertions: [], ok: false }; }
     try {
       const result = await extract({
         model,
         instruction:
           "Extract 1-5 topic signals from this conversation. Weight = centrality to the USER, depth = engagement level, sentiment = the user's attitude toward the topic. Capture decisions and rejected options as their own signals. " +
-          "Assistant replies, when present, are context for what the user was told and what got resolved — use them to identify outcomes and what the user now knows, but never treat a topic the assistant raised on its own as one of the user's interests.",
-        schema: topicsExtraction,
+          "Assistant replies, when present, are context for what the user was told and what got resolved — use them to identify outcomes and what the user now knows, but never treat a topic the assistant raised on its own as one of the user's interests. " +
+          "Also extract 0-3 assertions: what the USER decided, chose over an alternative, rejected, or stated as a lasting preference or way of working — not what the assistant recommended unless the user accepted it. Evidence quotes or closely paraphrases the user. Return none when the user only asked questions.",
+        schema: conversationExtraction,
         content: `Conversation title: ${convo.name}\n\nUser messages:\n${text}`
           + (replies ? `\n\nAssistant replies (context only):\n${replies}` : ""),
       });
-      const topics = topicsExtraction.parse(result).topics;
+      const parsed = conversationExtraction.parse(result);
+      const topics = parsed.topics;
+      const assertions = parsed.assertions.filter((a) => a !== null);
       succeeded++;
       recordEngineSuccess(); // a working call clears any recorded outage
       done();
-      return { topics, ok: true };
+      return { topics, assertions, ok: true };
     } catch (e) {
       failed++;
       // One malformed extraction (e.g. the model returns an out-of-enum value)
@@ -252,18 +262,21 @@ export async function extractEvents(
       recordEngineFailure(e);
       console.error(`extract: skipped "${convo.name}" — ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
       done();
-      return { topics: [], ok: false };
+      return { topics: [], assertions: [], ok: false };
     }
   });
 
   jobs.forEach(({ convo }, i) => {
-    const { topics, ok } = topicsPerConvo[i]!;
+    const { topics, assertions, ok } = topicsPerConvo[i]!;
     const provenance = {
       kind: "import" as const, batch, file: opts.file, conversation_uuid: convo.uuid, project: convo.project,
       ...(convo.lastMessageId ? { message_uuid: convo.lastMessageId } : {}),
     };
     for (const t of topics) {
       events.push(newEvent("signal.topic", opts.source, t, provenance, safeIso(convo.created_at)));
+    }
+    for (const a of assertions) {
+      events.push(newEvent("signal.assertion", opts.source, a, provenance, safeIso(convo.created_at)));
     }
     // Written whenever the call itself succeeded, even with zero topics — the
     // only durable record that a working engine already looked at this
