@@ -119,3 +119,12 @@ test("a malformed assertion is dropped without losing the conversation", async (
   assert.equal(events.filter((e) => e.type === "signal.assertion").length, 1);
   assert.equal(events.filter((e) => e.type === "signal.topic").length, 1);
 });
+
+test("a malformed assertions container keeps the conversation's topics", async () => {
+  for (const assertions of [null, {}, "none"]) {
+    const extract: LlmExtract = async () => ({ topics: [topic("x")], assertions });
+    const { events, extractionsFailed } = await extractEvents(exportWith(1), OPTS, extract, "m", 1);
+    assert.equal(extractionsFailed, 0);
+    assert.equal(events.filter((e) => e.type === "signal.topic").length, 1);
+  }
+});

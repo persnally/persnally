@@ -184,7 +184,7 @@ export function freshConversations(
 // than failing the conversation and losing its topics.
 const conversationExtraction = z.object({
   topics: z.array(PAYLOAD_SCHEMAS["signal.topic"]),
-  assertions: z.array(PAYLOAD_SCHEMAS["signal.assertion"].nullable().catch(null)).default([]),
+  assertions: z.array(PAYLOAD_SCHEMAS["signal.assertion"].nullable().catch(null)).catch([]),
 });
 const assertionsExtraction = z.object({ assertions: z.array(PAYLOAD_SCHEMAS["signal.assertion"]) });
 
