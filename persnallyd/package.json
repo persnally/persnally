@@ -54,7 +54,7 @@
     "eslint": "^10.9.1",
     "eslint-plugin-security": "^4.0.1",
     "node-gyp": "^13.0.2",
-    "preact": "^10.29.8",
+    "preact": "^11.0.1",
     "simple-icons": "^16.29.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.68.0",
